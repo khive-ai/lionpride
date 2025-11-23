@@ -1,0 +1,401 @@
+# Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
+# SPDX-License-Identifier: Apache-2.0
+
+"""Operation graph builder - Fluent API for constructing operation DAGs."""
+
+from __future__ import annotations
+
+from typing import Any
+from uuid import UUID
+
+from pydantic import BaseModel
+
+from lionpride import Edge, Graph
+
+from .node import Operation, OperationType, create_operation
+
+__all__ = ("Builder", "OperationGraphBuilder")
+
+
+class OperationGraphBuilder:
+    """Fluent builder for operation graphs.
+
+    Provides chainable API for constructing directed acyclic graphs (DAGs)
+    of operations with dependencies.
+
+    Supports incremental building: Build → Execute → Expand → Execute
+
+    Attributes:
+        graph: Underlying Graph instance
+        _nodes: Mapping of operation names to Operation nodes
+        _executed: Set of executed operation IDs
+        _current_heads: List of current head nodes for auto-linking
+
+    Example:
+        >>> builder = Builder()
+        >>> builder.add("extract", "generate", {"instruction": "Extract data"})
+        >>> builder.add("analyze", "operate", {"response_model": Analysis})
+        >>> builder.depends_on("analyze", "extract")  # analyze depends on extract
+        >>> graph = builder.build()
+    """
+
+    def __init__(self, graph: Graph | None = None):
+        """Initialize builder.
+
+        Args:
+            graph: Optional existing graph to build on
+        """
+        self.graph = graph or Graph()
+        self._nodes: dict[str, Operation] = {}
+        self._executed: set[UUID] = set()  # Track executed operations
+        self._current_heads: list[str] = []  # Current head nodes for linking
+
+    def add(
+        self,
+        name: str,
+        operation: OperationType | str,
+        parameters: dict[str, Any] | BaseModel | None = None,
+        depends_on: list[str] | None = None,
+        inherit_context: bool = False,
+        **kwargs,
+    ) -> OperationGraphBuilder:
+        """Add operation to graph.
+
+        Args:
+            name: Unique name for this operation node
+            operation: Operation type (generate, operate, etc.)
+            parameters: Operation parameters
+            depends_on: Optional list of operation names this depends on
+            inherit_context: If True and has dependencies, inherit conversation
+                           context from primary (first) dependency
+            **kwargs: Additional Operation fields (metadata, timeout, etc.)
+
+        Returns:
+            Self for chaining
+
+        Raises:
+            ValueError: If name already exists
+
+        Example:
+            >>> builder.add("task1", "generate", {"instruction": "Hello"})
+            >>> builder.add("task2", "operate", {...}, depends_on=["task1"])
+        """
+        if name in self._nodes:
+            raise ValueError(f"Operation with name '{name}' already exists")
+
+        # Create operation node
+        op = create_operation(operation, parameters, **kwargs)
+
+        # Store name in metadata for reference
+        op.metadata["name"] = name
+
+        # Store context inheritance strategy
+        if inherit_context and depends_on:
+            op.metadata["inherit_context"] = True
+            op.metadata["primary_dependency"] = self._nodes[depends_on[0]].id
+
+        # Add to graph
+        self.graph.add_node(op)
+
+        # Track by name
+        self._nodes[name] = op
+
+        # Handle dependencies
+        if depends_on:
+            for dep_name in depends_on:
+                if dep_name not in self._nodes:
+                    raise ValueError(f"Dependency '{dep_name}' not found")
+                dep_node = self._nodes[dep_name]
+                edge = Edge(head=dep_node.id, tail=op.id, label=["depends_on"])
+                self.graph.add_edge(edge)
+        elif self._current_heads:
+            # Auto-link from current heads if no explicit dependencies
+            for head_name in self._current_heads:
+                if head_name in self._nodes:
+                    head_node = self._nodes[head_name]
+                    edge = Edge(head=head_node.id, tail=op.id, label=["sequential"])
+                    self.graph.add_edge(edge)
+
+        # Update current heads
+        self._current_heads = [name]
+
+        return self
+
+    def depends_on(
+        self,
+        target: str,
+        *dependencies: str,
+        label: list[str] | None = None,
+    ) -> OperationGraphBuilder:
+        """Add dependency relationships.
+
+        Creates edges from dependencies to target (dependencies must complete before target).
+
+        Args:
+            target: Name of operation that depends on others
+            *dependencies: Names of operations that must complete first
+            label: Optional edge labels for conditional execution
+
+        Returns:
+            Self for chaining
+
+        Raises:
+            ValueError: If operation names not found
+
+        Example:
+            >>> builder.depends_on("analyze", "extract", "clean")
+            >>> # analyze depends on both extract and clean
+        """
+        if target not in self._nodes:
+            raise ValueError(f"Target operation '{target}' not found")
+
+        target_node = self._nodes[target]
+
+        for dep_name in dependencies:
+            if dep_name not in self._nodes:
+                raise ValueError(f"Dependency operation '{dep_name}' not found")
+
+            dep_node = self._nodes[dep_name]
+
+            # Create edge: dependency -> target
+            edge = Edge(
+                head=dep_node.id,
+                tail=target_node.id,
+                label=label or [],
+            )
+            self.graph.add_edge(edge)
+
+        return self
+
+    def sequence(self, *operations: str, label: list[str] | None = None) -> OperationGraphBuilder:
+        """Create sequential dependency chain.
+
+        Args:
+            *operations: Operation names in execution order
+            label: Optional edge labels
+
+        Returns:
+            Self for chaining
+
+        Raises:
+            ValueError: If operation names not found
+
+        Example:
+            >>> builder.sequence("extract", "clean", "analyze")
+            >>> # Creates: extract -> clean -> analyze
+        """
+        if len(operations) < 2:
+            raise ValueError("sequence requires at least 2 operations")
+
+        for i in range(len(operations) - 1):
+            self.depends_on(operations[i + 1], operations[i], label=label)
+
+        return self
+
+    def parallel(self, *operations: str) -> OperationGraphBuilder:
+        """Mark operations as parallel (no dependencies).
+
+        This is a no-op method for clarity - operations without
+        dependencies are automatically parallel.
+
+        Args:
+            *operations: Operation names that can run in parallel
+
+        Returns:
+            Self for chaining
+
+        Example:
+            >>> builder.parallel("extract1", "extract2", "extract3")
+        """
+        # Verify operations exist
+        for name in operations:
+            if name not in self._nodes:
+                raise ValueError(f"Operation '{name}' not found")
+
+        # No edges needed - operations are naturally parallel
+        return self
+
+    def get(self, name: str) -> Operation:
+        """Get operation by name.
+
+        Args:
+            name: Operation name
+
+        Returns:
+            Operation instance
+
+        Raises:
+            ValueError: If operation not found
+
+        Example:
+            >>> op = builder.get("extract")
+        """
+        if name not in self._nodes:
+            raise ValueError(f"Operation '{name}' not found")
+        return self._nodes[name]
+
+    def get_by_id(self, operation_id: UUID) -> Operation | None:
+        """Get operation by UUID.
+
+        Args:
+            operation_id: Operation UUID
+
+        Returns:
+            Operation instance or None if not found
+
+        Example:
+            >>> op = builder.get_by_id(uuid)
+        """
+        return self.graph.nodes.get(operation_id, None)
+
+    def add_aggregation(
+        self,
+        name: str,
+        operation: OperationType | str,
+        parameters: dict[str, Any] | BaseModel | None = None,
+        source_names: list[str] | None = None,
+        inherit_context: bool = False,
+        inherit_from_source: int = 0,
+        **kwargs,
+    ) -> OperationGraphBuilder:
+        """Add aggregation operation that collects from multiple sources.
+
+        Args:
+            name: Unique name for aggregation node
+            operation: Operation type
+            parameters: Operation parameters
+            source_names: Names of operations to aggregate from (defaults to current heads)
+            inherit_context: If True, inherit conversation context from one source
+            inherit_from_source: Index of source to inherit context from (default: 0)
+            **kwargs: Additional Operation fields
+
+        Returns:
+            Self for chaining
+
+        Raises:
+            ValueError: If source operations not found or no sources available
+
+        Example:
+            >>> builder.add_aggregation(
+            ...     "summary", "operate", {...}, source_names=["task1", "task2"]
+            ... )
+        """
+        sources = source_names or self._current_heads
+        if not sources:
+            raise ValueError("No source operations for aggregation")
+
+        # Add aggregation metadata to parameters
+        params = parameters or {}
+        if isinstance(params, dict):
+            params = {
+                "aggregation_sources": [str(self._nodes[s].id) for s in sources],
+                "aggregation_count": len(sources),
+                **params,
+            }
+
+        # Create operation node
+        op = create_operation(operation, params, **kwargs)
+        op.metadata["name"] = name
+        op.metadata["aggregation"] = True
+
+        # Store context inheritance for aggregations
+        if inherit_context and sources:
+            op.metadata["inherit_context"] = True
+            source_idx = min(inherit_from_source, len(sources) - 1)
+            op.metadata["primary_dependency"] = self._nodes[sources[source_idx]].id
+            op.metadata["inherit_from_source"] = source_idx
+
+        # Add to graph
+        self.graph.add_node(op)
+        self._nodes[name] = op
+
+        # Connect all sources
+        for source_name in sources:
+            if source_name not in self._nodes:
+                raise ValueError(f"Source operation '{source_name}' not found")
+            source_node = self._nodes[source_name]
+            edge = Edge(head=source_node.id, tail=op.id, label=["aggregate"])
+            self.graph.add_edge(edge)
+
+        # Update current heads
+        self._current_heads = [name]
+
+        return self
+
+    def mark_executed(self, *names: str) -> OperationGraphBuilder:
+        """Mark operations as executed.
+
+        This helps track which parts of the graph have been run for
+        incremental building (build → execute → expand cycles).
+
+        Args:
+            *names: Names of executed operations
+
+        Returns:
+            Self for chaining
+
+        Example:
+            >>> builder.mark_executed("task1", "task2")
+        """
+        for name in names:
+            if name in self._nodes:
+                self._executed.add(self._nodes[name].id)
+        return self
+
+    def get_unexecuted_nodes(self) -> list[Operation]:
+        """Get operations that haven't been executed yet.
+
+        Returns:
+            List of unexecuted Operation nodes
+
+        Example:
+            >>> unexecuted = builder.get_unexecuted_nodes()
+            >>> for op in unexecuted:
+            ...     print(op.metadata["name"])
+        """
+        return [op for op in self._nodes.values() if op.id not in self._executed]
+
+    def build(self) -> Graph:
+        """Build and validate operation graph.
+
+        Returns:
+            Graph instance with all operations and dependencies
+
+        Raises:
+            ValueError: If graph has cycles (not a DAG)
+
+        Example:
+            >>> graph = builder.build()
+        """
+        # Validate DAG
+        if not self.graph.is_acyclic():
+            raise ValueError("Operation graph has cycles - must be a DAG")
+
+        return self.graph
+
+    def clear(self) -> OperationGraphBuilder:
+        """Clear all operations and start fresh.
+
+        Returns:
+            Self for chaining
+
+        Example:
+            >>> builder.clear().add(...)
+        """
+        self.graph = Graph()
+        self._nodes = {}
+        self._executed = set()
+        self._current_heads = []
+        return self
+
+    def __repr__(self) -> str:
+        return (
+            f"OperationGraphBuilder("
+            f"operations={len(self._nodes)}, "
+            f"edges={len(self.graph.edges)}, "
+            f"executed={len(self._executed)})"
+        )
+
+
+# Alias for convenience
+Builder = OperationGraphBuilder

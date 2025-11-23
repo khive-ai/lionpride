@@ -1,0 +1,1 @@
+"""Service types tests."""
