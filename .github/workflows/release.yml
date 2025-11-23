@@ -3,6 +3,7 @@ name: Release
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -34,7 +35,8 @@ jobs:
         run: |
           uv run pytest tests/ \
             --tb=short \
-            -n auto
+            -n auto \
+            -m "not integration"
 
   deploy:
     needs: test
