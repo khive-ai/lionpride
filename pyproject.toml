@@ -72,6 +72,12 @@ filterwarnings = [
   "ignore:Pydantic serializer warnings:UserWarning:pydantic",
 ]
 
+[tool.coverage.run]
+omit = [
+  "src/lionpride/services/providers/*",
+  "src/lionpride/services/third_party/*",
+]
+
 [dependency-groups]
 dev = [
   "hypothesis>=6.142.4",
