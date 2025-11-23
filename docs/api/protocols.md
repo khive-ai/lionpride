@@ -8,7 +8,7 @@ The `protocols` module provides **runtime-checkable protocol definitions** that 
 
 **Key Components:**
 
-- **Core Protocols**: Observable, Serializable, Deserializable, Adaptable, AsyncAdaptable
+- **Core Protocols**: Observable, Serializable, Deserializable, Adaptable, AdapterRegisterable, AsyncAdaptable, AsyncAdapterRegisterable
 - **Container Protocols**: Containable, Invocable, Hashable, Allowable
 - **@implements() Decorator**: Explicit protocol implementation declaration
 
@@ -37,7 +37,9 @@ from lionpride.protocols import (
     Serializable,
     Deserializable,
     Adaptable,
+    AdapterRegisterable,
     AsyncAdaptable,
+    AsyncAdapterRegisterable,
     # Container protocols
     Containable,
     Invocable,
@@ -370,8 +372,65 @@ Adapter protocol enables:
 
 #### See Also
 
+- [AdapterRegisterable](#adapterregisterable): Separate protocol for adapter registration
 - [AsyncAdaptable](#asyncadaptable): Async version for I/O-bound conversion
 - [pydapter documentation](https://github.com/khive-ai/pydapter): Adapter library
+
+---
+
+### AdapterRegisterable
+
+**Purpose**: Mutable adapter registry protocol for configurable adapters. Compose with Adaptable for full adapter support.
+
+#### Protocol Definition
+
+```python
+from lionpride.protocols import AdapterRegisterable
+
+@runtime_checkable
+class AdapterRegisterable(Protocol):
+    """Mutable adapter registry. Compose with Adaptable for configurable adapters."""
+
+    @classmethod
+    def register_adapter(cls, adapter: Any) -> None:
+        """Register adapter for this class."""
+        ...
+```
+
+#### Required Interface
+
+- **Classmethod**: `register_adapter(adapter) -> None`
+  - Register adapter for format conversion
+  - Per-class adapter registry (isolated state)
+
+#### Design Note
+
+`AdapterRegisterable` is **separate from `Adaptable`** because:
+
+1. **Separation of concerns**: Adaptation methods vs registration
+2. **Composition**: Some classes may be Adaptable but use fixed adapters (no registration needed)
+3. **Immutability option**: Adaptable without AdapterRegisterable allows frozen adapter configurations
+
+#### Usage Pattern
+
+```python
+from lionpride.protocols import Adaptable, AdapterRegisterable, implements
+
+@implements(Adaptable, AdapterRegisterable)
+class Node:
+    _adapter = None
+
+    @classmethod
+    def register_adapter(cls, adapter):
+        cls._adapter = adapter
+
+    def adapt_to(self, obj_key: str, **kwargs):
+        return self._adapter.to(self, obj_key, **kwargs)
+
+    @classmethod
+    def adapt_from(cls, obj, obj_key: str, **kwargs):
+        return cls._adapter.from_(obj, obj_key, **kwargs)
+```
 
 ---
 
@@ -458,8 +517,64 @@ Separate async protocol enables:
 
 #### See Also
 
+- [AsyncAdapterRegisterable](#asyncadapterregisterable): Separate protocol for async adapter registration
 - [Adaptable](#adaptable): Synchronous adapter protocol
 - [anyio documentation](https://anyio.readthedocs.io/en/stable/): Async I/O framework
+
+---
+
+### AsyncAdapterRegisterable
+
+**Purpose**: Mutable async adapter registry protocol. Compose with AsyncAdaptable for configurable async adapters.
+
+#### Protocol Definition
+
+```python
+from lionpride.protocols import AsyncAdapterRegisterable
+
+@runtime_checkable
+class AsyncAdapterRegisterable(Protocol):
+    """Mutable async adapter registry. Compose with AsyncAdaptable for configurable async adapters."""
+
+    @classmethod
+    def register_async_adapter(cls, adapter: Any) -> None:
+        """Register async adapter for this class."""
+        ...
+```
+
+#### Required Interface
+
+- **Classmethod**: `register_async_adapter(adapter) -> None`
+  - Register async adapter (separate from sync adapters)
+  - Per-class async adapter registry (isolated from sync registry)
+
+#### Design Note
+
+Separate protocol mirrors the sync `AdapterRegisterable` pattern:
+
+1. **Isolation**: Sync and async adapters coexist without conflicts
+2. **Composition**: Use `AsyncAdaptable` alone for fixed async adapters, add `AsyncAdapterRegisterable` for runtime configuration
+
+#### Usage Pattern
+
+```python
+from lionpride.protocols import AsyncAdaptable, AsyncAdapterRegisterable, implements
+
+@implements(AsyncAdaptable, AsyncAdapterRegisterable)
+class Node:
+    _async_adapter = None
+
+    @classmethod
+    def register_async_adapter(cls, adapter):
+        cls._async_adapter = adapter
+
+    async def adapt_to_async(self, obj_key: str, **kwargs):
+        return await self._async_adapter.to_async(self, obj_key, **kwargs)
+
+    @classmethod
+    async def adapt_from_async(cls, obj, obj_key: str, **kwargs):
+        return await cls._async_adapter.from_async(obj, obj_key, **kwargs)
+```
 
 ---
 

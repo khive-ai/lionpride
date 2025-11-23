@@ -157,7 +157,7 @@ Pile of Node instances representing graph vertices.
 
 **Type:** Pile[Node]
 
-**Access:** Read-only via property (returns MappingProxyType)
+**Access:** Direct Pile access with all Pile operations (add, remove, UUID lookup, iteration)
 
 **Example:**
 
@@ -165,6 +165,9 @@ Pile of Node instances representing graph vertices.
 print(f"Graph has {len(graph.nodes)} nodes")
 for node in graph.nodes:
     print(node.content)
+
+# Direct UUID lookup
+node = graph.nodes[some_uuid]
 ```
 
 #### `edges`
@@ -177,7 +180,9 @@ Pile of Edge instances representing directed connections.
 
 **Type:** Pile[Edge]
 
-**Access:** Read-only via property (returns MappingProxyType)
+**Access:** Direct Pile access with all Pile operations (add, remove, UUID lookup, iteration)
+
+**Note:** For graph integrity, use `add_edge()` and `remove_edge()` methods instead of direct Pile operations, as they maintain adjacency lists.
 
 **Example:**
 
@@ -185,6 +190,9 @@ Pile of Edge instances representing directed connections.
 print(f"Graph has {len(graph.edges)} edges")
 for edge in graph.edges:
     print(f"{edge.head} → {edge.tail}")
+
+# Direct UUID lookup
+edge = graph.edges[edge_uuid]
 ```
 
 ---

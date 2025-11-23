@@ -43,7 +43,14 @@ See [Element](element.md) for identity-based base class.
 ```python
 from lionpride.core import Node, NODE_REGISTRY
 
-@implements(Deserializable, Adaptable, AsyncAdaptable)
+@implements(
+    Adaptable,
+    AdapterRegisterable,
+    AsyncAdaptable,
+    AsyncAdapterRegisterable,
+    Deserializable,
+    Serializable,
+)
 class Node(Element, PydapterAdaptable, PydapterAsyncAdaptable):
     """Polymorphic node with arbitrary content, embeddings, pydapter
     integration.
@@ -112,7 +119,7 @@ Arbitrary metadata. Auto-converts non-dict objects via `to_dict()`.
 
 | Attribute    | Type                | Frozen | Inherited | Description                        |
 | ------------ | ------------------- | ------ | --------- | ---------------------------------- |
-| `content`    | `Any`               | No     | No        | Arbitrary content payload          |
+| `content`    | `dict[str, Any] \| Serializable \| BaseModel \| None` | No | No | Structured content payload |
 | `embedding`  | `list[float]` or None | No     | No        | Optional embedding vector          |
 | `id`         | `UUID`              | Yes    | Element   | Unique identifier                  |
 | `created_at` | `datetime`          | Yes    | Element   | UTC creation timestamp             |

@@ -23,7 +23,8 @@ Exception
     ├── ConfigurationError
     ├── ExecutionError
     ├── ConnectionError
-    └── TimeoutError
+    ├── TimeoutError
+    └── QueueFullError
 ```
 
 ### Design Philosophy
@@ -430,6 +431,40 @@ except concurrency.get_cancelled_exc_class() as e:
         "Failed to acquire lock",
         details={"timeout": 5, "lock": "critical_section"}
     ) from e
+```
+
+---
+
+### QueueFullError
+
+Queue capacity exceeded. **Retryable** by default.
+
+**Use when:** Queue or buffer capacity is exceeded (bounded queues, rate limiting, backpressure).
+
+**Attributes:**
+
+- `default_message = "Queue is full"`
+- `default_retryable = True` (queue might have space later)
+
+**Example:**
+
+```python
+from lionpride.errors import QueueFullError
+
+# Bounded queue overflow
+if len(queue) >= max_capacity:
+    raise QueueFullError(
+        "Task queue full",
+        details={"queue_size": len(queue), "max_capacity": max_capacity}
+    )
+
+# Rate limiting
+if pending_requests >= rate_limit:
+    raise QueueFullError(
+        "Rate limit exceeded",
+        details={"pending": pending_requests, "limit": rate_limit},
+        retryable=True
+    )
 ```
 
 ---

@@ -70,7 +70,9 @@ if pile.include(item):  # True = item IS in pile now
 # After:  pile.add(item)  # Synchronous (CPU-bound ops)
 ```
 
-### 5. Removed: `__list__()`, `to_list()` → use `list(pile)`
+### 5. Simplified: use `list(pile)` for list conversion
+
+`__list__()` method is available but `list(pile)` is the idiomatic approach.
 
 ## Class Signature
 
@@ -183,7 +185,7 @@ def remove(self, item_id: UUID | str | Element) -> T
 
 **Raises:**
 
-- `ValueError`: If item not found
+- `NotFoundError`: If item not found
 
 **Returns:** T - Removed item
 
@@ -207,14 +209,14 @@ Alias for `remove()` - remove and return item.
 **Signature:**
 
 ```python
-def pop(self, item_id: UUID | str | Element) -> T
+def pop(self, item_id: UUID | str | Element, default: Any = ...) -> T | Any
 ```
 
 **Time Complexity:** O(n) - same as remove()
 
 #### `get(item_id, default=...) -> T | None`
 
-Get item by ID with optional default. O(1), thread-safe. Raises ValueError if not found and no default.
+Get item by ID with optional default. O(1), thread-safe. Raises NotFoundError if not found and no default.
 
 ```python
 item = pile.get(uuid, default=None)
@@ -222,7 +224,7 @@ item = pile.get(uuid, default=None)
 
 #### `update(item) -> None`
 
-Update existing item. O(1), thread-safe. Raises ValueError if not found, TypeError if type validation fails.
+Update existing item. O(1), thread-safe. Raises NotFoundError if not found, TypeError if type validation fails.
 
 ```python
 item = pile.get(uuid)

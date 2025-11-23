@@ -138,12 +138,12 @@ Add item to end of progression.
 **Signature:**
 
 ```python
-def append(self, item: UUID | Element) -> None
+def append(self, item_id: UUID | Element) -> None
 ```
 
 **Parameters:**
 
-- `item` (UUID | Element): Item to append (auto-converts Element to UUID)
+- `item_id` (UUID | Element): Item to append (auto-converts Element to UUID)
 
 **Returns:** None (modifies in place)
 
@@ -194,13 +194,13 @@ Insert item at specific position.
 **Signature:**
 
 ```python
-def insert(self, index: int, item: UUID | Element) -> None
+def insert(self, index: int, item_id: UUID | Element) -> None
 ```
 
 **Parameters:**
 
 - `index` (int): Position to insert at (supports negative indices)
-- `item` (UUID | Element): Item to insert
+- `item_id` (UUID | Element): Item to insert
 
 **Returns:** None (modifies in place)
 
@@ -221,12 +221,12 @@ Remove first occurrence of item.
 **Signature:**
 
 ```python
-def remove(self, item: UUID | Element) -> None
+def remove(self, item_id: UUID | Element) -> None
 ```
 
 **Parameters:**
 
-- `item` (UUID | Element): Item to remove
+- `item_id` (UUID | Element): Item to remove
 
 **Raises:**
 
@@ -398,13 +398,13 @@ Swap positions of two items.
 **Signature:**
 
 ```python
-def swap(self, i: int, j: int) -> None
+def swap(self, index1: int, index2: int) -> None
 ```
 
 **Parameters:**
 
-- `i` (int): First position (supports negative indices)
-- `j` (int): Second position (supports negative indices)
+- `index1` (int): First position (supports negative indices)
+- `index2` (int): Second position (supports negative indices)
 
 **Returns:** None (modifies in place)
 
@@ -687,12 +687,12 @@ Find position of item.
 **Signature:**
 
 ```python
-def index(self, item: UUID | Element) -> int
+def index(self, item_id: UUID | Element) -> int
 ```
 
 **Parameters:**
 
-- `item` (UUID | Element): Item to find
+- `item_id` (UUID | Element): Item to find
 
 **Raises:**
 

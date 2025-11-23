@@ -164,6 +164,20 @@ Optional execution timeout in seconds. If exceeded, raises
 
 **Serialization**: Excluded from serialization (`exclude=True`)
 
+#### `streaming`
+
+```python
+streaming: bool
+```
+
+Flag indicating whether event supports streaming execution via `stream()`.
+
+**Type:** bool
+
+**Default:** False
+
+**Serialization**: Excluded from serialization (`exclude=True`)
+
 ### Read-Only Properties
 
 #### `status`
@@ -268,14 +282,14 @@ Execute with lifecycle management (idempotent)
 ```python
 @final
 @async_synchronized
-async def invoke(self) -> Any
+async def invoke(self) -> None
 ```
 
 Execute event with status tracking, timing, and error capture. Multiple
-concurrent calls execute `_invoke()` exactly once and return the same cached
-result.
+concurrent calls execute `_invoke()` exactly once. Access result via
+`event.response` property after execution.
 
-**Returns:** Any - Execution result (cached after first call)
+**Returns:** None (result stored in `execution.response`)
 
 **Idempotency**: Once executed, subsequent calls return cached result without
 re-execution. Status must be PENDING for execution to occur.
@@ -888,7 +902,7 @@ Comprehensive examples demonstrating:
 - Error capture enables observability without disrupting control flow
 - Status-based lifecycle provides clear execution contract
 
-See `src/lionpride/base/event.py` for full implementation details.
+See `src/lionpride/core/event.py` for full implementation details.
 
 ---
 
