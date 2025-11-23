@@ -732,7 +732,7 @@ class StreamingEvent(Event):
 - **[Flow](flow.md)**: Dual-pile state machine (used by Executor for event storage)
 - **[EventStatus](event.md#eventstatus)**: Enum for event lifecycle states
 - **[Processor/Executor Integration](../../user_guide/processor_executor.md)**: Integration patterns and shared concepts
-- **[Processor/Executor Examples](../../../notebooks/references/processor_executor.ipynb)**: Copy-paste ready code examples
+- **[Processor/Executor Examples](../../../notebooks/processor_executor.ipynb)**: Copy-paste ready code examples
 
 ---
 

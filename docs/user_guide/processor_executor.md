@@ -2100,8 +2100,7 @@ The Processor/Executor pattern provides:
 
 - Review [Processor API Reference](../api/base/processor.md) for detailed API
 - Review [Executor API Reference](../api/base/executor.md) for detailed API
-- Try [Reference Notebook](../../notebooks/references/processor_executor.ipynb) for copy-paste examples
-- Follow [Event Processing Tutorial](../../notebooks/tutorials/event_processing_system.ipynb) for hands-on learning
+- Try [Processor/Executor Notebook](../../notebooks/processor_executor.ipynb) for copy-paste examples
 
 ---
 
