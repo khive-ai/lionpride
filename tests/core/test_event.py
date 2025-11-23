@@ -53,7 +53,7 @@ CANCELLED is used for both timeout and explicit cancellation (CancelledError).
 Rationale: Timeouts are cancellation signals from the runtime, not exceptions
 from user code. This maintains consistency with anyio's cancellation model
 where timeouts trigger CancelledError which is caught and converted to
-LionherdTimeoutError with status=CANCELLED.
+lionprideTimeoutError with status=CANCELLED.
 
 Observability Properties
 ------------------------
@@ -1079,7 +1079,7 @@ async def test_exception_group_retryable_all_logic():
     Design Decision: Conservative retryability for ExceptionGroups.
     - If ALL errors are retryable → group is retryable
     - If even ONE error is non-retryable → group is non-retryable
-    - Unknown exceptions (non-LionherdError) default to retryable=True
+    - Unknown exceptions (non-LionprideError) default to retryable=True
 
     Why Conservative (ANY non-retryable → False)?
     -----------------------------------------------
@@ -1105,7 +1105,7 @@ async def test_exception_group_retryable_all_logic():
     from lionpride.errors import (
         ConnectionError,
         ExecutionError,
-        LionherdError,
+        LionprideError,
         ValidationError,
     )
 
@@ -1115,7 +1115,7 @@ async def test_exception_group_retryable_all_logic():
             errors = [
                 ConnectionError("network error"),  # default_retryable=True
                 ExecutionError("execution failed"),  # default_retryable=True
-                LionherdError("generic error", retryable=True),
+                LionprideError("generic error", retryable=True),
             ]
             raise ExceptionGroup("all retryable errors", errors)
 
@@ -1149,7 +1149,7 @@ async def test_exception_group_retryable_all_logic():
             errors = [
                 ValidationError("validation failed 1"),  # default_retryable=False
                 ValidationError("validation failed 2"),  # default_retryable=False
-                LionherdError("explicit non-retryable", retryable=False),
+                LionprideError("explicit non-retryable", retryable=False),
             ]
             raise ExceptionGroup("all non-retryable errors", errors)
 
@@ -1165,9 +1165,9 @@ async def test_exception_group_retryable_all_logic():
     class UnknownExceptionEvent(Event):
         async def _invoke(self) -> Any:
             errors = [
-                ValueError("unknown stdlib exception"),  # Not LionherdError → defaults True
+                ValueError("unknown stdlib exception"),  # Not LionprideError → defaults True
                 ConnectionError("network error"),  # retryable=True
-                RuntimeError("another unknown"),  # Not LionherdError → defaults True
+                RuntimeError("another unknown"),  # Not LionprideError → defaults True
             ]
             raise ExceptionGroup("mixed with unknown", errors)
 
@@ -1415,36 +1415,36 @@ async def test_exception_group_cycle_detection_dag_allowed():
 
 @pytest.mark.asyncio
 async def test_exception_group_with_lionpride_error():
-    """Test ExceptionGroup containing LionherdError uses to_dict() serialization.
+    """Test ExceptionGroup containing LionprideError uses to_dict() serialization.
 
     Edge Case Coverage:
     -------------------
-    When an ExceptionGroup contains LionherdError instances, the serialization
-    should use the LionherdError.to_dict() method instead of generic error handling.
+    When an ExceptionGroup contains LionprideError instances, the serialization
+    should use the LionprideError.to_dict() method instead of generic error handling.
     This provides richer error context (retryable flag, error codes, etc.).
 
     This test covers line 152 in event.py.
     """
     from lionpride.errors import ConnectionError, ValidationError
 
-    class LionherdErrorGroupEvent(Event):
+    class LionprideErrorGroupEvent(Event):
         async def _invoke(self) -> Any:
-            """Raise ExceptionGroup with LionherdError instances."""
+            """Raise ExceptionGroup with LionprideError instances."""
             errors = [
                 ValidationError("invalid input", retryable=False),
                 ConnectionError("network failure", retryable=True),
-                ValueError("standard error"),  # Non-LionherdError
+                ValueError("standard error"),  # Non-LionprideError
             ]
             raise ExceptionGroup("mixed errors", errors)
 
-    event = LionherdErrorGroupEvent()
+    event = LionprideErrorGroupEvent()
     await event.invoke()
 
     # Should fail and capture ExceptionGroup
     assert event.status == EventStatus.FAILED
     assert isinstance(event.execution.error, ExceptionGroup)
 
-    # Serialize and verify LionherdError.to_dict() was used
+    # Serialize and verify LionprideError.to_dict() was used
     serialized = event.execution.to_dict()
 
     assert serialized["status"] == "failed"
@@ -1458,35 +1458,35 @@ async def test_exception_group_with_lionpride_error():
     validation_error = exceptions[0]
     assert validation_error["error"] == "ValidationError"
     assert "invalid input" in validation_error["message"]
-    assert validation_error["retryable"] is False  # From LionherdError.to_dict()
+    assert validation_error["retryable"] is False  # From LionprideError.to_dict()
 
     # ConnectionError should have retryable=True from to_dict()
     connection_error = exceptions[1]
     assert connection_error["error"] == "ConnectionError"
     assert "network failure" in connection_error["message"]
-    assert connection_error["retryable"] is True  # From LionherdError.to_dict()
+    assert connection_error["retryable"] is True  # From LionprideError.to_dict()
 
     # ValueError should use generic serialization (no retryable field)
     value_error = exceptions[2]
     assert value_error["error"] == "ValueError"
     assert "standard error" in value_error["message"]
-    assert "retryable" not in value_error  # Not a LionherdError
+    assert "retryable" not in value_error  # Not a LionprideError
 
 
 @pytest.mark.asyncio
 async def test_lionpride_error_retryable_flag_respected():
-    """Test Event respects LionherdError.retryable flag.
+    """Test Event respects LionprideError.retryable flag.
 
     Edge Case Coverage:
     -------------------
-    When a LionherdError with retryable=False is raised, the Execution
+    When a LionprideError with retryable=False is raised, the Execution
     should capture this flag instead of defaulting to True (unknown exception behavior).
 
     This test covers line 320 in event.py.
     """
     from lionpride.errors import ConnectionError, ValidationError
 
-    # Test 1: LionherdError with retryable=False
+    # Test 1: LionprideError with retryable=False
     class NonRetryableErrorEvent(Event):
         async def _invoke(self) -> Any:
             raise ValidationError("bad input", retryable=False)
@@ -1496,9 +1496,9 @@ async def test_lionpride_error_retryable_flag_respected():
 
     assert event1.status == EventStatus.FAILED
     assert isinstance(event1.execution.error, ValidationError)
-    assert event1.execution.retryable is False  # Should respect LionherdError flag
+    assert event1.execution.retryable is False  # Should respect LionprideError flag
 
-    # Test 2: LionherdError with retryable=True
+    # Test 2: LionprideError with retryable=True
     class RetryableErrorEvent(Event):
         async def _invoke(self) -> Any:
             raise ConnectionError("network issue", retryable=True)
@@ -1508,9 +1508,9 @@ async def test_lionpride_error_retryable_flag_respected():
 
     assert event2.status == EventStatus.FAILED
     assert isinstance(event2.execution.error, ConnectionError)
-    assert event2.execution.retryable is True  # Should respect LionherdError flag
+    assert event2.execution.retryable is True  # Should respect LionprideError flag
 
-    # Test 3: Non-LionherdError defaults to retryable=True
+    # Test 3: Non-LionprideError defaults to retryable=True
     class UnknownErrorEvent(Event):
         async def _invoke(self) -> Any:
             raise RuntimeError("unknown error")
@@ -1637,16 +1637,16 @@ async def test_event_timeout_completes_in_time():
 
 @pytest.mark.asyncio
 async def test_event_timeout_exceeded():
-    """Test Event timeout exceeded - converts to LionherdTimeoutError.
+    """Test Event timeout exceeded - converts to lionprideTimeoutError.
 
     Timeout Behavior:
     - Operation takes longer than timeout
     - builtin TimeoutError is caught
-    - Converted to LionherdTimeoutError
+    - Converted to lionprideTimeoutError
     - Status: CANCELLED
     - Retryable: True (timeouts are transient)
     """
-    from lionpride.errors import TimeoutError as LionherdTimeoutError
+    from lionpride.errors import TimeoutError as lionprideTimeoutError
     from lionpride.types._sentinel import Unset
 
     # Slow operation with short timeout
@@ -1660,7 +1660,7 @@ async def test_event_timeout_exceeded():
     # Timeout handling
     assert event.status == EventStatus.CANCELLED
     assert event.execution.response is Unset  # No response due to timeout
-    assert isinstance(event.execution.error, LionherdTimeoutError)
+    assert isinstance(event.execution.error, lionprideTimeoutError)
     assert "timed out after 0.1s" in str(event.execution.error)
     assert event.execution.retryable is True  # Timeouts are retryable
     assert event.execution.duration is not None
@@ -1669,7 +1669,7 @@ async def test_event_timeout_exceeded():
 @pytest.mark.asyncio
 async def test_event_timeout_different_event_types():
     """Test timeout works with different event types."""
-    from lionpride.errors import TimeoutError as LionherdTimeoutError
+    from lionpride.errors import TimeoutError as lionprideTimeoutError
 
     # Test with SimpleEvent
     simple = SimpleEvent(return_value="fast", timeout=1.0)
@@ -1681,22 +1681,22 @@ async def test_event_timeout_different_event_types():
     slow = SlowEvent(delay=5.0, timeout=0.05)
     await slow.invoke()
     assert slow.status == EventStatus.CANCELLED
-    assert isinstance(slow.execution.error, LionherdTimeoutError)
+    assert isinstance(slow.execution.error, lionprideTimeoutError)
 
 
 @pytest.mark.asyncio
 async def test_event_timeout_error_conversion():
-    """Test builtin TimeoutError is converted to LionherdTimeoutError."""
-    from lionpride.errors import TimeoutError as LionherdTimeoutError
+    """Test builtin TimeoutError is converted to lionprideTimeoutError."""
+    from lionpride.errors import TimeoutError as lionprideTimeoutError
 
     event = SlowEvent(delay=10.0, timeout=0.05)
 
     await event.invoke()
 
-    # Error should be LionherdTimeoutError, not builtin TimeoutError
-    assert isinstance(event.execution.error, LionherdTimeoutError)
+    # Error should be lionprideTimeoutError, not builtin TimeoutError
+    assert isinstance(event.execution.error, lionprideTimeoutError)
     assert not isinstance(event.execution.error, TimeoutError.__bases__)  # Not builtin
-    assert event.execution.error.retryable is True  # LionherdTimeoutError has retryable
+    assert event.execution.error.retryable is True  # lionprideTimeoutError has retryable
 
 
 @pytest.mark.asyncio

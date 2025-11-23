@@ -156,7 +156,7 @@ timeout: float | None
 ```
 
 Optional execution timeout in seconds. If exceeded, raises
-`LionherdTimeoutError` and sets status to CANCELLED.
+`lionprideTimeoutError` and sets status to CANCELLED.
 
 **Type:** float | None
 
@@ -282,7 +282,7 @@ re-execution. Status must be PENDING for execution to occur.
 
 **Timeout Handling**: If timeout specified and exceeded:
 
-- Raises `LionherdTimeoutError` internally
+- Raises `lionprideTimeoutError` internally
 - Sets status to CANCELLED
 - Sets retryable to True
 - Returns None
@@ -291,7 +291,7 @@ re-execution. Status must be PENDING for execution to occur.
 
 - Captures error in `execution.error`
 - Sets status to FAILED
-- Sets retryable based on error type (LionherdError.retryable or True)
+- Sets retryable based on error type (LionprideError.retryable or True)
 - Returns None
 
 **ExceptionGroup Support**: If multiple errors occur:
@@ -531,7 +531,7 @@ cancellation semantics.
 3. **Conservative**: Avoid retry loops on persistent failures
 
 **Pattern**: Loop through `eg.exceptions`, set `retryable = False` if any
-`LionherdError` has `retryable=False`.
+`LionprideError` has `retryable=False`.
 
 ---
 

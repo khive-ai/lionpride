@@ -13,7 +13,7 @@ Production systems must handle:
 - Cascading failures (one slow service blocks everything)
 - Partial batch failures (some items succeed, some fail)
 
-Manual error handling is error-prone and verbose. Lionherd-core provides battle-tested primitives.
+Manual error handling is error-prone and verbose. lionpride-core provides battle-tested primitives.
 
 ## Core Concepts
 
