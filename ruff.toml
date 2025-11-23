@@ -1,4 +1,4 @@
-# Ruff configuration for lionherd monorepo
+# Ruff configuration for lionpride monorepo
 # Replaces: Black, isort, Flake8
 # Docs: https://docs.astral.sh/ruff/
 
@@ -80,7 +80,7 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [lint.isort]
 # isort configuration (replaces tool.isort in pyproject.toml)
-known-first-party = ["lionherd"]
+known-first-party = ["lionpride"]
 combine-as-imports = true
 force-wrap-aliases = true
 split-on-trailing-comma = true

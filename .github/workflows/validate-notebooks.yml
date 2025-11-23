@@ -1,0 +1,117 @@
+name: Validate Notebooks
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "notebooks/**/*.ipynb"
+      - ".github/workflows/validate-notebooks.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # =============================================================================
+  # Execute all notebooks in parallel across Python versions
+  # =============================================================================
+  execute-notebooks:
+    name: Notebooks (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Cache uv dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+          restore-keys: |
+            venv-${{ runner.os }}-py${{ matrix.python-version }}-
+
+      - name: Install dependencies
+        run: uv sync --group dev --all-extras
+
+      - name: Execute all notebooks (parallel)
+        run: |
+          uv run pytest --nbmake notebooks/ \
+            --nbmake-timeout=300 \
+            --tb=short \
+            -n 3 \
+            -v
+
+      - name: Upload execution artifacts
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: notebook-failures-py${{ matrix.python-version }}
+          path: |
+            .pytest_cache/
+            **/*.nbconvert.ipynb
+
+  # =============================================================================
+  # Run pre-commit hooks on notebooks
+  # =============================================================================
+  pre-commit:
+    name: Pre-commit (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    needs: execute-notebooks
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Cache uv dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+          restore-keys: |
+            venv-${{ runner.os }}-py${{ matrix.python-version }}-
+
+      - name: Install dependencies
+        run: uv sync --group dev --all-extras
+
+      - name: Cache pre-commit hooks
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            pre-commit-${{ runner.os }}-py${{ matrix.python-version }}-
+
+      - name: Run pre-commit
+        run: uv run pre-commit run --all-files --show-diff-on-failure
