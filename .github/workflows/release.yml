@@ -55,7 +55,7 @@ jobs:
           enable-cache: true
 
       - name: Install twine
-        run: uv pip install twine
+        run: uv pip install --system twine
 
       - name: Build package
         run: uv build
@@ -64,4 +64,4 @@ jobs:
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_KEY }}
-        run: uv run twine upload dist/*
+        run: twine upload dist/*
