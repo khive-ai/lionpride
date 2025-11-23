@@ -9,7 +9,7 @@ from typing import Any, final
 
 from pydantic import Field, field_serializer, field_validator
 
-from ..errors import TimeoutError as LionherdTimeoutError
+from ..errors import TimeoutError as lionprideTimeoutError
 from ..libs.concurrency import Lock
 from ..protocols import Invocable, Serializable, implements
 from ..types import Enum, MaybeSentinel, MaybeUnset, Unset, is_sentinel
@@ -77,9 +77,9 @@ class Execution:
 
         error_dict = None
         if self.error is not Unset and self.error is not None:
-            from lionpride.errors import LionherdError
+            from lionpride.errors import LionprideError
 
-            if isinstance(self.error, LionherdError):
+            if isinstance(self.error, LionprideError):
                 error_dict = self.error.to_dict()
             elif isinstance(self.error, ExceptionGroup):
                 error_dict = self._serialize_exception_group(self.error)
@@ -107,7 +107,7 @@ class Execution:
         _seen: set[int] | None = None,
     ) -> dict[str, Any]:
         """Recursively serialize ExceptionGroup with depth limit and cycle detection."""
-        from lionpride.errors import LionherdError
+        from lionpride.errors import LionprideError
 
         # Depth limit to prevent stack overflow
         MAX_DEPTH = 100
@@ -135,7 +135,7 @@ class Execution:
         try:
             exceptions = []
             for exc in eg.exceptions:
-                if isinstance(exc, LionherdError):
+                if isinstance(exc, LionprideError):
                     exceptions.append(exc.to_dict())
                 elif isinstance(exc, ExceptionGroup):
                     exceptions.append(self._serialize_exception_group(exc, depth + 1, _seen))
@@ -267,7 +267,7 @@ class Event(Element):
             self.execution.retryable = False
 
         except TimeoutError:
-            lionpride_timeout = LionherdTimeoutError(
+            lionpride_timeout = lionprideTimeoutError(
                 f"Operation timed out after {self.timeout}s",
                 retryable=True,
             )
@@ -278,19 +278,19 @@ class Event(Element):
             self.execution.retryable = lionpride_timeout.retryable
 
         except Exception as e:
-            from lionpride.errors import LionherdError
+            from lionpride.errors import LionprideError
 
             if isinstance(e, ExceptionGroup):
                 # All exceptions must be retryable for group to be retryable
                 retryable = True
                 for exc in e.exceptions:
-                    if isinstance(exc, LionherdError) and not exc.retryable:
+                    if isinstance(exc, LionprideError) and not exc.retryable:
                         retryable = False
                         break
 
                 self.execution.retryable = retryable
             else:
-                if isinstance(e, LionherdError):
+                if isinstance(e, LionprideError):
                     self.execution.retryable = e.retryable
                 else:
                     self.execution.retryable = True

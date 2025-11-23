@@ -12,7 +12,7 @@ __all__ = (
     "ConnectionError",
     "ExecutionError",
     "ExistsError",
-    "LionherdError",
+    "LionprideError",
     "NotFoundError",
     "QueueFullError",
     "TimeoutError",
@@ -21,7 +21,7 @@ __all__ = (
 
 
 @implements(Serializable)
-class LionherdError(Exception):
+class LionprideError(Exception):
     """Base exception for all lionpride errors.
 
     Attributes:
@@ -30,7 +30,7 @@ class LionherdError(Exception):
         retryable: Whether this error can be retried
     """
 
-    default_message: str = "Lionherd error"
+    default_message: str = "lionpride error"
     default_retryable: bool = True
 
     def __init__(
@@ -72,56 +72,56 @@ class LionherdError(Exception):
         }
 
 
-class ValidationError(LionherdError):
+class ValidationError(LionprideError):
     """Validation failure. Not retryable."""
 
     default_message = "Validation failed"
     default_retryable = False  # Validation errors won't fix themselves
 
 
-class ConfigurationError(LionherdError):
+class ConfigurationError(LionprideError):
     """Configuration error. Not retryable."""
 
     default_message = "Configuration error"
     default_retryable = False  # Config errors need manual fixes
 
 
-class ExecutionError(LionherdError):
+class ExecutionError(LionprideError):
     """Event/Calling execution failure. Retryable by default."""
 
     default_message = "Execution failed"
     default_retryable = True  # Most execution failures are transient
 
 
-class ConnectionError(LionherdError):
+class ConnectionError(LionprideError):
     """Connection/network failure. Retryable by default."""
 
     default_message = "Connection error"
     default_retryable = True  # Network issues are often transient
 
 
-class TimeoutError(LionherdError):
+class TimeoutError(LionprideError):
     """Operation timeout. Retryable by default."""
 
     default_message = "Operation timed out"
     default_retryable = True  # Timeouts might succeed with more time
 
 
-class NotFoundError(LionherdError):
+class NotFoundError(LionprideError):
     """Item not found. Not retryable."""
 
     default_message = "Item not found"
     default_retryable = False  # Missing items won't appear on retry
 
 
-class ExistsError(LionherdError):
+class ExistsError(LionprideError):
     """Item already exists. Not retryable."""
 
     default_message = "Item already exists"
     default_retryable = False  # Duplicate items won't resolve on retry
 
 
-class QueueFullError(LionherdError):
+class QueueFullError(LionprideError):
     """Queue capacity exceeded. Retryable."""
 
     default_message = "Queue is full"

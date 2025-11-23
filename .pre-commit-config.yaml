@@ -1,4 +1,4 @@
-# Pre-commit hooks for lionherd monorepo
+# Pre-commit hooks for lionpride monorepo
 # Docs: https://pre-commit.com/
 # Install: pre-commit install
 # Run: pre-commit run --all-files
