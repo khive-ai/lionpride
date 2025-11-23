@@ -10,7 +10,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from lionpride import Edge, Graph
+from lionpride.core import Edge, Graph
 
 from .node import Operation, OperationType, create_operation
 

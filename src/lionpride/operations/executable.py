@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import Field
 
-from lionpride import Event
+from lionpride.core import Event
 
 from .node import Operation
 

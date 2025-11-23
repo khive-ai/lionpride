@@ -5,7 +5,7 @@ from typing import Any
 
 from pydantic import field_serializer, field_validator
 
-from lionpride import Node
+from lionpride.core import Node
 
 from .base import (
     MessageRole,

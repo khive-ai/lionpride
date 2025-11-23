@@ -3,7 +3,8 @@
 
 from typing import Any
 
-from lionpride import Pile, Progression, not_sentinel
+from lionpride.core import Pile, Progression
+from lionpride.types import not_sentinel
 
 from .content import (
     ActionResponseContent,

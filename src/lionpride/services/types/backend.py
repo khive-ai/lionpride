@@ -16,7 +16,8 @@ from pydantic import (
     model_validator,
 )
 
-from lionpride import Element, Event, EventStatus, HashableModel, MaybeUnset, Unset, is_sentinel
+from lionpride.core import Element, Event, EventStatus
+from lionpride.types import HashableModel, MaybeUnset, Unset, is_sentinel
 
 from .hook import HookBroadcaster, HookEvent, HookPhase
 
@@ -60,7 +61,7 @@ class ServiceConfig(HashableModel):
                 return v.__class__
             if isinstance(v, dict | str):
                 try:
-                    from lionpride import schema_handlers
+                    from lionpride.libs import schema_handlers
 
                     return schema_handlers.load_pydantic_model_from_schema(v)
                 except ImportError:

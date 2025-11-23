@@ -174,16 +174,21 @@ class TestEndpointConfig:
         assert issubclass(config.request_options, BaseModel)
 
     def test_validate_request_options_dict_no_schema_gen(self):
-        """Test request_options with dict when schema-gen NOT installed."""
-        # Mock the schema_handlers module to raise ImportError when accessed
-        import lionpride
+        """Test request_options with dict when schema-gen NOT installed.
 
-        # Save original if it exists
-        original_schema_handlers = getattr(lionpride, "schema_handlers", None)
+        This tests the graceful degradation when datamodel-code-generator
+        is not installed. We mock the load_pydantic_model_from_schema to
+        raise ImportError to simulate the missing dependency.
+        """
+        from lionpride.libs import schema_handlers
 
-        # Delete the attribute to simulate it not being available
-        if hasattr(lionpride, "schema_handlers"):
-            delattr(lionpride, "schema_handlers")
+        original_func = schema_handlers.load_pydantic_model_from_schema
+
+        def raise_import_error(*args, **kwargs):
+            raise ImportError("No module named 'datamodel_code_generator'")
+
+        # Temporarily replace the function
+        schema_handlers.load_pydantic_model_from_schema = raise_import_error
 
         try:
             with patch("lionpride.services.types.backend.logger") as mock_logger:
@@ -200,9 +205,8 @@ class TestEndpointConfig:
                     mock_logger.warning.call_args
                 )
         finally:
-            # Restore original
-            if original_schema_handlers is not None:
-                lionpride.schema_handlers = original_schema_handlers
+            # Restore original function
+            schema_handlers.load_pydantic_model_from_schema = original_func
 
     def test_full_url_without_endpoint_params(self):
         """Test full_url property without endpoint params."""

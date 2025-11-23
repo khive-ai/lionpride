@@ -4,7 +4,7 @@
 from typing import TypeAlias
 from uuid import UUID
 
-from lionpride import Enum
+from lionpride.types import Enum
 
 __all__ = (
     "MessageRole",

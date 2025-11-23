@@ -64,11 +64,19 @@ markers = [
   "unit: Unit tests",
   "property: Property-based tests",
   "slow: Slow tests (deselect with '-m \"not slow\"')",
+  "integration: Integration tests requiring external resources",
 ]
 filterwarnings = [
   "ignore::RuntimeWarning",
   "ignore::pydantic.warnings.PydanticDeprecatedSince20",
   "ignore:Pydantic serializer warnings:UserWarning:pydantic",
+]
+
+[tool.coverage.run]
+omit = [
+  "src/lionpride/services/providers/*",
+  "src/lionpride/services/third_party/*",
+  "src/lionpride/testing.py",
 ]
 
 [dependency-groups]

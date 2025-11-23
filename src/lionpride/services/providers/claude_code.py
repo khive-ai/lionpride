@@ -85,10 +85,10 @@ class ClaudeCodeEndpoint(Endpoint):
         Returns:
             (payload_dict, headers_dict) - headers always empty for CLI
         """
-        from lionpride import ln
+        from lionpride.ln import to_dict
 
         # Convert request to dict if BaseModel
-        request_dict = ln.to_dict(request) if isinstance(request, BaseModel) else request
+        request_dict = to_dict(request) if isinstance(request, BaseModel) else request
 
         # Merge config kwargs, request, and call kwargs (ignore extra_headers for CLI)
         req_dict = {**self.config.kwargs, **request_dict, **kwargs}
@@ -132,7 +132,7 @@ class ClaudeCodeEndpoint(Endpoint):
             - raw_result: Raw "result" chunk from Claude Code CLI
             - session: Organized session data from ClaudeSession
         """
-        from lionpride import ln
+        from lionpride.ln import to_dict
 
         request: ClaudeCodeRequest = payload["request"]
         session = ClaudeSession()
@@ -183,7 +183,7 @@ class ClaudeCodeEndpoint(Endpoint):
         # 6. Return both raw CLI result and organized session data
         return {
             "raw_result": raw_result_chunk,
-            "session": ln.to_dict(session, recursive=True),
+            "session": to_dict(session, recursive=True),
         }
 
     def normalize_response(self, raw_response: dict[str, Any]) -> NormalizedResponse:

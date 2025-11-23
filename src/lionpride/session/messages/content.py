@@ -8,9 +8,9 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel
 
-from lionpride import DataClass, MaybeUnset, ModelConfig, Unset
 from lionpride.libs.schema_handlers import minimal_yaml, typescript_schema
 from lionpride.ln import now_utc
+from lionpride.types import DataClass, MaybeUnset, ModelConfig, Unset
 
 from .base import MessageRole
 
@@ -244,11 +244,11 @@ class InstructionContent(MessageContent):
             else:
                 # JSON format (default - lionagi pattern)
                 try:
-                    from lionpride import ln
+                    from lionpride.ln import json_dumps
 
                     # Create simple example from schema
                     example = self._create_example_from_schema(model_schema)
-                    example_json = ln.json_dumps(example)
+                    example_json = json_dumps(example)
                     if isinstance(example_json, bytes):
                         example_json = example_json.decode("utf-8")
 

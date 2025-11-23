@@ -12,7 +12,7 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel, PydanticUserError
 
-from lionpride import ln
+from lionpride.ln import json_dumps, to_dict
 
 B = TypeVar("B", bound=BaseModel)
 
@@ -66,13 +66,13 @@ def _prepare_schema_input(
     if isinstance(schema, dict):
         try:
             schema_dict = schema
-            schema_json = ln.json_dumps(schema_dict)
+            schema_json = json_dumps(schema_dict)
         except TypeError as e:
             msg = "Invalid dictionary provided for schema"
             raise ValueError(msg) from e
     elif isinstance(schema, str):
         try:
-            schema_dict = ln.to_dict(schema)
+            schema_dict = to_dict(schema)
         except Exception as e:
             msg = "Invalid JSON schema string provided"
             raise ValueError(msg) from e

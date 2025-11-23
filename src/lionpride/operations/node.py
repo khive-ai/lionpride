@@ -9,7 +9,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from lionpride import HashableModel, Node
+from lionpride.core import Node
+from lionpride.types import HashableModel
 
 __all__ = ("Operation", "OperationContent", "OperationType", "create_operation")
 

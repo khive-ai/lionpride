@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import Field, field_serializer, field_validator
 
-from lionpride import Element, Invocable, implements
-from lionpride.core import Executor
+from lionpride.core import Element, Executor
 from lionpride.libs.concurrency import sleep
+from lionpride.protocols import Invocable, implements
 from lionpride.services.types.hook import HookRegistry
 
 from ..utilities.rate_limiter import TokenBucket
