@@ -1,8 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Action models for structured tool calling in operations."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -19,18 +17,7 @@ __all__ = (
 
 
 class ActionRequestModel(HashableModel):
-    """Action/tool call request from LLM in structured output.
-
-    This represents a function call that the LLM wants to execute.
-    It's part of the structured output schema, not a message content type.
-
-    Attributes:
-        function: Name of the function to call (must match tool_schemas)
-        arguments: Arguments to pass to the function
-
-    Example:
-        >>> request = ActionRequestModel(function="multiply", arguments={"a": 5, "b": 3})
-    """
+    """Action/tool call request from LLM structured output."""
 
     function: str | None = Field(
         None,
@@ -50,21 +37,7 @@ class ActionRequestModel(HashableModel):
 
 
 class ActionResponseModel(HashableModel):
-    """Action/tool call response after execution.
-
-    This represents the result of executing a tool call.
-    It's filled in after act() executes the requested tools.
-
-    Attributes:
-        function: Name of the function that was executed
-        arguments: Arguments that were passed to the function
-        output: Result returned by the function (or error if failed)
-
-    Example:
-        >>> response = ActionResponseModel(
-        ...     function="multiply", arguments={"a": 5, "b": 3}, output=15
-        ... )
-    """
+    """Action/tool call response after execution."""
 
     function: str = Field(
         default="",
@@ -81,20 +54,7 @@ class ActionResponseModel(HashableModel):
 
 
 class Reason(HashableModel):
-    """Reasoning/explanation field for chain-of-thought.
-
-    Optional field that can be added to structured outputs to capture
-    the LLM's reasoning process before taking actions.
-
-    Attributes:
-        reasoning: The LLM's explanation of its reasoning
-        confidence: Optional confidence score (0.0 to 1.0)
-
-    Example:
-        >>> reason = Reason(
-        ...     reasoning="I need to multiply 5 by 3 to get the result", confidence=0.95
-        ... )
-    """
+    """Reasoning/explanation field for chain-of-thought."""
 
     reasoning: str = Field(
         default="",

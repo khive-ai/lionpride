@@ -1,24 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""LNDL Lexer - Tokenization for Structured Outputs.
-
-This module provides tokenization for LNDL structured output tags.
-The lexer transforms LNDL responses into token streams for parsing.
-
-Design Philosophy:
-- Clean tokenization with line/column tracking
-- Support for structured output tags (lvars, lacts, OUT blocks)
-- Robust error reporting with position information
-- Minimal lookahead (efficient single-pass)
-
-Token Types:
-- Tags: LVAR_OPEN, LVAR_CLOSE, LACT_OPEN, LACT_CLOSE, OUT_OPEN, OUT_CLOSE
-- Literals: ID, NUM, STR
-- Punctuation: DOT, COMMA, COLON, LBRACKET, RBRACKET, LPAREN, RPAREN
-- Control: NEWLINE, EOF
-"""
-
 from dataclasses import dataclass
 from enum import Enum, auto
 

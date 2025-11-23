@@ -141,52 +141,14 @@ Observable = ObservableProto
 def implements(*protocols: type):
     """Declare protocol implementations (Rust-like: MUST define in class body).
 
-    CRITICAL SEMANTICS (strictest interpretation):
-        @implements() means the class **LITERALLY** implements/overrides the method
-        or declares the attribute IN ITS OWN CLASS BODY. Inheritance does NOT count.
-
-        This is Rust-like trait implementation: you must provide the implementation
-        in the impl block, not rely on inheritance.
-
-    Rules:
-        - Method must be defined in class body (even if it calls super())
-        - Property must be declared in class body (cannot inherit from parent)
-        - Classmethod must be defined in class body
-        - NO inheritance: @implements means "I define this, not my parent"
+    Members must be defined in the decorated class body, not inherited.
+    Stores protocols on cls.__protocols__.
 
     Args:
-        *protocols: Protocol classes that the decorated class **literally** implements
-
-    Returns:
-        Class decorator that stores protocols on cls.__protocols__
+        *protocols: Protocol classes the decorated class literally implements
 
     Raises:
-        TypeError: If class does not define required protocol members in its class body
-
-    Usage:
-        ✓ CORRECT: Literal implementation
-        @implements(Serializable, Deserializable)
-        class MyClass:
-            def to_dict(self, **kwargs): ...      # Defined in this class
-            @classmethod
-            def from_dict(cls, data, **kwargs): ...  # Defined in this class
-
-        ✗ WRONG: Relying on inheritance
-        @implements(Serializable)  # VIOLATION!
-        class Child(Parent):  # Parent has to_dict()
-            pass  # No to_dict in Child body → not allowed!
-
-        ✓ CORRECT: Explicit override
-        @implements(Serializable)
-        class Child(Parent):
-            def to_dict(self, **kwargs):  # Explicit in Child body
-                return super().to_dict(**kwargs)  # Can call parent
-
-    Rationale:
-        - Explicit > Implicit (Rust philosophy)
-        - Clear ownership: each class declares what it implements
-        - No ambiguity about where implementation lives
-        - Prevents accidental protocol claims through inheritance
+        TypeError: If required members are not defined in class body
     """
 
     def decorator(cls):

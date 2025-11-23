@@ -1,3 +1,6 @@
+# Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
+# SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -20,15 +23,7 @@ if TYPE_CHECKING:
 
 
 def _update_model_fields(model: Any, updates: dict[str, Any]) -> Any:
-    """Update model fields with given updates (Pydantic v2 compatible).
-
-    Args:
-        model: Pydantic model instance
-        updates: Dict of field_name -> value updates
-
-    Returns:
-        Updated model instance
-    """
+    """Update model fields with given updates (Pydantic v2 compatible)."""
     if hasattr(model, "model_copy"):
         return model.model_copy(update=updates)
     else:
@@ -38,14 +33,7 @@ def _update_model_fields(model: Any, updates: dict[str, Any]) -> Any:
 
 
 def to_response_str(data: Any) -> str:
-    """Convert response data to string for Message storage.
-
-    Args:
-        data: Response data (str, BaseModel, dict, or any)
-
-    Returns:
-        String representation of data
-    """
+    """Convert response data to string for Message storage."""
     if isinstance(data, str):
         return data
     if isinstance(data, BaseModel):
@@ -68,22 +56,7 @@ async def parse_response(
     branch: Branch | None = None,
     session: Session | None = None,
 ) -> tuple[Any, str]:
-    """Parse and validate response with appropriate strategy.
-
-    Args:
-        response_text: Raw response text
-        response_data: Response data from model
-        use_lndl: Whether to use LNDL parsing
-        operative: Operative for validation
-        response_model: Response model for validation
-        lndl_threshold: LNDL fuzzy matching threshold
-        skip_validation: Skip validation entirely
-        branch: Current branch (for LNDL parsing)
-        session: Current session (for LNDL parsing)
-
-    Returns:
-        Tuple of (parsed_response, response_str)
-    """
+    """Parse and validate response with appropriate strategy."""
     if skip_validation:
         return response_data, response_text
 
@@ -111,18 +84,7 @@ async def _parse_lndl_response(
     branch: Branch | None,
     session: Session | None,
 ) -> tuple[Any, str]:
-    """Parse LNDL response with fuzzy matching.
-
-    Args:
-        response_text: Raw LNDL response
-        operative: Operative for validation
-        threshold: Fuzzy matching threshold
-        branch: Current branch
-        session: Current session
-
-    Returns:
-        Tuple of (parsed_response, response_str)
-    """
+    """Parse LNDL response with fuzzy matching."""
     try:
         # Parse LNDL with fuzzy matching
         lndl_output = parse_lndl_fuzzy(
@@ -183,17 +145,7 @@ def _parse_json_response(
     operative: Operative | None,
     response_model: type[BaseModel] | None,
 ) -> tuple[Any, str]:
-    """Parse JSON response with validation.
-
-    Args:
-        response_text: Raw response text
-        response_data: Response data
-        operative: Operative for validation
-        response_model: Response model
-
-    Returns:
-        Tuple of (parsed_response, response_str)
-    """
+    """Parse JSON response with validation."""
     if operative:
         # Use operative's two-tier validation
         parsed = operative.validate_response(response_text, strict=False)
@@ -221,16 +173,7 @@ def _validate_with_model(
     response_data: Any,
     response_model: type[BaseModel],
 ) -> Any:
-    """Validate response with Pydantic model.
-
-    Args:
-        response_text: Raw response text
-        response_data: Response data
-        response_model: Pydantic model for validation
-
-    Returns:
-        Validated model instance
-    """
+    """Validate response with Pydantic model."""
     # Try PydanticSpecAdapter first (includes fuzzy matching)
     parsed = PydanticSpecAdapter.validate_response(
         response_text,
@@ -262,16 +205,7 @@ async def _process_embedded_actions(
     branch: Branch,
     session: Session,
 ) -> Any:
-    """Process ActionCall objects embedded within model fields.
-
-    Args:
-        parsed_response: Parsed response with potential ActionCall fields
-        branch: Current branch
-        session: Current session
-
-    Returns:
-        Updated response with action results replacing ActionCall objects
-    """
+    """Process ActionCall objects embedded within model fields."""
     from pydantic import BaseModel
 
     from lionpride.lndl.types import ActionCall
@@ -329,17 +263,7 @@ async def _process_lndl_actions(
     branch: Branch,
     session: Session,
 ) -> Any:
-    """Process LNDL action calls.
-
-    Args:
-        parsed_response: Parsed response
-        actions: Action calls from LNDL
-        branch: Current branch
-        session: Current session
-
-    Returns:
-        Updated response with action results
-    """
+    """Process LNDL action calls."""
     # TODO: Implement LNDL action processing
     # This would convert LNDL actions to ActionRequestModel instances
     # and execute them via act()

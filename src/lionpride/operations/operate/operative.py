@@ -18,17 +18,7 @@ __all__ = (
 
 
 class Operative:
-    """Spec/Operable-based validator with two-tier strategy (strict → fuzzy).
-
-    Attributes:
-        name: Operation name
-        adapter: Framework adapter ("pydantic")
-        strict: Strict validation (raise on error)
-        auto_retry_parse: Enable fuzzy fallback
-        max_retries: Max validation attempts
-        operable: Single Operable with all specs
-        request_exclude: Fields excluded from request model
-    """
+    """Spec/Operable-based validator with two-tier strategy (strict then fuzzy)."""
 
     def __init__(
         self,
@@ -72,13 +62,7 @@ class Operative:
         return self._request_model_cls
 
     def create_response_model(self) -> type[BaseModel]:
-        """Materialize response model.
-
-        For single model-based spec (from create_operative_from_model),
-        returns the original Pydantic model directly.
-
-        For multi-spec operables, creates a composite model.
-        """
+        """Materialize response model."""
         if self._response_model_cls:
             return self._response_model_cls
 
@@ -105,15 +89,7 @@ class Operative:
         return self._response_model_cls
 
     def validate_response(self, text: str, strict: bool | None = None) -> Any:
-        """Validate response with two-tier strategy (strict → fuzzy).
-
-        Args:
-            text: Raw response text
-            strict: Override strict setting
-
-        Returns:
-            Validated model instance or None if validation fails
-        """
+        """Validate response with two-tier strategy (strict then fuzzy)."""
         strict = self.strict if strict is None else strict
 
         if not self._response_model_cls:
@@ -184,20 +160,7 @@ def create_operative_from_model(
     strict: bool = False,
     auto_retry_parse: bool = True,
 ) -> Operative:
-    """Create Operative from Pydantic model as a single model-based spec.
-
-    Creates a single Spec with the Pydantic model as base_type, enabling
-    LNDL parsing with namespaced lvars: <lvar Model.field alias>value</lvar>
-
-    Args:
-        response_model: Pydantic BaseModel class
-        name: Operation name (defaults to model class name)
-        strict: Strict validation
-        auto_retry_parse: Enable fuzzy fallback
-
-    Returns:
-        Operative instance with single model-based spec
-    """
+    """Create Operative from Pydantic model as a single model-based spec."""
     from lionpride.types import Spec
 
     # Create single model-based spec
@@ -232,39 +195,7 @@ def create_action_operative(
     strict: bool = False,
     auto_retry_parse: bool = True,
 ) -> Operative:
-    """Create Operative with optional reasoning and action support.
-
-    With LNDL, actions are handled via <lact> tags, not as specs.
-    This function creates specs for the data model and optionally reason.
-
-    Action execution is handled by:
-    - LLM writes <lact> tags in response
-    - LNDL parser extracts these as action calls
-    - operate() executes the actions via act()
-    - Results are integrated into final response
-
-    Args:
-        base_model: Optional Pydantic model for the main data
-        reason: Include reasoning field for chain-of-thought
-        actions: Enable action execution (via <lact> tags)
-        name: Operation name
-        strict: Strict validation
-        auto_retry_parse: Enable fuzzy fallback
-
-    Returns:
-        Operative with action support
-
-    Example:
-        >>> from pydantic import BaseModel
-        >>> class Analysis(BaseModel):
-        ...     summary: str
-        ...     metrics: dict
-        >>> operative = create_action_operative(
-        ...     base_model=Analysis, reason=True, actions=True, name="analyze"
-        ... )
-        >>> # LNDL specs: analyze (Analysis model), reason (Reason model)
-        >>> # Actions handled via <lact> tags, not as specs
-    """
+    """Create Operative with optional reasoning and action support."""
     from lionpride.types import Spec
 
     from ..models import Reason

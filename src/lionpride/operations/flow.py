@@ -1,8 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Flow - Dependency-aware operation graph execution with structured concurrency."""
-
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
@@ -45,23 +43,7 @@ class OperationResult:
 
 
 class DependencyAwareExecutor:
-    """Executes operation graphs with dependency management and context inheritance.
-
-    Key Features:
-    - ConcurrencyEvent-based dependency coordination (operations wait for predecessors)
-    - Branch pre-allocation (avoid locking during execution)
-    - Context inheritance (operations receive predecessor results)
-    - Concurrency control via Semaphore
-    - Structured concurrency via gather
-
-    Attributes:
-        session: Session for services and state
-        graph: Operation graph (DAG) to execute
-        context: Shared execution context
-        max_concurrent: Max concurrent operations (None = unlimited)
-        verbose: Enable debug logging
-        default_branch: Default branch for operations
-    """
+    """Executes operation graphs with dependency management and context inheritance."""
 
     def __init__(
         self,
@@ -73,17 +55,7 @@ class DependencyAwareExecutor:
         verbose: bool = False,
         default_branch: Branch | str | None = None,
     ):
-        """Initialize executor.
-
-        Args:
-            session: Session instance
-            graph: Operation graph to execute
-            context: Initial shared context
-            max_concurrent: Max concurrent operations (None = unlimited)
-            stop_on_error: Stop execution on first error (default: True)
-            verbose: Enable verbose logging
-            default_branch: Default branch for operations
-        """
+        """Initialize executor."""
         self.session = session
         self.graph = graph
         self.context = context or {}
@@ -111,14 +83,7 @@ class DependencyAwareExecutor:
                 self.completion_events[node.id] = concurrency.Event()
 
     async def execute(self) -> dict[str, Any]:
-        """Execute the operation graph with dependency coordination.
-
-        Returns:
-            Dictionary mapping operation names to their results
-
-        Raises:
-            ValueError: If graph has cycles or contains non-Operation nodes
-        """
+        """Execute the operation graph with dependency coordination."""
         # Validate graph is acyclic
         if not self.graph.is_acyclic():
             raise ValueError("Operation graph has cycles - must be a DAG")
@@ -163,20 +128,7 @@ class DependencyAwareExecutor:
         return results_by_name
 
     async def stream_execute(self) -> AsyncGenerator[OperationResult, None]:
-        """Execute the operation graph, yielding results as operations complete.
-
-        Yields:
-            OperationResult for each completed operation (success or failure)
-
-        Raises:
-            ValueError: If graph has cycles or contains non-Operation nodes
-
-        Example:
-            >>> async for result in executor.stream_execute():
-            ...     print(f"{result.name}: {result.completed}/{result.total}")
-            ...     if result.success:
-            ...         process(result.result)
-        """
+        """Execute the operation graph, yielding results as operations complete."""
         # Validate graph is acyclic
         if not self.graph.is_acyclic():
             raise ValueError("Operation graph has cycles - must be a DAG")
@@ -226,7 +178,7 @@ class DependencyAwareExecutor:
                     )
 
     async def _preallocate_branches(self) -> None:
-        """Pre-allocate branches for all operations to eliminate runtime locking."""
+        """Pre-allocate branches for all operations."""
         # Resolve default branch
         default_branch = self._default_branch
         if isinstance(default_branch, str):
@@ -247,19 +199,7 @@ class DependencyAwareExecutor:
         self,
         operation: Operation,
     ) -> Operation:
-        """Execute single operation with dependency coordination.
-
-        Args:
-            operation: Operation to execute
-
-        Returns:
-            The operation (for CompletionStream index tracking)
-
-        Note:
-            Concurrency limiting happens AFTER dependency waiting.
-            This ensures limiter slots are only held by tasks ready to execute,
-            not by tasks blocked waiting for predecessors.
-        """
+        """Execute single operation with dependency coordination."""
         try:
             # Wait for all dependencies to complete (no limiter held yet)
             await self._wait_for_dependencies(operation)
@@ -302,11 +242,7 @@ class DependencyAwareExecutor:
         return operation
 
     async def _wait_for_dependencies(self, operation: Operation) -> None:
-        """Wait for all predecessor operations to complete.
-
-        Args:
-            operation: Operation whose dependencies to wait for
-        """
+        """Wait for all predecessor operations to complete."""
         # Check for aggregation sources (special handling)
         is_aggregation = operation.metadata.get("aggregation", False)
         if is_aggregation and isinstance(operation.content.parameters, dict):
@@ -341,15 +277,7 @@ class DependencyAwareExecutor:
                 await self.completion_events[pred.id].wait()
 
     def _prepare_operation_context(self, operation: Operation) -> None:
-        """Prepare operation parameters with predecessor results.
-
-        Updates operation.content.parameters in-place with:
-        - context: Dict with predecessor results and shared context
-        - Individual predecessor results as {pred_id}_result
-
-        Args:
-            operation: Operation to prepare
-        """
+        """Prepare operation parameters with predecessor results."""
         predecessors = self.graph.get_predecessors(operation)
 
         if not predecessors:
@@ -399,11 +327,7 @@ class DependencyAwareExecutor:
             )
 
     async def _invoke_operation(self, operation: Operation) -> None:
-        """Invoke operation and store result.
-
-        Args:
-            operation: Operation to invoke
-        """
+        """Invoke operation and store result."""
         if self.verbose:
             print(f"Executing operation: {str(operation.id)[:8]}")
 
@@ -462,34 +386,12 @@ async def flow(
 ) -> dict[str, Any]:
     """Execute operation graph with dependency-aware scheduling.
 
-    Operations are executed with proper dependency coordination using
-    ConcurrencyEvents for signaling. Independent operations run concurrently
-    where possible.
-
     Args:
-        session: Session instance (for services and context)
-        branch: Branch instance or name
-        graph: Operation graph (DAG) to execute
-        context: Initial shared context (optional)
-        max_concurrent: Maximum concurrent operations (None = unlimited)
-        stop_on_error: Stop execution on first error (default: True)
-        verbose: Enable verbose logging
+        graph: Operation graph (DAG) to execute.
+        max_concurrent: Max concurrent operations (None = unlimited).
 
     Returns:
-        Dictionary mapping operation names to their results
-
-    Raises:
-        ValueError: If graph has cycles or contains non-Operation nodes
-
-    Example:
-        >>> builder = Builder()
-        >>> builder.add("extract", "generate", {"instruction": "Extract data"})
-        >>> builder.add("analyze", "operate", {"response_model": Analysis})
-        >>> builder.depends_on("analyze", "extract")
-        >>> graph = builder.build()
-        >>> results = await flow(session, "main", graph)
-        >>> results["extract"]  # Access by operation name
-        >>> results["analyze"]
+        Dictionary mapping operation names to their results.
     """
     executor = DependencyAwareExecutor(
         session=session,
@@ -513,28 +415,7 @@ async def flow_stream(
     max_concurrent: int | None = None,
     stop_on_error: bool = True,
 ) -> AsyncGenerator[OperationResult, None]:
-    """Execute operation graph, yielding results as operations complete.
-
-    Streaming version of flow() - yields OperationResult as each operation
-    finishes, enabling progress monitoring and early result processing.
-
-    Args:
-        session: Session instance (for services and context)
-        branch: Branch instance or name
-        graph: Operation graph (DAG) to execute
-        context: Initial shared context (optional)
-        max_concurrent: Maximum concurrent operations (None = unlimited)
-        stop_on_error: Stop execution on first error (default: True)
-
-    Yields:
-        OperationResult for each completed operation
-
-    Example:
-        >>> async for result in flow_stream(session, "main", graph):
-        ...     print(f"[{result.completed}/{result.total}] {result.name}")
-        ...     if not result.success:
-        ...         print(f"  Error: {result.error}")
-    """
+    """Execute operation graph, yielding results as operations complete."""
     executor = DependencyAwareExecutor(
         session=session,
         graph=graph,

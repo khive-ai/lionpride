@@ -3,11 +3,24 @@
 
 """Shared fixtures for LNDL tests.
 
-This module provides common test fixtures for testing LNDL components:
-- Sample Pydantic models (Report, Analysis, SearchResult)
-- Sample LNDL text snippets (valid, invalid, edge cases)
-- Operable instances with different Specs
-- Lexer/Parser/AST helper instances
+LNDL Overview:
+    LNDL (Language Network Directive Language) is a structured output format
+    for LLM responses with fuzzy parsing tolerance.
+
+Security Model:
+    - Threat model: Designed for LLM output (structured but imperfect)
+    - NOT for: Untrusted user input without validation
+    - ActionCalls: Parsed but NOT executed (caller must sandbox)
+    - Fuzzy mode: Trades strictness for tolerance (use strict for security-critical)
+
+Thread Safety:
+    Lexer and Parser are not thread-safe. Create separate instances per thread.
+
+Fixtures Provided:
+    - Sample Pydantic models (Report, Analysis, SearchResult)
+    - Sample LNDL text snippets (valid, invalid, edge cases)
+    - Operable instances with different Specs
+    - Lexer/Parser/AST helper instances
 """
 
 import pytest

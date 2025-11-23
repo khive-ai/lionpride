@@ -14,22 +14,7 @@ def to_num(
     num_type: type[int] | type[float] = float,
     precision: int | None = None,
 ) -> int | float:
-    """Convert input to numeric type with validation and bounds checking.
-
-    Args:
-        input_: Value to convert to number
-        upper_bound: Maximum allowed value (inclusive)
-        lower_bound: Minimum allowed value (inclusive)
-        num_type: Target numeric type (int or float)
-        precision: Number of decimal places for rounding (float only)
-
-    Returns:
-        Converted number
-
-    Raises:
-        ValueError: For invalid input or out of bounds values
-        TypeError: For invalid input types
-    """
+    """Convert input to numeric type with optional bounds checking."""
     # Validate num_type
     if num_type not in (int, float):
         raise ValueError(f"Invalid number type: {num_type}")

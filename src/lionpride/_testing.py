@@ -1,19 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Internal testing utilities for lionpride.
-
-This module provides test classes that require proper import paths for
-serialization/deserialization (lion_class polymorphic dispatch).
-
-These classes are NOT part of the public API. For test fixtures and factories,
-use the conftest.py files in the tests/ directory.
-
-Note: This module is named with underscore prefix (_testing) to indicate
-it's internal. It's needed because lion_class serialization requires
-fully-qualified module paths that can be dynamically imported.
-"""
-
 from __future__ import annotations
 
 from typing import Any

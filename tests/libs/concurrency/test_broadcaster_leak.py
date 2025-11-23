@@ -1,3 +1,6 @@
+# Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
+# SPDX-License-Identifier: Apache-2.0
+
 """Test Broadcaster class-level subscription leak - Issue #24.
 
 Broadcaster uses ClassVar[list] for _subscribers, combined with singleton pattern.

@@ -13,21 +13,7 @@ __all__ = ("run_async",)
 
 
 def run_async(coro: Awaitable[T]) -> T:
-    """Run async coroutine from sync context using anyio.
-
-    Creates a new thread with an isolated event loop to execute the coroutine.
-    This allows calling async code from sync contexts, even when an event loop
-    is already running in the current thread.
-
-    Args:
-        coro: Coroutine to execute
-
-    Returns:
-        Result from the coroutine
-
-    Raises:
-        Any exception raised by the coroutine
-    """
+    """Run async coroutine from sync context (creates isolated thread with event loop)."""
     result_container: list[Any] = []
     exception_container: list[Exception] = []
 

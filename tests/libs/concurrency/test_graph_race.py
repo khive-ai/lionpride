@@ -1,3 +1,6 @@
+# Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
+# SPDX-License-Identifier: Apache-2.0
+
 """Test Graph.add_edge() race condition - Issue #21.
 
 This test verifies that @synchronized on Graph mutation methods prevents

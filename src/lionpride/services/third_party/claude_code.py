@@ -1,30 +1,5 @@
-# Copyright (c) 2023-2025, HaiyangLi <quantocean.li at gmail dot com>
+# Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
-
-"""Claude Code CLI integration models and streaming utilities.
-
-Design Notes
-------------
-This module provides request models for the Claude Code CLI. Key design choices:
-
-1. **Permission Bypass**: `permission_mode="bypassPermissions"` passes
-   `--dangerously-skip-permissions` to the CLI without additional gates.
-   This is intentional - lionpride is a production orchestration framework
-   where users configure permissions deliberately. No env var gate is added.
-
-2. **add_dir Parameter**: Passed directly to CLI without path validation.
-   Unlike `workspace` (which is validated to stay under repo), `add_dir` may
-   legitimately reference paths outside the repo (e.g., shared libraries).
-   Users are responsible for safe configuration.
-
-3. **Timeout Handling**: Subprocess timeout is NOT enforced at this layer.
-   When used via APICalling/Event, timeout is enforced by the Event base class
-   using `fail_after()`. Direct calls to `stream_claude_code_cli()` have no
-   timeout - caller's responsibility.
-
-4. **Response Models**: This module defines request models only. Responses are
-   streamed as raw JSON chunks, not validated against Pydantic models.
-"""
 
 from __future__ import annotations
 

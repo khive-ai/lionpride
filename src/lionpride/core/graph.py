@@ -528,38 +528,19 @@ class Graph(Element, PydapterAdaptable, PydapterAsyncAdaptable):
         super().register_async_adapter(adapter)
 
     def adapt_to(self, obj_key: str, many: bool = False, **kwargs: Any) -> Any:
-        """Convert to external format via pydapter adapter.
-
-        Args:
-            obj_key: Adapter key (e.g., "neo4j")
-            many: Whether to adapt multiple Graph instances
-            **kwargs: Passed to adapter
-        """
+        """Convert to external format via pydapter adapter."""
         kwargs.setdefault("adapt_meth", "to_dict")
         kwargs.setdefault("adapt_kw", {"mode": "db"})
         return super().adapt_to(obj_key=obj_key, many=many, **kwargs)
 
     @classmethod
     def adapt_from(cls, obj: Any, obj_key: str, many: bool = False, **kwargs: Any) -> Graph:
-        """Create from external format via pydapter adapter.
-
-        Args:
-            obj: Source object
-            obj_key: Adapter key (e.g., "neo4j")
-            many: Whether to deserialize multiple Graph instances
-            **kwargs: Passed to adapter
-        """
+        """Create from external format via pydapter adapter."""
         kwargs.setdefault("adapt_meth", "from_dict")
         return super().adapt_from(obj, obj_key=obj_key, many=many, **kwargs)
 
     async def adapt_to_async(self, obj_key: str, many: bool = False, **kwargs: Any) -> Any:
-        """Async convert to external format via pydapter async adapter.
-
-        Args:
-            obj_key: Adapter key
-            many: Whether to adapt multiple Graph instances
-            **kwargs: Passed to adapter
-        """
+        """Async convert to external format via pydapter adapter."""
         kwargs.setdefault("adapt_meth", "to_dict")
         kwargs.setdefault("adapt_kw", {"mode": "db"})
         return await super().adapt_to_async(obj_key=obj_key, many=many, **kwargs)
@@ -568,13 +549,6 @@ class Graph(Element, PydapterAdaptable, PydapterAsyncAdaptable):
     async def adapt_from_async(
         cls, obj: Any, obj_key: str, many: bool = False, **kwargs: Any
     ) -> Graph:
-        """Async create from external format via pydapter async adapter.
-
-        Args:
-            obj: Source object
-            obj_key: Adapter key
-            many: Whether to deserialize multiple Graph instances
-            **kwargs: Passed to adapter
-        """
+        """Async create from external format via pydapter adapter."""
         kwargs.setdefault("adapt_meth", "from_dict")
         return await super().adapt_from_async(obj, obj_key=obj_key, many=many, **kwargs)

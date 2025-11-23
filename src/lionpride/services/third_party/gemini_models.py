@@ -1,22 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Gemini CLI integration models and streaming utilities.
-
-Design Notes
-------------
-This module provides request models for the Gemini CLI (google-gemini/gemini-cli).
-Follows the same patterns as claude_code.py for consistency.
-
-1. **Yolo Mode**: `yolo=True` passes `--yolo` to auto-approve all actions.
-   Similar to Claude Code's `bypassPermissions`.
-
-2. **Output Format**: Uses `--output-format stream-json` for streaming JSON events.
-
-3. **Timeout Handling**: Like Claude Code, subprocess timeout is NOT enforced
-   at this layer. When used via APICalling/Event, timeout is enforced by Event.
-"""
-
 from __future__ import annotations
 
 import asyncio

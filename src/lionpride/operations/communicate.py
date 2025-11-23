@@ -1,16 +1,5 @@
-"""Communicate operation - stateful chat with optional structured output.
-
-Supports two structured output modes:
-1. JSON Schema mode: response_model (BaseModel) → uses response_format
-2. LNDL mode: operable (Operable) → uses system prompt injection + fuzzy parsing
-
-Both modes support stateful retry on validation failure.
-
-Hierarchy:
-    generate     → stateless model invocation
-    communicate  → generate + message persistence + validation + retry
-    operate      → communicate + events + actions
-"""
+# Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -46,42 +35,9 @@ async def communicate(
 ) -> str | dict | Message | BaseModel:
     """Stateful chat with optional structured output and retry.
 
-    Supports two structured output modes:
-    - JSON mode: Provide response_model (BaseModel) for JSON schema validation
-    - LNDL mode: Provide operable (Operable) for fuzzy LNDL parsing
-
     Args:
-        session: Current session
-        branch: Current branch or branch name
-        parameters: Operation parameters including:
-            - instruction: The instruction/prompt text (required)
-            - imodel: Service name to use (required)
-
-            # JSON Schema Mode:
-            - response_model: Pydantic model for structured output
-            - strict_validation: Raise on validation failure (default: False)
-            - fuzzy_parse: Enable fuzzy JSON parsing (default: True)
-
-            # LNDL Mode:
-            - operable: Operable for LNDL structured output
-            - lndl_threshold: Fuzzy matching threshold (default: 0.85)
-
-            # Retry:
-            - max_retries: Retry attempts on validation failure (default: 0)
-
-            # Common:
-            - context: Optional context dict
-            - images: Optional image URLs
-            - image_detail: Optional image detail level
-            - return_as: "text" | "raw" | "message" | "model" (default: "text")
-            - **kwargs: Passed to imodel.invoke()
-
-    Returns:
-        Based on return_as:
-            - "text": response string (default)
-            - "raw": full raw API response dict
-            - "message": Message with metadata
-            - "model": validated Pydantic model (requires response_model or operable)
+        parameters: Must include 'instruction' and 'imodel'. Optionally:
+            response_model/operable for validation, max_retries, return_as.
     """
     # Extract parameters
     instruction = parameters.pop("instruction", None)
@@ -253,17 +209,7 @@ def _prepare_lndl_messages(
     ins_msg: Message,
     operable: Operable,
 ) -> list[dict[str, Any]]:
-    """Prepare messages with LNDL system prompt injection.
-
-    Args:
-        session: Current session
-        branch: Current branch
-        ins_msg: Instruction message
-        operable: Operable for LNDL spec generation
-
-    Returns:
-        List of chat messages with LNDL prompt
-    """
+    """Prepare messages with LNDL system prompt injection."""
     from lionpride.lndl import get_lndl_system_prompt
 
     # Get base LNDL prompt
@@ -291,14 +237,7 @@ def _prepare_lndl_messages(
 
 
 def _generate_lndl_spec_format(operable: Operable) -> str:
-    """Generate LNDL format guidance from Operable specs.
-
-    Args:
-        operable: Operable containing specs
-
-    Returns:
-        LNDL format string to append to system prompt
-    """
+    """Generate LNDL format guidance from Operable specs."""
     # Handle both Operable (lionpride) and Operative (lionpride wrapper)
     from lionpride.operations.operate.operative import Operative
 
@@ -406,16 +345,7 @@ def _validate_lndl(
     operable: Operable,
     threshold: float,
 ) -> tuple[Any, str | None]:
-    """Validate LNDL response with fuzzy matching.
-
-    Args:
-        response_text: Raw LNDL response
-        operable: Operable for validation (can be Operable or Operative)
-        threshold: Fuzzy matching threshold
-
-    Returns:
-        Tuple of (validated_result, error_message_or_none)
-    """
+    """Validate LNDL response with fuzzy matching."""
     from lionpride.lndl import parse_lndl_fuzzy
     from lionpride.operations.operate.operative import Operative
 
@@ -458,17 +388,7 @@ def _validate_json(
     strict: bool,
     fuzzy_parse: bool,
 ) -> tuple[Any, str | None]:
-    """Validate JSON response with PydanticSpecAdapter.
-
-    Args:
-        response_data: Raw response text or dict
-        response_model: Pydantic model for validation
-        strict: Strict validation mode
-        fuzzy_parse: Enable fuzzy parsing
-
-    Returns:
-        Tuple of (validated_result, error_message_or_none)
-    """
+    """Validate JSON response with PydanticSpecAdapter."""
     try:
         # If response is already a dict, validate directly
         if isinstance(response_data, dict):
@@ -503,20 +423,7 @@ def _format_result(
     response_model: type[BaseModel] | None,
     operable: Operable | None,
 ) -> Any:
-    """Format the result based on return_as parameter.
-
-    Args:
-        return_as: Return format
-        validated: Validated response
-        response_text: Raw response text
-        raw_response: Raw API response
-        assistant_msg: Assistant message
-        response_model: Response model (if JSON mode)
-        operable: Operable (if LNDL mode)
-
-    Returns:
-        Formatted result
-    """
+    """Format the result based on return_as parameter."""
     match return_as:
         case "text":
             if isinstance(validated, BaseModel):

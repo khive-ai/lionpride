@@ -22,29 +22,9 @@ ConversionMode = Literal["python", "json"]
 
 @implements(Serializable, Deserializable, Hashable)
 class HashableModel(BaseModel):
-    """Content-based hashable model (vs Element's ID-based hashing).
+    """Content-based hashable model: identical fields produce identical hash.
 
-    Two instances with identical fields have same hash. Use for cache keys,
-    deduplication, configs where value equality matters.
-
-    Frozen by default (immutable) to prevent hash corruption when used in
-    sets/dicts. This ensures safe use with to_list(unique=True) and as
-    cache keys.
-
-    Use Cases:
-        - Structured LLM outputs with to_list(flatten=True, unique=True)
-        - Cache keys where identical config values should deduplicate
-        - Set deduplication based on field content
-        - Value equality (same fields = same hash)
-
-    When to Use Element Instead:
-        - Workflow entities where identity matters (ID-based hashing)
-        - Entities that mutate over time (ID remains stable)
-
-    Hash Stability:
-        Hash computation delegates to to_dict() serialization. Changes to
-        serialization logic may affect hash values, potentially invalidating
-        cached objects.
+    Frozen by default for safe use in sets/dicts.
     """
 
     model_config = ConfigDict(
@@ -81,20 +61,7 @@ class HashableModel(BaseModel):
     def from_dict(
         cls, data: dict[str, Any] | str | bytes, mode: ConversionMode = "python", **kwargs: Any
     ) -> Self:
-        """Deserialize from dict.
-
-        Args:
-            data: Dictionary to deserialize (or JSON string/bytes if mode='json')
-            mode: 'python' for native types, 'json' for JSON-safe deserialization
-            **kwargs: Passed to model_validate()
-
-        Returns:
-            Validated model instance
-
-        Raises:
-            ValueError: If mode is invalid
-            ValidationError: If data doesn't match schema
-        """
+        """Deserialize from dict or JSON string/bytes."""
         if mode == "python":
             return cls.model_validate(data, **kwargs)
         elif mode == "json":
@@ -105,18 +72,7 @@ class HashableModel(BaseModel):
             raise ValueError(f"Invalid mode: {mode}. Must be 'python' or 'json'")
 
     def to_json(self, decode: bool = True, **kwargs: Any) -> str | bytes:
-        """Serialize to deterministic JSON.
-
-        Keys are sorted to ensure deterministic hashing - identical objects
-        produce identical JSON output, critical for hash stability.
-
-        Args:
-            decode: If True, return str; if False, return bytes
-            **kwargs: Passed to model_dump()
-
-        Returns:
-            JSON string (decode=True) or bytes (decode=False)
-        """
+        """Serialize to deterministic JSON (sorted keys for hash stability)."""
         dict_ = self._to_dict(**kwargs)
         json_bytes = json_dumps(
             dict_,

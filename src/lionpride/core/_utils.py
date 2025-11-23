@@ -28,18 +28,7 @@ __all__ = (
 
 
 def synchronized(func: Callable[P, R]) -> Callable[P, R]:
-    """Decorator for thread-safe method execution.
-
-    Executes method within self._lock context. The class must have a _lock
-    attribute (typically threading.RLock()).
-
-    Preserves the exact signature and return type of the decorated method.
-
-    Example:
-        @synchronized
-        def append(self, item: T) -> None:
-            self.items.append(item)
-    """
+    """Decorator for thread-safe method execution using self._lock."""
 
     @wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
@@ -52,18 +41,7 @@ def synchronized(func: Callable[P, R]) -> Callable[P, R]:
 
 
 def async_synchronized(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
-    """Decorator for async-safe method execution.
-
-    Executes async method within self._async_lock context. The class must have a
-    _async_lock attribute (typically asyncio.Lock()).
-
-    Preserves the exact signature and return type of the decorated async method.
-
-    Example:
-        @async_synchronized
-        async def append_async(self, item: T) -> None:
-            self.items.append(item)
-    """
+    """Decorator for async-safe method execution using self._async_lock."""
 
     @wraps(func)
     async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
@@ -79,20 +57,10 @@ _TYPE_CACHE: dict[str, type] = {}
 
 
 def load_type_from_string(type_str: str) -> type:
-    """Load type from fully qualified module path string.
-
-    Args:
-        type_str: Fully qualified type path (e.g., 'lionpride.core.Node')
-
-    Returns:
-        Type class
+    """Load type from fully qualified module path (e.g., 'lionpride.core.Node').
 
     Raises:
-        ValueError: If type string is invalid or type cannot be loaded
-
-    Example:
-        >>> load_type_from_string("lionpride.core.Node")
-        <class 'lionpride.core.node.Node'>
+        ValueError: If type string invalid or type cannot be loaded.
     """
     # Check cache first
     if type_str in _TYPE_CACHE:
@@ -130,22 +98,7 @@ def load_type_from_string(type_str: str) -> type:
 
 
 def extract_types(item_type: Any) -> set[type]:
-    """Extract types from union types or convert single types to set.
-
-    Handles Python 3.10+ pipe syntax (int | str), typing.Union, lists, and sets.
-
-    Args:
-        item_type: Single type, list of types, set of types, or Union type
-
-    Returns:
-        Set of extracted types
-
-    Examples:
-        extract_types(int) -> {int}
-        extract_types([int, str]) -> {int, str}
-        extract_types(int | str) -> {int, str}
-        extract_types(Union[int, str]) -> {int, str}
-    """
+    """Extract types from union types, lists, sets, or single types to set[type]."""
 
     # Helper to check if type is a union
     def is_union(t):
@@ -184,23 +137,7 @@ def extract_types(item_type: Any) -> set[type]:
 
 
 def to_uuid(value: Any) -> UUID:
-    """Convert various ID representations to UUID.
-
-    Args:
-        value: UUID, UUID string, or Observable object with id property
-
-    Returns:
-        UUID instance
-
-    Raises:
-        ValueError: If value cannot be converted to UUID or Observable.id is callable
-
-    Examples:
-        >>> to_uuid(UUID("12345678-1234-5678-1234-567812345678"))
-        UUID('12345678-1234-5678-1234-567812345678')
-        >>> to_uuid("12345678-1234-5678-1234-567812345678")
-        UUID('12345678-1234-5678-1234-567812345678')
-    """
+    """Convert UUID, UUID string, or Observable to UUID instance."""
     if isinstance(value, Observable):
         id_value = value.id
         if callable(id_value):
@@ -216,17 +153,7 @@ def to_uuid(value: Any) -> UUID:
 
 
 def coerce_created_at(v) -> dt.datetime:
-    """Coerce datetime, timestamp, or ISO string to UTC-aware datetime.
-
-    Args:
-        v: datetime, float timestamp, or ISO 8601 string
-
-    Returns:
-        UTC-aware datetime
-
-    Raises:
-        ValueError: If cannot coerce to datetime
-    """
+    """Coerce datetime, timestamp, or ISO string to UTC-aware datetime."""
     # datetime object
     if isinstance(v, dt.datetime):
         if v.tzinfo is None:

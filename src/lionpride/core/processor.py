@@ -47,20 +47,7 @@ class Processor:
         max_queue_size: int = 1000,
         max_denial_tracking: int = 10000,
     ) -> None:
-        """Initialize processor with capacity constraints.
-
-        Args:
-            queue_capacity: Max events per batch (must be > 0, max 10000)
-            capacity_refresh_time: Refresh interval in seconds (must be in [0.01, 3600])
-            pile: Reference to executor's Flow.items for event storage
-            executor: Reference to executor for progression updates (optional)
-            concurrency_limit: Max concurrent executions (default: 100, prevents resource exhaustion)
-            max_queue_size: Max queue size before rejecting new events (default: 1000)
-            max_denial_tracking: Max denial entries to track (default: 10000, prevents unbounded growth)
-
-        Raises:
-            ValueError: If parameters out of bounds
-        """
+        """Initialize processor with capacity constraints."""
         # Validate queue_capacity
         if queue_capacity < 1:
             raise ValueError("Queue capacity must be greater than 0.")
@@ -125,17 +112,7 @@ class Processor:
         self._execution_mode = value
 
     async def enqueue(self, event_id: UUID, priority: float | None = None) -> None:
-        """Add event UUID to priority queue.
-
-        Args:
-            event_id: UUID of event in pile
-            priority: Priority value (lower = higher priority).
-                     If None, fetches event from pile and uses created_at timestamp.
-
-        Raises:
-            QueueFullError: If queue size exceeds max_queue_size
-            ValueError: If priority is NaN or Inf
-        """
+        """Add event UUID to priority queue (lower priority = processed first)."""
         # Check queue size limit
         if self.queue.qsize() >= self.max_queue_size:
             raise QueueFullError(
@@ -172,10 +149,7 @@ class Processor:
             await concurrency.sleep(0.1)
 
     async def stop(self) -> None:
-        """Signal processor to stop processing events.
-
-        Clears denial tracking to prevent memory leaks across stop/start cycles.
-        """
+        """Signal processor to stop and clear denial tracking."""
         self._stop_event.set()
         self._denial_counts.clear()  # Clear denial tracking on stop
 
@@ -199,20 +173,7 @@ class Processor:
         max_queue_size: int = 1000,
         max_denial_tracking: int = 10000,
     ) -> Self:
-        """Asynchronously construct new Processor.
-
-        Args:
-            queue_capacity: Max events per batch
-            capacity_refresh_time: Refresh interval in seconds
-            pile: Reference to executor's Flow.items
-            executor: Reference to executor for progression updates
-            concurrency_limit: Max concurrent executions (default: 100)
-            max_queue_size: Max queue size (default: 1000)
-            max_denial_tracking: Max denial entries to track (default: 10000)
-
-        Returns:
-            New processor instance
-        """
+        """Async factory for Processor construction."""
         return cls(
             queue_capacity=queue_capacity,
             capacity_refresh_time=capacity_refresh_time,
@@ -351,13 +312,7 @@ class Executor:
         strict_event_type: bool = False,
         name: str | None = None,
     ) -> None:
-        """Initialize executor with Flow-based state management.
-
-        Args:
-            processor_config: Config dict for creating Processor
-            strict_event_type: If True, Flow enforces exact type matching
-            name: Optional name for the executor Flow
-        """
+        """Initialize executor with Flow-based state management."""
         self.processor_config = processor_config or {}
         self.processor: Processor | None = None
 
@@ -385,11 +340,7 @@ class Executor:
     async def _update_progression(
         self, event: Event, force_status: EventStatus | None = None
     ) -> None:
-        """Update Flow progression to match event status (thread-safe via Pile lock).
-
-        Raises:
-            ConfigurationError: If progression for status doesn't exist
-        """
+        """Update Flow progression to match event status."""
         from ..errors import ConfigurationError
 
         target_status = force_status if force_status else event.execution.status
@@ -441,26 +392,14 @@ class Executor:
         )
 
     async def append(self, event: Event, priority: float | None = None) -> None:
-        """Add event to Flow and enqueue for processing.
-
-        Args:
-            event: Event to add
-            priority: Priority value (lower = higher priority). Defaults to event.created_at.
-        """
+        """Add event to Flow and enqueue for processing."""
         self.states.add_item(event, progressions="pending")
 
         if self.processor:
             await self.processor.enqueue(event.id, priority=priority)
 
     def get_events_by_status(self, status: EventStatus | str) -> list[Event]:
-        """Get all events with given status.
-
-        Args:
-            status: EventStatus enum or status string
-
-        Returns:
-            List of events
-        """
+        """Get all events with given status."""
         status_str = status.value if isinstance(status, EventStatus) else status
         prog = self.states.get_progression(status_str)
         return [self.states.items[uid] for uid in prog]
@@ -490,25 +429,7 @@ class Executor:
         return {prog.name: len(prog) for prog in self.states.progressions}
 
     async def cleanup_events(self, statuses: list[EventStatus] | None = None) -> int:
-        """Remove events with specified statuses from executor.
-
-        This is a manual cleanup method for memory management. Events are removed
-        from both progressions and the Flow.items pile. Also cleans up processor
-        denial tracking to prevent memory leaks.
-
-        Thread-safe: Uses Pile's built-in async locks to prevent race conditions
-        with concurrent _update_progression() calls.
-
-        Args:
-            statuses: List of statuses to clean up (default: [COMPLETED, FAILED, ABORTED])
-
-        Returns:
-            Number of events removed
-
-        Example:
-            # Clean up after events are logged elsewhere
-            await executor.cleanup_events([EventStatus.COMPLETED, EventStatus.FAILED])
-        """
+        """Remove events with specified statuses (default: COMPLETED, FAILED, ABORTED)."""
         if statuses is None:
             statuses = [EventStatus.COMPLETED, EventStatus.FAILED, EventStatus.ABORTED]
 

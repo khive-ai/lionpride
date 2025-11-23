@@ -1,25 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""LNDL - Language Network Directive Language.
-
-LNDL is a structured output format for LLM responses with fuzzy parsing tolerance.
-
-Security Model:
-    - **Threat model**: Designed for LLM output (structured but imperfect)
-    - **NOT for**: Untrusted user input without validation
-    - **ActionCalls**: Parsed but NOT executed (caller must sandbox)
-    - **Fuzzy mode**: Trades strictness for tolerance (use strict mode for security-critical)
-
-Usage:
-    >>> from lionpride.lndl import parse_lndl_fuzzy
-    >>> from lionpride.types import Operable
-    >>> result = parse_lndl_fuzzy(llm_response, operable)
-
-Thread Safety:
-    Lexer and Parser are not thread-safe. Create separate instances per thread.
-"""
-
 from .ast import Identifier, Lact, Literal, Lvar, OutBlock, Program, RLvar
 from .errors import (
     AmbiguousMatchError,
