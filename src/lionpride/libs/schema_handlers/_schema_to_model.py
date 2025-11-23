@@ -193,28 +193,12 @@ def load_pydantic_model_from_schema(
 ) -> type[BaseModel]:
     """Generate Pydantic model dynamically from JSON schema.
 
-    Creates model class via datamodel-code-generator, imports it,
-    and rebuilds with proper type resolution.
-
     Args:
         schema: JSON schema (string or dict)
         model_name: Base name for model (schema title takes precedence)
-        pydantic_version: DataModelType enum (default: PydanticV2BaseModel)
-        python_version: PythonVersion enum (default: PY_312)
-
-    Returns:
-        Dynamically created BaseModel class
 
     Raises:
         ImportError: datamodel-code-generator not installed
-        ValueError: Invalid schema format
-        TypeError: Invalid schema type
-        RuntimeError: Generation or loading failed
-
-    Example:
-        >>> schema = {"title": "User", "type": "object", ...}
-        >>> UserModel = load_pydantic_model_from_schema(schema)
-        >>> user = UserModel(name="Alice", age=30)
     """
     try:
         from datamodel_code_generator import (

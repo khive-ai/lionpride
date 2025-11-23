@@ -32,16 +32,7 @@ def is_cancelled(exc: BaseException) -> bool:
 
 
 async def shield(func: Callable[P, Awaitable[T]], *args: P.args, **kwargs: P.kwargs) -> T:
-    """Run ``func`` immune to outer cancellation.
-
-    Args:
-        func: Async function to shield from cancellation
-        *args: Positional arguments for func
-        **kwargs: Keyword arguments for func
-
-    Returns:
-        Result of func
-    """
+    """Run async function immune to outer cancellation."""
     with anyio.CancelScope(shield=True):
         return await func(*args, **kwargs)  # type: ignore[return-value]
 
@@ -52,29 +43,11 @@ async def shield(func: Callable[P, Awaitable[T]], *args: P.args, **kwargs: P.kwa
 def split_cancellation(
     eg: BaseExceptionGroup,
 ) -> tuple[BaseExceptionGroup | None, BaseExceptionGroup | None]:
-    """Split an exception group into (cancel_subgroup, non_cancel_subgroup).
-
-    Uses Python 3.11+ ExceptionGroup.split() to preserve structure, tracebacks,
-    __cause__/__context__/__notes__.
-
-    Args:
-        eg: Exception group to split
-
-    Returns:
-        Tuple of (cancellation exceptions, non-cancellation exceptions).
-        Either element may be None if that category is empty.
-    """
+    """Split exception group into (cancel_subgroup, non_cancel_subgroup)."""
     return eg.split(anyio.get_cancelled_exc_class())
 
 
 def non_cancel_subgroup(eg: BaseExceptionGroup) -> BaseExceptionGroup | None:
-    """Return subgroup without cancellations, or None if empty.
-
-    Args:
-        eg: Exception group to filter
-
-    Returns:
-        Subgroup containing only non-cancellation exceptions, or None.
-    """
+    """Return subgroup without cancellations, or None if empty."""
     _, rest = eg.split(anyio.get_cancelled_exc_class())
     return rest

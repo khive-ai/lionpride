@@ -1,8 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Operation - Pure data node for DAG execution."""
-
 from __future__ import annotations
 
 from typing import Any, Literal
@@ -28,12 +26,7 @@ OperationType = Literal[
 
 
 class OperationContent(HashableModel):
-    """Content for Operation nodes.
-
-    Attributes:
-        operation: Operation type (generate, operate, etc.)
-        parameters: Operation parameters (dict or Pydantic model)
-    """
+    """Content for Operation nodes."""
 
     operation: OperationType | str = Field(..., description="Operation type to execute")
     parameters: dict[str, Any] | BaseModel = Field(
@@ -43,20 +36,7 @@ class OperationContent(HashableModel):
 
 
 class Operation(Node):
-    """Pure data node for operation graphs.
-
-    Node with OperationContent - no execution logic, just data for DAG.
-
-    Attributes:
-        content: OperationContent (operation type + parameters)
-        metadata: Additional metadata (name, graph_id, etc.)
-
-    Example:
-        >>> content = OperationContent(operation="generate", parameters={"instruction": "Hi"})
-        >>> op = Operation(content=content)
-        >>> op.content.operation  # "generate"
-        >>> op.content.parameters  # {"instruction": "Hi"}
-    """
+    """Pure data node for operation graphs."""
 
     content: OperationContent
 
@@ -66,20 +46,7 @@ def create_operation(
     parameters: dict[str, Any] | BaseModel | None = None,
     **kwargs,
 ) -> Operation:
-    """Create an Operation node.
-
-    Args:
-        operation: Operation type
-        parameters: Operation parameters
-        **kwargs: Additional Operation fields (metadata, etc.)
-
-    Returns:
-        Operation instance
-
-    Example:
-        >>> op = create_operation("generate", {"instruction": "Hello"})
-        >>> op = create_operation("operate", params_model, timeout=30.0)
-    """
+    """Create an Operation node."""
     content = OperationContent(
         operation=operation,
         parameters=parameters or {},

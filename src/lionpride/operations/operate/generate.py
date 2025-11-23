@@ -1,4 +1,5 @@
-"""Generate operation - stateless text generation."""
+# Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -21,19 +22,7 @@ async def generate(
     """Stateless text generation - does not persist messages.
 
     Args:
-        session: Current session (for service registry access)
-        branch: Current branch (for conversation context)
-        parameters: Operation parameters including:
-            - imodel: Service name to use
-            - return_as: "text" | "raw" | "message" | "calling" (default: "text")
-            - **kwargs: Passed to imodel.invoke()
-
-    Returns:
-        Based on return_as:
-            - "text": response string (default)
-            - "raw": full raw API response dict
-            - "message": Message with metadata preserved
-            - "calling": full Calling object (for advanced usage)
+        parameters: Must include 'imodel'. Optional: return_as (text|raw|message|calling).
     """
     imodel_param = parameters.pop("imodel", None)
     if not imodel_param:

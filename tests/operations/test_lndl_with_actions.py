@@ -1,3 +1,6 @@
+# Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
+# SPDX-License-Identifier: Apache-2.0
+
 """Test LNDL integration with action/tool calling.
 
 Tests ensure:

@@ -24,15 +24,7 @@ class LeakInfo:
 
 
 class LeakTracker:
-    """Track live objects for leak detection.
-
-    Warning:
-        This tracker uses threading.Lock and is designed for SYNC contexts only.
-        Do NOT call track()/untrack() from async code as it may block the event loop.
-        This is intentional: weakref.finalize callbacks must be synchronous.
-
-        For debugging resource leaks, this is acceptable as it's not used in hot paths.
-    """
+    """Track live objects for leak detection (sync only, uses threading.Lock)."""
 
     def __init__(self) -> None:
         self._live: dict[int, LeakInfo] = {}
@@ -67,12 +59,7 @@ _TRACKER = LeakTracker()
 
 
 def track_resource(obj: object, name: str | None = None, kind: str | None = None) -> None:
-    """Track an object for leak detection (sync only).
-
-    Warning:
-        Do not call from async code - uses blocking threading.Lock.
-        For leak detection/debugging only, not production hot paths.
-    """
+    """Track an object for leak detection (sync only, blocking)."""
     _TRACKER.track(obj, name=name, kind=kind)
 
 

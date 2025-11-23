@@ -1,18 +1,5 @@
-"""OpenAI-compatible Chat Completions request models.
-
-Design Notes
-------------
-These models are for **request validation only**. API responses are processed
-as raw JSON and normalized via `Endpoint.normalize_response()`.
-
-Compatible with OpenAI, Groq, OpenRouter, NVIDIA NIM, and other providers.
-The `model` field is a plain string - no client-side model name validation.
-Invalid parameters (e.g., temperature on reasoning models) result in API
-errors (HTTP 400) which propagate as non-retryable errors.
-
-Response models (ChatCompletionResponse, streaming chunks) are NOT included.
-Response parsing uses raw dicts, not strict Pydantic validation.
-"""
+# Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 

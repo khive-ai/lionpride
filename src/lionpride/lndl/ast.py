@@ -1,28 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""LNDL AST Nodes - Structured Output Only (Simplified).
-
-This module defines the Abstract Syntax Tree for LNDL structured outputs.
-Semantic operations and cognitive programming constructs are deferred for future phases.
-
-AST Design Philosophy:
-- Pure data (dataclasses, no methods)
-- Type-safe (full annotations)
-- Simple and clear (no over-engineering)
-
-Node Hierarchy:
-- ASTNode (base)
-  - Expr (expressions)
-    - Literal: Scalar values (int, float, str, bool)
-    - Identifier: Variable references
-  - Stmt (statements)
-    - Lvar: Variable declarations
-    - Lact: Action/function declarations
-    - OutBlock: Output specification
-  - Program: Root node (list of statements)
-"""
-
 from dataclasses import dataclass
 
 

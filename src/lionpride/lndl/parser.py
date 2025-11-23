@@ -1,33 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""LNDL Parser - Structured Output Parsing (Simplified).
-
-This module provides parsing for LNDL structured output tags only.
-The parser transforms token streams from the Lexer into Abstract Syntax Trees.
-
-Design Philosophy:
-- Recursive descent for clarity and maintainability
-- Structured outputs only (defer semantic operations)
-- Clean error messages with line/column context
-- Support both namespaced and legacy syntax
-- Hybrid approach: Lexer/Parser for structure, regex for content preservation
-
-Grammar (Simplified for Structured Outputs):
-    Program    ::= (Lvar | Lact)* OutBlock?
-    Lvar       ::= '<lvar' (ID '.' ID ID? | ID) '>' Content '</lvar>'
-    Lact       ::= '<lact' (ID '.' ID ID? | ID) '>' FuncCall '</lact>'
-    OutBlock   ::= 'OUT{' OutFields '}'
-    OutFields  ::= OutField (',' OutField)*
-    OutField   ::= ID ':' OutValue
-    OutValue   ::= '[' RefList ']' | Literal
-
-Performance:
-- Typical LNDL response: <5ms
-- Linear complexity O(n) for token stream
-- Minimal lookahead (efficient single-pass)
-"""
-
 import ast
 import re
 import warnings

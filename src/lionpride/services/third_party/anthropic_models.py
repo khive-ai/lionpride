@@ -1,18 +1,5 @@
-# Copyright (c) 2023-2025, HaiyangLi <quantocean.li at gmail dot com>
+# Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
-
-"""Anthropic Messages API request models.
-
-Design Notes
-------------
-These models are for **request validation only**. API responses are processed
-as raw JSON and normalized via `Endpoint.normalize_response()`.
-
-Response-side types (ContentBlockResponse, Usage, streaming events) are
-included for reference but may not cover all API response variants
-(e.g., tool_use, thinking blocks, cache tokens). This is intentional -
-response parsing uses raw dicts, not strict Pydantic validation.
-"""
 
 from __future__ import annotations
 

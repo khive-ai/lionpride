@@ -1,3 +1,6 @@
+# Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
+# SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -15,17 +18,7 @@ async def execute_tools(
     *,
     concurrent: bool = True,
 ) -> tuple[Any, list[ActionResponseModel]]:
-    """Execute tool calls from action_requests.
-
-    Args:
-        parsed_response: Parsed response with potential action_requests
-        session: Current session
-        branch: Current branch (unused but kept for API compatibility)
-        concurrent: Whether to execute tools concurrently
-
-    Returns:
-        Tuple of (updated_response, action_responses)
-    """
+    """Execute tool calls from action_requests."""
     if not hasattr(parsed_response, "action_requests"):
         return parsed_response, []
 
@@ -55,15 +48,7 @@ def _update_response_with_actions(
     parsed_response: Any,
     action_responses: list[ActionResponseModel],
 ) -> Any:
-    """Update response with action results.
-
-    Args:
-        parsed_response: Original parsed response
-        action_responses: Executed action results
-
-    Returns:
-        Updated response with action_responses field
-    """
+    """Update response with action results."""
     if hasattr(parsed_response, "model_copy"):
         # Pydantic v2 way
         return parsed_response.model_copy(update={"action_responses": action_responses})
@@ -75,14 +60,7 @@ def _update_response_with_actions(
 
 
 def has_action_requests(parsed_response: Any) -> bool:
-    """Check if response has action requests.
-
-    Args:
-        parsed_response: Parsed response
-
-    Returns:
-        True if has non-empty action_requests
-    """
+    """Check if response has action requests."""
     if not hasattr(parsed_response, "action_requests"):
         return False
 

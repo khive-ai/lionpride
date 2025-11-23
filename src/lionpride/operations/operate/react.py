@@ -1,20 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""ReAct - Multi-step reasoning with tool calling.
-
-Implements the Reason-Action loop:
-1. LLM reasons about task and decides on action
-2. If action requested, execute tool(s)
-3. Feed results back to LLM
-4. Repeat until LLM provides final answer or max_steps reached
-
-Uses operate for each step, which handles:
-- Message persistence
-- Response validation
-- Action execution
-"""
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -77,14 +63,7 @@ class ReactStepResponse(BaseModel):
 def _create_react_response_model(
     response_model: type[BaseModel] | None,
 ) -> type[BaseModel]:
-    """Create dynamic response model for ReAct steps.
-
-    Args:
-        response_model: Optional final response model type
-
-    Returns:
-        Pydantic model for ReAct step responses
-    """
+    """Create dynamic response model for ReAct steps."""
     if response_model is None:
         return ReactStepResponse
 
@@ -118,26 +97,9 @@ async def react(
 ) -> ReactResult:
     """ReAct operation - multi-step reasoning with tool calling.
 
-    Uses operate for each step, which handles message persistence,
-    validation, and action execution.
-
     Args:
-        session: Current session
-        branch: Current branch or branch name
-        parameters: Operation parameters including:
-            - instruction: Initial instruction
-            - imodel: iModel interface to use
-            - tools: List of Tool instances available
-            - response_model: Optional Pydantic model for final output
-            - context: Optional initial context
-            - max_steps: Maximum reasoning steps (default 5)
-            - use_lndl: Use LNDL validation (default False)
-            - lndl_threshold: LNDL confidence threshold (default 0.85)
-            - verbose: Print step-by-step execution (default False)
-            - **model_kwargs: Additional model parameters (model_name required)
-
-    Returns:
-        ReactResult with steps and final response
+        parameters: Must include 'instruction', 'imodel', 'tools', and 'model_name'.
+            Optional: response_model, max_steps, use_lndl, verbose.
     """
     from .factory import operate
 

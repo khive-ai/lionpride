@@ -392,20 +392,7 @@ class Pile(Element, PydapterAdaptable, PydapterAsyncAdaptable, Generic[T]):
         ...
 
     def __getitem__(self, key: Any) -> T | Pile[T]:
-        """Type-dispatched query interface.
-
-        Args:
-            key: UUID/str (get by ID), Progression (filter), int (index), slice (range),
-                 list/tuple of int (indices), list/tuple of UUID (IDs), or callable (predicate)
-
-        Returns:
-            Single item (T) for UUID/str/int access, new Pile[T] for all multi-item operations
-
-        Raises:
-            TypeError: If key type is not supported or list/tuple mixes int and UUID
-            NotFoundError: If item not found (UUID/str access)
-            ValueError: If no items match filter or empty list/tuple provided
-        """
+        """Type-dispatched query: UUID/str/int -> T; slice/list/tuple/Progression/callable -> Pile[T]."""
         # Type 1: UUID/str - Get by ID (returns T)
         if isinstance(key, (UUID, str)):
             return self.get(key)
@@ -472,19 +459,7 @@ class Pile(Element, PydapterAdaptable, PydapterAsyncAdaptable, Generic[T]):
 
     @synchronized
     def _get_by_list(self, keys: list | tuple) -> Pile[T]:
-        """Get multiple items by list/tuple of indices or UUIDs, returns new Pile.
-
-        Args:
-            keys: list/tuple of int (indices) or UUID (IDs), no mixing allowed
-
-        Returns:
-            New Pile with items in the order specified by keys
-
-        Raises:
-            ValueError: If keys is empty or mixes int and UUID types
-            NotFoundError: If UUID not found in pile
-            IndexError: If index out of range
-        """
+        """Get items by list/tuple of indices or UUIDs (no mixing), returns new Pile."""
         if not keys:
             raise ValueError("Cannot get items with empty list/tuple")
 
@@ -773,42 +748,19 @@ class Pile(Element, PydapterAdaptable, PydapterAsyncAdaptable, Generic[T]):
         super().register_async_adapter(adapter)
 
     def adapt_to(self, obj_key: str, many: bool = False, **kwargs: Any) -> Any:
-        """Convert to external format via pydapter adapter.
-
-        Args:
-            obj_key: Adapter key (e.g., "postgres", "qdrant", "mongo")
-            many: Adaptation mode:
-                - False (default): Treat entire Pile as single object (export Pile + all items)
-                - True: Bulk operation on items within Pile (export items individually)
-            **kwargs: Passed to adapter
-        """
+        """Convert to external format via pydapter adapter."""
         kwargs.setdefault("adapt_meth", "to_dict")
         kwargs.setdefault("adapt_kw", {"mode": "db"})
         return super().adapt_to(obj_key=obj_key, many=many, **kwargs)
 
     @classmethod
     def adapt_from(cls, obj: Any, obj_key: str, many: bool = False, **kwargs: Any) -> Pile:
-        """Create from external format via pydapter adapter.
-
-        Args:
-            obj: Source object
-            obj_key: Adapter key (e.g., "postgres", "qdrant", "mongo")
-            many: Adaptation mode:
-                - False (default): Deserialize entire Pile from single object
-                - True: Bulk load items from external source (construct Pile from items)
-            **kwargs: Passed to adapter
-        """
+        """Create from external format via pydapter adapter."""
         kwargs.setdefault("adapt_meth", "from_dict")
         return super().adapt_from(obj, obj_key=obj_key, many=many, **kwargs)
 
     async def adapt_to_async(self, obj_key: str, many: bool = False, **kwargs: Any) -> Any:
-        """Async convert to external format via pydapter async adapter.
-
-        Args:
-            obj_key: Adapter key
-            many: Adaptation mode (see adapt_to for details)
-            **kwargs: Passed to adapter
-        """
+        """Async convert to external format via pydapter adapter."""
         kwargs.setdefault("adapt_meth", "to_dict")
         kwargs.setdefault("adapt_kw", {"mode": "db"})
         return await super().adapt_to_async(obj_key=obj_key, many=many, **kwargs)
@@ -817,14 +769,7 @@ class Pile(Element, PydapterAdaptable, PydapterAsyncAdaptable, Generic[T]):
     async def adapt_from_async(
         cls, obj: Any, obj_key: str, many: bool = False, **kwargs: Any
     ) -> Pile:
-        """Async create from external format via pydapter async adapter.
-
-        Args:
-            obj: Source object
-            obj_key: Adapter key
-            many: Adaptation mode (see adapt_from for details)
-            **kwargs: Passed to adapter
-        """
+        """Async create from external format via pydapter adapter."""
         kwargs.setdefault("adapt_meth", "from_dict")
         return await super().adapt_from_async(obj, obj_key=obj_key, many=many, **kwargs)
 

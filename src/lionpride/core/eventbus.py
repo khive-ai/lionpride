@@ -16,14 +16,7 @@ Handler = Callable[..., Awaitable[None]]
 
 
 class EventBus:
-    """In-process pub/sub with concurrent handler execution.
-
-    Fire-and-forget: handlers run concurrently via gather(), exceptions suppressed.
-
-    Memory Management:
-        Uses weakref for automatic handler cleanup when handler objects are garbage collected.
-        Prevents memory leaks in long-running services where handlers are registered dynamically.
-    """
+    """In-process pub/sub with weakref-based automatic handler cleanup."""
 
     def __init__(self) -> None:
         """Initialize with empty subscription registry."""
@@ -31,12 +24,7 @@ class EventBus:
         self._subs: dict[str, list[weakref.ref[Handler]]] = defaultdict(list)
 
     def subscribe(self, topic: str, handler: Handler) -> None:
-        """Subscribe async handler to topic.
-
-        Handlers are stored as weak references for automatic cleanup when
-        handler objects are garbage collected. Prevents memory leaks in
-        long-running services.
-        """
+        """Subscribe async handler to topic (stored as weakref)."""
         # Store weakref without callback - cleanup happens lazily
         weak_handler = weakref.ref(handler)
         self._subs[topic].append(weak_handler)
@@ -54,14 +42,7 @@ class EventBus:
         return False
 
     def _cleanup_dead_refs(self, topic: str) -> list[Handler]:
-        """Remove garbage-collected handlers and return list of live handlers.
-
-        Lazily cleans up dead weakrefs during normal operations (emit/handler_count).
-        Updates subscription list in-place to remove dead references.
-
-        Returns:
-            List of live handler callables (weakrefs resolved).
-        """
+        """Remove dead weakrefs and return list of live handlers."""
         weak_refs = self._subs[topic]
         handlers = []
         alive_refs = []
@@ -77,11 +58,7 @@ class EventBus:
         return handlers
 
     async def emit(self, topic: str, *args: Any, **kwargs: Any) -> None:
-        """Emit event to all subscribers.
-
-        Handlers run concurrently via gather(), exceptions suppressed.
-        Dead weakrefs are lazily cleaned up during emission.
-        """
+        """Emit event to all subscribers (concurrent, exceptions suppressed)."""
         if topic not in self._subs:
             return
 

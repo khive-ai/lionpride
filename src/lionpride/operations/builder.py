@@ -1,8 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Operation graph builder - Fluent API for constructing operation DAGs."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -18,33 +16,10 @@ __all__ = ("Builder", "OperationGraphBuilder")
 
 
 class OperationGraphBuilder:
-    """Fluent builder for operation graphs.
-
-    Provides chainable API for constructing directed acyclic graphs (DAGs)
-    of operations with dependencies.
-
-    Supports incremental building: Build → Execute → Expand → Execute
-
-    Attributes:
-        graph: Underlying Graph instance
-        _nodes: Mapping of operation names to Operation nodes
-        _executed: Set of executed operation IDs
-        _current_heads: List of current head nodes for auto-linking
-
-    Example:
-        >>> builder = Builder()
-        >>> builder.add("extract", "generate", {"instruction": "Extract data"})
-        >>> builder.add("analyze", "operate", {"response_model": Analysis})
-        >>> builder.depends_on("analyze", "extract")  # analyze depends on extract
-        >>> graph = builder.build()
-    """
+    """Fluent builder for operation graphs (DAGs)."""
 
     def __init__(self, graph: Graph | None = None):
-        """Initialize builder.
-
-        Args:
-            graph: Optional existing graph to build on
-        """
+        """Initialize builder with optional existing graph."""
         self.graph = graph or Graph()
         self._nodes: dict[str, Operation] = {}
         self._executed: set[UUID] = set()  # Track executed operations
@@ -59,27 +34,7 @@ class OperationGraphBuilder:
         inherit_context: bool = False,
         **kwargs,
     ) -> OperationGraphBuilder:
-        """Add operation to graph.
-
-        Args:
-            name: Unique name for this operation node
-            operation: Operation type (generate, operate, etc.)
-            parameters: Operation parameters
-            depends_on: Optional list of operation names this depends on
-            inherit_context: If True and has dependencies, inherit conversation
-                           context from primary (first) dependency
-            **kwargs: Additional Operation fields (metadata, timeout, etc.)
-
-        Returns:
-            Self for chaining
-
-        Raises:
-            ValueError: If name already exists
-
-        Example:
-            >>> builder.add("task1", "generate", {"instruction": "Hello"})
-            >>> builder.add("task2", "operate", {...}, depends_on=["task1"])
-        """
+        """Add operation to graph. Returns self for chaining."""
         if name in self._nodes:
             raise ValueError(f"Operation with name '{name}' already exists")
 
@@ -127,25 +82,7 @@ class OperationGraphBuilder:
         *dependencies: str,
         label: list[str] | None = None,
     ) -> OperationGraphBuilder:
-        """Add dependency relationships.
-
-        Creates edges from dependencies to target (dependencies must complete before target).
-
-        Args:
-            target: Name of operation that depends on others
-            *dependencies: Names of operations that must complete first
-            label: Optional edge labels for conditional execution
-
-        Returns:
-            Self for chaining
-
-        Raises:
-            ValueError: If operation names not found
-
-        Example:
-            >>> builder.depends_on("analyze", "extract", "clean")
-            >>> # analyze depends on both extract and clean
-        """
+        """Add dependency relationships. Returns self for chaining."""
         if target not in self._nodes:
             raise ValueError(f"Target operation '{target}' not found")
 
@@ -168,22 +105,7 @@ class OperationGraphBuilder:
         return self
 
     def sequence(self, *operations: str, label: list[str] | None = None) -> OperationGraphBuilder:
-        """Create sequential dependency chain.
-
-        Args:
-            *operations: Operation names in execution order
-            label: Optional edge labels
-
-        Returns:
-            Self for chaining
-
-        Raises:
-            ValueError: If operation names not found
-
-        Example:
-            >>> builder.sequence("extract", "clean", "analyze")
-            >>> # Creates: extract -> clean -> analyze
-        """
+        """Create sequential dependency chain. Returns self for chaining."""
         if len(operations) < 2:
             raise ValueError("sequence requires at least 2 operations")
 
@@ -193,20 +115,7 @@ class OperationGraphBuilder:
         return self
 
     def parallel(self, *operations: str) -> OperationGraphBuilder:
-        """Mark operations as parallel (no dependencies).
-
-        This is a no-op method for clarity - operations without
-        dependencies are automatically parallel.
-
-        Args:
-            *operations: Operation names that can run in parallel
-
-        Returns:
-            Self for chaining
-
-        Example:
-            >>> builder.parallel("extract1", "extract2", "extract3")
-        """
+        """Mark operations as parallel (no-op for clarity). Returns self."""
         # Verify operations exist
         for name in operations:
             if name not in self._nodes:
@@ -216,36 +125,13 @@ class OperationGraphBuilder:
         return self
 
     def get(self, name: str) -> Operation:
-        """Get operation by name.
-
-        Args:
-            name: Operation name
-
-        Returns:
-            Operation instance
-
-        Raises:
-            ValueError: If operation not found
-
-        Example:
-            >>> op = builder.get("extract")
-        """
+        """Get operation by name."""
         if name not in self._nodes:
             raise ValueError(f"Operation '{name}' not found")
         return self._nodes[name]
 
     def get_by_id(self, operation_id: UUID) -> Operation | None:
-        """Get operation by UUID.
-
-        Args:
-            operation_id: Operation UUID
-
-        Returns:
-            Operation instance or None if not found
-
-        Example:
-            >>> op = builder.get_by_id(uuid)
-        """
+        """Get operation by UUID, or None if not found."""
         return self.graph.nodes.get(operation_id, None)
 
     def add_aggregation(
@@ -258,28 +144,7 @@ class OperationGraphBuilder:
         inherit_from_source: int = 0,
         **kwargs,
     ) -> OperationGraphBuilder:
-        """Add aggregation operation that collects from multiple sources.
-
-        Args:
-            name: Unique name for aggregation node
-            operation: Operation type
-            parameters: Operation parameters
-            source_names: Names of operations to aggregate from (defaults to current heads)
-            inherit_context: If True, inherit conversation context from one source
-            inherit_from_source: Index of source to inherit context from (default: 0)
-            **kwargs: Additional Operation fields
-
-        Returns:
-            Self for chaining
-
-        Raises:
-            ValueError: If source operations not found or no sources available
-
-        Example:
-            >>> builder.add_aggregation(
-            ...     "summary", "operate", {...}, source_names=["task1", "task2"]
-            ... )
-        """
+        """Add aggregation operation that collects from multiple sources."""
         sources = source_names or self._current_heads
         if not sources:
             raise ValueError("No source operations for aggregation")
@@ -323,50 +188,18 @@ class OperationGraphBuilder:
         return self
 
     def mark_executed(self, *names: str) -> OperationGraphBuilder:
-        """Mark operations as executed.
-
-        This helps track which parts of the graph have been run for
-        incremental building (build → execute → expand cycles).
-
-        Args:
-            *names: Names of executed operations
-
-        Returns:
-            Self for chaining
-
-        Example:
-            >>> builder.mark_executed("task1", "task2")
-        """
+        """Mark operations as executed for incremental building."""
         for name in names:
             if name in self._nodes:
                 self._executed.add(self._nodes[name].id)
         return self
 
     def get_unexecuted_nodes(self) -> list[Operation]:
-        """Get operations that haven't been executed yet.
-
-        Returns:
-            List of unexecuted Operation nodes
-
-        Example:
-            >>> unexecuted = builder.get_unexecuted_nodes()
-            >>> for op in unexecuted:
-            ...     print(op.metadata["name"])
-        """
+        """Get operations that haven't been executed yet."""
         return [op for op in self._nodes.values() if op.id not in self._executed]
 
     def build(self) -> Graph:
-        """Build and validate operation graph.
-
-        Returns:
-            Graph instance with all operations and dependencies
-
-        Raises:
-            ValueError: If graph has cycles (not a DAG)
-
-        Example:
-            >>> graph = builder.build()
-        """
+        """Build and validate operation graph (must be DAG)."""
         # Validate DAG
         if not self.graph.is_acyclic():
             raise ValueError("Operation graph has cycles - must be a DAG")
@@ -374,14 +207,7 @@ class OperationGraphBuilder:
         return self.graph
 
     def clear(self) -> OperationGraphBuilder:
-        """Clear all operations and start fresh.
-
-        Returns:
-            Self for chaining
-
-        Example:
-            >>> builder.clear().add(...)
-        """
+        """Clear all operations and start fresh."""
         self.graph = Graph()
         self._nodes = {}
         self._executed = set()

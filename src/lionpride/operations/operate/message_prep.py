@@ -1,3 +1,6 @@
+# Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
+# SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -22,17 +25,7 @@ if TYPE_CHECKING:
 
 
 def generate_lndl_spec_format(operative: Operative) -> str:
-    """Generate LNDL format guidance for operative's specs.
-
-    Creates user-friendly LNDL format instructions based on the
-    operative's Operable specs.
-
-    Args:
-        operative: Operative containing specs
-
-    Returns:
-        LNDL format string to append to system prompt
-    """
+    """Generate LNDL format guidance for operative's specs."""
     if not operative or not operative.operable:
         return ""
 
@@ -130,24 +123,7 @@ def create_instruction_message(
     image_detail: str | None = None,
     use_lndl: bool = False,
 ) -> Message:
-    """Create instruction message from various input types.
-
-    Args:
-        instruction: The instruction (str, InstructionContent, or Message)
-        session: Current session
-        branch: Current branch
-        sender: Message sender
-        recipient: Message recipient
-        context: Additional context
-        response_model: Response model for structured output
-        tool_schemas: Tool schemas for injection
-        images: Image URLs
-        image_detail: Image detail level
-        use_lndl: Whether to use LNDL format
-
-    Returns:
-        Message with appropriate content
-    """
+    """Create instruction message from various input types."""
     if isinstance(instruction, Message):
         return instruction
 
@@ -215,17 +191,7 @@ def prepare_lndl_messages(
     ins_msg: Message,
     operative: Any,
 ) -> list[dict[str, Any]]:
-    """Prepare messages with LNDL system prompt injection.
-
-    Args:
-        session: Current session
-        branch: Current branch
-        ins_msg: Instruction message
-        operative: Operative for LNDL spec generation
-
-    Returns:
-        List of chat messages with LNDL prompt
-    """
+    """Prepare messages with LNDL system prompt injection."""
     from lionpride.lndl import get_lndl_system_prompt
     from lionpride.session.messages.utils import prepare_messages_for_chat
 
@@ -288,15 +254,7 @@ def prepare_tool_schemas(
     session: Session,
     tools: bool | list[str],
 ) -> list[Any] | None:
-    """Prepare tool schemas from session services.
-
-    Args:
-        session: Current session
-        tools: True for all tools, list for specific tools
-
-    Returns:
-        Tool schemas or None
-    """
+    """Prepare tool schemas from session services."""
     if not tools:
         return None
 

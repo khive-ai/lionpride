@@ -106,13 +106,7 @@ class Execution:
         depth: int = 0,
         _seen: set[int] | None = None,
     ) -> dict[str, Any]:
-        """Recursively serialize ExceptionGroup with depth limit and cycle detection.
-
-        Args:
-            eg: ExceptionGroup to serialize
-            depth: Current recursion depth (internal)
-            _seen: Set of seen exception IDs for cycle detection (internal)
-        """
+        """Recursively serialize ExceptionGroup with depth limit and cycle detection."""
         from lionpride.errors import LionherdError
 
         # Depth limit to prevent stack overflow
@@ -246,15 +240,7 @@ class Event(Element):
     @final
     @async_synchronized
     async def invoke(self) -> None:
-        """Execute with status tracking, timing, error capture (idempotent).
-
-        **Idempotency**: Multiple concurrent calls execute _invoke() exactly once.
-        Once COMPLETED or FAILED, invoke() is a no-op. Access result via
-        `event.response` or `event.execution.response`.
-
-        **Retry Pattern**: To retry after FAILED status, use `as_fresh_event()` to
-        create a new Event with reset execution state.
-        """
+        """Execute with status tracking, timing, error capture (idempotent, single execution)."""
         from lionpride.libs.concurrency import current_time
 
         # Idempotency: no-op if already executed

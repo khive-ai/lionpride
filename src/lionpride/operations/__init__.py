@@ -1,26 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Operations - Executable operations for LLM-powered workflows.
-
-Core components:
-- ExecutableOperation: Composes Operation (data) + Event (lifecycle)
-- OperationDispatcher: Registry mapping operation types to factories
-- Operation: Pure data node for operation parameters
-- Builder: Fluent API for constructing operation graphs
-- flow: Dependency-aware graph execution
-
-Example:
-    >>> # Operation graph
-    >>> from lionpride.operations import Builder, flow
-    >>> builder = Builder()
-    >>> builder.add("step1", "custom_op", {"param": "value"})
-    >>> builder.add("step2", "custom_op", {"param": "value2"})
-    >>> builder.depends_on("step2", "step1")
-    >>> graph = builder.build()
-    >>> results = await flow(session, branch, graph)
-"""
-
 from .builder import Builder, OperationGraphBuilder
 from .dispatcher import OperationDispatcher, get_dispatcher, register_operation
 from .executable import ExecutableOperation

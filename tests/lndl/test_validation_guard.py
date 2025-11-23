@@ -1,3 +1,6 @@
+# Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
+# SPDX-License-Identifier: Apache-2.0
+
 """Test LNDL validation guard - Issue #23.
 
 The footgun: Users forget to call revalidate_with_action_results() after parsing,

@@ -1,15 +1,5 @@
-"""Operate operation - structured output with optional actions.
-
-Hierarchy:
-    generate     → stateless model invocation
-    communicate  → generate + message persistence + validation + retry
-    operate      → communicate + action execution
-
-operate adds:
-- Action specs (action_requests, action_responses) when actions=True
-- Reasoning spec when reason=True
-- Tool execution after model response
-"""
+# Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -36,57 +26,9 @@ async def operate(
 ) -> Any:
     """Structured output with optional actions.
 
-    Builds on communicate by adding:
-    - Action specs for tool calling (action_requests, action_responses)
-    - Reasoning spec for chain-of-thought
-    - Tool execution after model response
-
     Args:
-        session: Current session
-        branch: Current branch or branch name
-        parameters: Operation parameters including:
-            - instruction: The instruction/prompt text (required)
-            - imodel: Service name to use (required)
-            - response_model: Pydantic model for structured output (required unless operable)
-            - operable: Pre-built Operable (alternative to response_model)
-
-            # Action support:
-            - actions: Enable action_requests/action_responses specs (default: False)
-            - reason: Enable reasoning spec (default: False)
-            - tools: True for all tools, or list of tool names (default: False)
-            - tool_schemas: Pre-built tool schemas (alternative to tools)
-            - concurrent_tool_execution: Execute tools in parallel (default: True)
-
-            # LNDL vs JSON mode:
-            - use_lndl: Use LNDL mode (default: False, uses JSON schema)
-            - lndl_threshold: Fuzzy matching threshold (default: 0.85)
-
-            # Common:
-            - max_retries: Retry attempts on validation failure (default: 0)
-            - return_message: Also return the assistant message (default: False)
-            - skip_validation: Skip response validation (default: False)
-            - **kwargs: Passed to communicate/generate
-
-    Returns:
-        Validated response model, or (response, message) if return_message=True
-
-    Example:
-        >>> from pydantic import BaseModel
-        >>> class Analysis(BaseModel):
-        ...     summary: str
-        ...     score: float
-        >>> result = await operate(
-        ...     session,
-        ...     branch,
-        ...     {
-        ...         "instruction": "Analyze this text",
-        ...         "imodel": "openai",
-        ...         "response_model": Analysis,
-        ...         "model": "gpt-4.1-mini",
-        ...     },
-        ... )
-        >>> result.summary  # "..."
-        >>> result.score  # 0.85
+        parameters: Must include 'instruction', 'imodel', and 'response_model' or 'operable'.
+            Optional: actions, reason, tools, use_lndl, max_retries, return_message.
     """
     # 1. Validate and extract parameters
     params = _validate_parameters(parameters)
@@ -177,17 +119,7 @@ async def operate(
 
 
 def _validate_parameters(params: dict[str, Any]) -> dict[str, Any]:
-    """Validate and normalize parameters.
-
-    Args:
-        params: Raw parameters dict
-
-    Returns:
-        Normalized parameters with defaults
-
-    Raises:
-        ValueError: If required parameters missing or invalid
-    """
+    """Validate and normalize parameters."""
     # Required parameters
     if not params.get("instruction"):
         raise ValueError("operate requires 'instruction' parameter")
@@ -262,19 +194,7 @@ def _build_operable(
     actions: bool,
     reason: bool,
 ) -> tuple[Operable | None, type[BaseModel] | None]:
-    """Build Operable from response_model + action/reason specs.
-
-    Args:
-        response_model: Base Pydantic model for structured output
-        operable: Pre-built Operable (takes precedence)
-        actions: Include action_requests/action_responses specs
-        reason: Include reasoning spec
-
-    Returns:
-        Tuple of (operable, validation_model) where:
-        - operable: Built Operable for LNDL mode
-        - validation_model: Pydantic model for JSON mode
-    """
+    """Build Operable from response_model + action/reason specs."""
     # If operable provided, use it directly
     # Handle both Operable (lionpride) and Operative (lionpride wrapper)
     if operable:

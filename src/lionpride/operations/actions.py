@@ -1,8 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Action execution for tool calling."""
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -28,34 +26,10 @@ async def act(
 ) -> list[ActionResponseModel]:
     """Execute tool calls from action_requests via iModel.invoke().
 
-    This is the core execution function that:
-    1. Validates action_requests against available tools
-    2. Executes via iModel.invoke() (with rate limiting, hooks, executor support)
-    3. Handles errors gracefully (returns error string in output)
-    4. Supports concurrent or sequential execution
-
     Args:
-        action_requests: List of tool calls from LLM structured output
-        registry: ServiceRegistry containing registered iModel instances
-        concurrent: Execute tools in parallel (True) or sequentially (False)
-        timeout: Optional Event timeout in seconds (enforced in Event.invoke)
-        poll_timeout: Optional executor polling timeout (for rate-limited execution)
-        poll_interval: Optional executor polling interval
-
-    Returns:
-        List of ActionResponseModel with results (or errors)
-
-    Example:
-        >>> requests = [
-        ...     ActionRequestModel(function="multiply", arguments={"a": 5, "b": 3}),
-        ...     ActionRequestModel(function="add", arguments={"a": 10, "b": 20}),
-        ... ]
-        >>> responses = await act(requests, registry, concurrent=True)
-        >>> responses[0].output  # 15
-        >>> responses[1].output  # 30
-
-    Raises:
-        ValueError: If registry doesn't contain required tools
+        action_requests: Tool calls from LLM structured output.
+        registry: ServiceRegistry containing registered tools.
+        concurrent: Execute in parallel (default True).
     """
     if not action_requests:
         return []
@@ -114,23 +88,7 @@ async def _execute_single_action(
     poll_timeout: float | None = None,
     poll_interval: float | None = None,
 ) -> Any:
-    """Execute single tool call via iModel.invoke().
-
-    Uses the unified iModel interface which provides:
-    - Rate limiting (via TokenBucket or Executor)
-    - Hook support (pre/post invocation)
-    - Consistent Calling/NormalizedResponse interface
-
-    Args:
-        request: Action request with function name and arguments
-        registry: ServiceRegistry containing the iModel
-        timeout: Event timeout in seconds (enforced in Event.invoke)
-        poll_timeout: Executor polling timeout
-        poll_interval: Executor polling interval
-
-    Returns:
-        Tool output data (or Exception if failed)
-    """
+    """Execute single tool call via iModel.invoke()."""
     try:
         # Get iModel from registry
         imodel = registry.get(request.function)  # type: ignore[arg-type]
@@ -167,15 +125,7 @@ def _handle_execution_result(
     request: ActionRequestModel,
     result: Any,
 ) -> ActionResponseModel:
-    """Convert execution result to ActionResponseModel.
-
-    Args:
-        request: Original action request
-        result: Tool output or Exception
-
-    Returns:
-        ActionResponseModel with output or error
-    """
+    """Convert execution result to ActionResponseModel."""
     # Extract function and arguments from request
     function = request.function or ""
     arguments = request.arguments or {}

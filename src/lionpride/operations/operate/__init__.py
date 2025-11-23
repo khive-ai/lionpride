@@ -1,13 +1,5 @@
-"""Operate operation - modularized components.
-
-Components:
-- generate.py: Basic generation operation (stateless model invocation)
-- factory.py: Operate factory orchestrating structured output
-- react.py: ReAct loop for multi-step reasoning with actions
-- message_prep.py: Message preparation and LNDL spec generation
-- response_parser.py: Response parsing (JSON/LNDL) and tool execution
-- operative.py: Operative validation framework
-"""
+# Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
+# SPDX-License-Identifier: Apache-2.0
 
 from .factory import operate
 from .generate import generate
