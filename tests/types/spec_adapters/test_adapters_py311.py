@@ -223,10 +223,10 @@ import pytest
 # Skip pydantic-specific tests if pydantic isn't installed
 pytest.importorskip("pydantic")
 
-from lionpride.testing import create_spec, get_sample_validators
 from lionpride.types import Operable, Spec
 from lionpride.types.spec_adapters._protocol import SpecAdapter
 from lionpride.types.spec_adapters.pydantic_field import PydanticSpecAdapter
+from tests.types.conftest import create_spec, get_sample_validators
 
 # -- SpecAdapter.parse_json ---------------------------------------------------
 

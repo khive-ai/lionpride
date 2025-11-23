@@ -119,18 +119,18 @@ from typing import Any
 
 import pytest
 
-from lionpride.core.event import Event, EventStatus, Execution
-from lionpride.libs.concurrency import create_task_group, fail_after
-
 # ============================================================================
 # Test Event Subclasses (Concrete implementations for testing)
 # ============================================================================
 # Import reusable Event classes from testing module
-from lionpride.testing import (
+from conftest import (
     FailingTestEvent as FailingEvent,
     SimpleTestEvent as SimpleEvent,
     SlowTestEvent as SlowEvent,
 )
+
+from lionpride.core.event import Event, EventStatus, Execution
+from lionpride.libs.concurrency import create_task_group, fail_after
 
 
 class ComplexResponseEvent(Event):

@@ -103,12 +103,12 @@ from uuid import UUID, uuid4
 
 import pytest
 
+# ==================== Fixtures ====================
+from conftest import TestElement, create_test_elements
+
 from lionpride.core import Element, Flow, Pile, Progression
 from lionpride.errors import ExistsError, NotFoundError
 from lionpride.ln import to_dict
-
-# ==================== Fixtures ====================
-from lionpride.testing import TestElement, create_test_elements
 
 
 @pytest.fixture

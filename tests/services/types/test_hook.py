@@ -26,7 +26,7 @@ from lionpride.services.types.hook import (
     validate_hooks,
     validate_stream_handlers,
 )
-from lionpride.testing import SimpleTestEvent
+from tests.conftest import SimpleTestEvent
 
 # =============================================================================
 # Test Fixtures & Helpers

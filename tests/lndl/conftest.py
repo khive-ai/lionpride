@@ -16,34 +16,123 @@ from pydantic import BaseModel
 from lionpride.lndl import Lexer, Parser
 from lionpride.lndl.ast import Lvar
 from lionpride.lndl.types import LvarMetadata, RLvarMetadata
-from lionpride.testing import get_sample_lndl_text, get_sample_pydantic_models
 from lionpride.types import Operable, Spec
+
+# ============================================================================
+# Sample LNDL Text
+# ============================================================================
+
+SAMPLE_LNDL_TEXTS = {
+    "simple": """\
+<lvar Report.title t>AI Safety Analysis</lvar>
+
+OUT{title: [t]}
+""",
+    "multi": """\
+<lvar Report.title t>AI Safety</lvar>
+<lvar Report.content c>Analysis of AI safety measures.</lvar>
+<lvar Report.score s>0.95</lvar>
+
+OUT{title: [t], content: [c], score: [s]}
+""",
+    "lact": """\
+<lact SearchResult.results r>search(query="AI safety")</lact>
+
+OUT{results: [r]}
+""",
+    "raw": """\
+<lvar reasoning>This is intermediate reasoning text.</lvar>
+
+OUT{reasoning: [reasoning]}
+""",
+    "mixed": """\
+<lvar Report.title t>Title</lvar>
+<lvar reasoning>Reasoning text here</lvar>
+<lact Analysis.summary s>summarize(text="...")</lact>
+
+OUT{title: [t], reasoning: [reasoning], summary: [s], confidence: 0.85}
+""",
+    "invalid": """\
+<lvar Report.title>Missing closing tag
+OUT{title: [t]
+""",
+    "empty": "",
+}
+
+
+def get_sample_lndl_text(variant: str = "simple") -> str:
+    """Get sample LNDL text for testing."""
+    if variant not in SAMPLE_LNDL_TEXTS:
+        raise ValueError(
+            f"Unknown variant: {variant}. Choose from: {', '.join(SAMPLE_LNDL_TEXTS.keys())}"
+        )
+    return SAMPLE_LNDL_TEXTS[variant]
+
 
 # ============================================================================
 # Sample Pydantic Models
 # ============================================================================
 
 
+class Report(BaseModel):
+    """Simple report model for basic testing."""
+
+    title: str
+    content: str
+    score: float = 0.0
+
+
+class Analysis(BaseModel):
+    """Analysis model with multiple field types."""
+
+    summary: str
+    findings: list[str]
+    confidence: float
+    metadata: dict[str, str] | None = None
+
+
+class SearchResult(BaseModel):
+    """Search result model for action testing."""
+
+    query: str
+    results: list[str]
+    count: int
+
+
+def get_sample_pydantic_models() -> dict[str, type[BaseModel]]:
+    """Get sample Pydantic models for LNDL testing."""
+    return {
+        "Report": Report,
+        "Analysis": Analysis,
+        "SearchResult": SearchResult,
+    }
+
+
+# ============================================================================
+# Pytest Fixtures - Pydantic Models
+# ============================================================================
+
+
 @pytest.fixture
 def report_model():
     """Simple report model for basic testing."""
-    return get_sample_pydantic_models()["Report"]
+    return Report
 
 
 @pytest.fixture
 def analysis_model():
     """Analysis model with multiple field types."""
-    return get_sample_pydantic_models()["Analysis"]
+    return Analysis
 
 
 @pytest.fixture
 def search_result_model():
     """Search result model for action testing."""
-    return get_sample_pydantic_models()["SearchResult"]
+    return SearchResult
 
 
 # ============================================================================
-# Sample LNDL Text Snippets
+# Pytest Fixtures - LNDL Text Snippets
 # ============================================================================
 
 
@@ -190,7 +279,6 @@ def extract_lvars_prefixed():
         lvars = {}
         for lvar in program.lvars:
             if isinstance(lvar, Lvar):
-                # Namespaced lvar
                 lvars[lvar.alias] = LvarMetadata(
                     model=lvar.model,
                     field=lvar.field,
@@ -198,7 +286,6 @@ def extract_lvars_prefixed():
                     value=lvar.content,
                 )
             else:  # RLvar
-                # Raw lvar
                 lvars[lvar.alias] = RLvarMetadata(
                     local_name=lvar.alias,
                     value=lvar.content,

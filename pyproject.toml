@@ -76,7 +76,7 @@ filterwarnings = [
 omit = [
   "src/lionpride/services/providers/*",
   "src/lionpride/services/third_party/*",
-  "src/lionpride/testing.py",
+  "src/lionpride/_testing.py",
 ]
 
 [dependency-groups]
