@@ -64,6 +64,7 @@ markers = [
   "unit: Unit tests",
   "property: Property-based tests",
   "slow: Slow tests (deselect with '-m \"not slow\"')",
+  "integration: Integration tests requiring external resources",
 ]
 filterwarnings = [
   "ignore::RuntimeWarning",

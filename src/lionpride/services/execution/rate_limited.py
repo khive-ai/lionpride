@@ -17,7 +17,7 @@ from ..utilities.rate_limiter import TokenBucket
 if TYPE_CHECKING:
     import asyncio
 
-    from lionpride import Pile
+    from lionpride.core import Pile
 
 __all__ = ("RateLimitedExecutor", "RateLimitedProcessor")
 

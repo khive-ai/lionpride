@@ -97,10 +97,10 @@ class GeminiCodeEndpoint(Endpoint):
         Returns:
             (payload_dict, headers_dict) - headers always empty for CLI
         """
-        from lionpride import ln
+        from lionpride.ln import to_dict
 
         # Convert request to dict if BaseModel
-        request_dict = ln.to_dict(request) if isinstance(request, BaseModel) else request
+        request_dict = to_dict(request) if isinstance(request, BaseModel) else request
 
         # Merge config kwargs, request, and call kwargs
         req_dict = {**self.config.kwargs, **request_dict, **kwargs}
@@ -147,7 +147,7 @@ class GeminiCodeEndpoint(Endpoint):
             - raw_result: Raw result chunk from Gemini CLI
             - session: Organized session data from GeminiSession
         """
-        from lionpride import ln
+        from lionpride.ln import to_dict
 
         request: GeminiCodeRequest = payload["request"]
         session = GeminiSession()
@@ -182,7 +182,7 @@ class GeminiCodeEndpoint(Endpoint):
 
         return {
             "raw_result": raw_result_chunk,
-            "session": ln.to_dict(session, recursive=True),
+            "session": to_dict(session, recursive=True),
         }
 
     def normalize_response(self, raw_response: dict[str, Any]) -> NormalizedResponse:

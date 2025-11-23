@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
-from lionpride import ln
+from lionpride.ln import json_dumps
 from lionpride.lndl import parse_lndl_fuzzy
 from lionpride.types.spec_adapters.pydantic_field import PydanticSpecAdapter
 
@@ -51,7 +51,7 @@ def to_response_str(data: Any) -> str:
     if isinstance(data, BaseModel):
         return data.model_dump_json()
     if isinstance(data, dict):
-        result = ln.json_dumps(data)
+        result = json_dumps(data)
         return result if isinstance(result, str) else result.decode("utf-8")
     return str(data)
 

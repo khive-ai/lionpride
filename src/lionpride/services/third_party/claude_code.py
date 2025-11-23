@@ -46,7 +46,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from lionpride import ln
+from lionpride.ln import json_dumps, now_utc
 
 HAS_CLAUDE_CODE_CLI = False
 CLAUDE_CLI = None
@@ -156,7 +156,7 @@ class ClaudeCodeRequest(BaseModel):
             continue_conversation = True
             prompt = msg[-1]["content"]
             if isinstance(prompt, (dict, list)):
-                prompt = ln.json_dumps(prompt)
+                prompt = json_dumps(prompt)
 
         # 2. else, use entire messages except system message
         else:
@@ -166,7 +166,7 @@ class ClaudeCodeRequest(BaseModel):
                 if message["role"] != "system":
                     content = message["content"]
                     prompts.append(
-                        ln.json_dumps(content) if isinstance(content, (dict, list)) else content
+                        json_dumps(content) if isinstance(content, (dict, list)) else content
                     )
 
             prompt = "\n".join(prompts)
@@ -538,7 +538,7 @@ def _pp_tool_result(tr: dict[str, Any], theme) -> None:
 def _pp_final(sess: ClaudeSession, theme) -> None:
     usage = sess.usage or {}
     txt = (
-        f"### ✅ Session complete - {ln.now_utc().isoformat(timespec='seconds')} UTC\n"
+        f"### ✅ Session complete - {now_utc().isoformat(timespec='seconds')} UTC\n"
         f"**Result:**\n\n{sess.result or ''}\n\n"
         f"- cost: **${sess.total_cost_usd:.4f}**  \n"
         f"- turns: **{sess.num_turns}**  \n"

@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from lionpride import EventStatus, Graph
+from lionpride.core import EventStatus, Graph
 from lionpride.libs import concurrency
 from lionpride.libs.concurrency import CapacityLimiter, CompletionStream
 

@@ -10,7 +10,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, PrivateAttr
 
-from lionpride import Element, Flow, Progression
+from lionpride.core import Element, Flow, Progression
 from lionpride.services import ServiceRegistry
 
 from .messages import Message, SenderRecipient
