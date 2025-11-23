@@ -128,15 +128,15 @@ import threading
 from uuid import UUID
 
 import pytest
-
-from lionpride.core import Element, Pile, Progression
-from lionpride.errors import ExistsError, NotFoundError
-from lionpride.testing import (
+from conftest import (
     TestElement,
     create_test_elements,
     create_test_pile,
     mock_element,
 )
+
+from lionpride.core import Element, Pile, Progression
+from lionpride.errors import ExistsError, NotFoundError
 
 # =============================================================================
 # Test Fixtures

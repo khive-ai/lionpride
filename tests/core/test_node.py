@@ -110,10 +110,10 @@ from __future__ import annotations
 from uuid import UUID
 
 import pytest
+from conftest import TestElement
 from pydantic import BaseModel
 
 from lionpride.core.node import NODE_REGISTRY, Node
-from lionpride.testing import TestElement
 
 # ============================================================================
 # Test Node Subclasses

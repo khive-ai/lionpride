@@ -47,10 +47,10 @@ from uuid import UUID, uuid4
 
 import orjson
 import pytest
+from conftest import TestElement
 from pydantic import ValidationError
 
 from lionpride.core import Element
-from lionpride.testing import TestElement
 
 # Module-level test Element subclasses for polymorphic deserialization tests
 # (must be module-level so they can be dynamically imported via load_type_from_string)

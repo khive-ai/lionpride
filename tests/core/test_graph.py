@@ -190,16 +190,16 @@ from __future__ import annotations
 from uuid import UUID
 
 import pytest
-
-from lionpride.core import Edge, EdgeCondition, Graph, Node
-from lionpride.errors import ExistsError, NotFoundError
-from lionpride.testing import (
+from conftest import (
     create_cyclic_graph,
     create_dag_graph,
     create_empty_graph,
     create_simple_graph,
     mock_node,
 )
+
+from lionpride.core import Edge, EdgeCondition, Graph, Node
+from lionpride.errors import ExistsError, NotFoundError
 
 # ============================================================================
 # Test EdgeCondition Subclasses

@@ -15,6 +15,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
+from conftest import mock_element
 from pydantic import BaseModel
 
 from lionpride.core._utils import (
@@ -24,7 +25,6 @@ from lionpride.core._utils import (
 )
 from lionpride.ln import json_dict
 from lionpride.protocols import Observable, ObservableProto
-from lionpride.testing import mock_element
 
 # ============================================================================
 # Tests: synchronized() and async_synchronized() decorators

@@ -41,22 +41,22 @@ from uuid import uuid4
 
 import pytest
 
-from lionpride.core.event import Event, EventStatus
-from lionpride.core.pile import Pile
-from lionpride.core.processor import Executor, Processor
-from lionpride.libs import concurrency
-
 # ============================================================================
 # Test Event Subclasses (Concrete implementations for testing)
 # ============================================================================
 # Import reusable Event classes from testing module
-from lionpride.testing import (
+from conftest import (
     FailingTestEvent as FailingEvent,
     SimpleTestEvent as SimpleEvent,
     SlowTestEvent as SlowEvent,
     StreamingTestEvent as StreamingEvent,
     TestProcessor as SimpleProcessor,
 )
+
+from lionpride.core.event import Event, EventStatus
+from lionpride.core.pile import Pile
+from lionpride.core.processor import Executor, Processor
+from lionpride.libs import concurrency
 
 
 class FailingProcessor(Processor):

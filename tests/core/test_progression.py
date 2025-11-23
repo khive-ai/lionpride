@@ -61,12 +61,12 @@ Test Coverage:
 from uuid import UUID, uuid4
 
 import pytest
+from conftest import TestElement, create_test_elements, create_test_progression
 
 from lionpride.core import Element, Progression
 from lionpride.errors import NotFoundError
 from lionpride.libs.concurrency import create_task_group, gather
 from lionpride.ln import to_dict, to_list
-from lionpride.testing import TestElement, create_test_elements, create_test_progression
 
 
 class TestProgressionInstantiation:

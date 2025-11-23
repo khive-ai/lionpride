@@ -66,16 +66,16 @@ from typing import Any
 
 import pytest
 
-from lionpride.core import Event, EventStatus, Executor, Pile, Processor
-
 # ============================================================================
 # Test Event and Processor Subclasses (Minimal implementations for testing)
 # ============================================================================
 # Import reusable Event and Processor from testing module
-from lionpride.testing import (
+from conftest import (
     SimpleTestEvent as ExecTestEvent,
     TestProcessor as ExecTestProcessor,
 )
+
+from lionpride.core import Event, EventStatus, Executor, Pile, Processor
 
 
 class ExecTestExecutor(Executor):
