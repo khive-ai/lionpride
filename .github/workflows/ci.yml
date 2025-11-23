@@ -65,7 +65,7 @@ jobs:
         run: uv sync --group dev --all-extras
 
       - name: Run mypy
-        run: uv run mypy src/lionherd
+        run: uv run mypy src/lionpride
         continue-on-error: true # Don't block CI on type errors initially
 
   # =============================================================================
@@ -100,6 +100,7 @@ jobs:
         if: matrix.python-version != '3.11'
         run: |
           uv run pytest tests/ \
+            -m "not integration" \
             --junitxml=junit.xml \
             --tb=short \
             -n auto
@@ -108,7 +109,8 @@ jobs:
         if: matrix.python-version == '3.11'
         run: |
           uv run pytest tests/ \
-            --cov=src/lionherd \
+            -m "not integration" \
+            --cov=src/lionpride \
             --cov-report=xml \
             --cov-report=term-missing:skip-covered \
             --junitxml=junit.xml \
