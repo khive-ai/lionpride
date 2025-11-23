@@ -838,7 +838,7 @@ fresh = event.as_fresh_event()  # New instance with PENDING status
 
 ## Examples
 
-See [Event Notebook](../../../notebooks/references/event.ipynb) for comprehensive examples and patterns.
+See [Event Notebook](../../../notebooks/event.ipynb) for comprehensive examples and patterns.
 
 Comprehensive examples demonstrating:
 

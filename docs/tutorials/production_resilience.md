@@ -388,7 +388,7 @@ async def run_with_shutdown(item_ids: list[str]):
 ## Next Steps
 
 - **API Reference**: `docs/api/libs/concurrency.md` for complete API details
-- **Notebooks**: `notebooks/tutorials/concurrency/` for interactive examples
+- **Notebooks**: `notebooks/` directory for interactive concurrency examples
 
 ## Real-World Metrics
 

@@ -4,10 +4,6 @@
 
 ---
 
-> **⚠️ Migration Notice**: Breaking changes in v1.0.0-alpha5. See the [comprehensive migration guide](../../migration/v1.0.0-alpha5.md) for detailed upgrade instructions.
-
----
-
 ## Overview
 
 `Pile` is a thread-safe collection for managing Element instances with type validation and rich querying capabilities. It combines dict-like keyed access with list-like insertion order preservation and provides a powerful type-dispatched `__getitem__` interface.
@@ -41,7 +37,7 @@
 
 See [Element](element.md) for identity-based base class.
 
-## Migration Guide (v1.0.0a4 → v1.0.0a5)
+## API Design Notes
 
 ### 1. Frozen Type Configuration
 

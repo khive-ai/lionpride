@@ -4,10 +4,6 @@
 
 ---
 
-> **⚠️ Migration Notice**: Breaking changes in v1.0.0-alpha5. See the [comprehensive migration guide](../../migration/v1.0.0-alpha5.md) for detailed upgrade instructions.
-
----
-
 ## Overview
 
 `Progression` is an ordered sequence container that combines list-like operations with workflow-specific functionality. It extends Element to provide UUID ordering with identity, serialization, and metadata tracking.
@@ -40,9 +36,9 @@
 
 See [Element](element.md) for identity-based base class.
 
-## Migration Guide (v1.0.0a4 → v1.0.0a5)
+## API Design Notes
 
-### 1. Field Validator - Stricter Validation
+### 1. Field Validator - Strict Validation
 
 ```python
 # Before: Progression(order=[uuid1, "invalid", None])  # Silently dropped invalid

@@ -16,7 +16,7 @@ The error module provides:
 
 ```text
 Exception
-└── lionprideError (base)
+└── LionprideError (base)
     ├── NotFoundError (semantic)
     ├── ExistsError (semantic)
     ├── ValidationError
@@ -44,7 +44,7 @@ This enables:
 
 ## Exception Classes
 
-### lionprideError
+### LionprideError
 
 Base exception for all lionpride errors.
 
@@ -57,7 +57,7 @@ Base exception for all lionpride errors.
 **Constructor:**
 
 ```python
-lionprideError(
+LionprideError(
     message: str | None = None,
     *,
     details: dict[str, Any] | None = None,
@@ -90,9 +90,9 @@ def to_dict(self) -> dict[str, Any]
 **Example:**
 
 ```python
-from lionpride.errors import lionprideError
+from lionpride.errors import LionprideError
 
-error = lionprideError(
+error = LionprideError(
     "Operation failed",
     details={"operation": "fetch", "resource": "user/123"},
     retryable=True
@@ -101,7 +101,7 @@ error = lionprideError(
 # Structured error data for logging
 error_data = error.to_dict()
 # {
-#     "error": "lionprideError",
+#     "error": "LionprideError",
 #     "message": "Operation failed",
 #     "retryable": True,
 #     "details": {"operation": "fetch", "resource": "user/123"}
@@ -457,7 +457,7 @@ The `.retryable` flag indicates whether an operation can be retried after this e
 
 ```python
 # noqa:validation
-from lionpride.errors import lionprideError, ExecutionError
+from lionpride.errors import LionprideError, ExecutionError
 from lionpride import concurrency
 
 async def retry_operation(operation, max_attempts=3):
@@ -465,7 +465,7 @@ async def retry_operation(operation, max_attempts=3):
     for attempt in range(max_attempts):
         try:
             return await operation()
-        except lionprideError as e:
+        except LionprideError as e:
             if not e.retryable or attempt == max_attempts - 1:
                 raise
 
@@ -477,7 +477,7 @@ async def retry_operation(operation, max_attempts=3):
 # Usage
 try:
     result = await retry_operation(fetch_data)
-except lionprideError as e:
+except LionprideError as e:
     if e.retryable:
         print("Operation failed after retries")
     else:
@@ -685,7 +685,7 @@ Use `.retryable` flag to decide retry strategy.
 
 ```python
 # noqa:validation
-from lionpride.errors import lionprideError
+from lionpride.errors import LionprideError
 from lionpride import concurrency
 
 async def resilient_operation(operation, max_attempts=3):
@@ -695,7 +695,7 @@ async def resilient_operation(operation, max_attempts=3):
     for attempt in range(max_attempts):
         try:
             return await operation()
-        except lionprideError as e:
+        except LionprideError as e:
             last_error = e
 
             # Check if error is retryable
@@ -807,7 +807,7 @@ Use `.to_dict()` for structured logging and monitoring.
 # noqa:validation
 import logging
 import json
-from lionpride.errors import lionprideError
+from lionpride.errors import LionprideError
 
 # Configure structured logging
 logging.basicConfig(
@@ -831,7 +831,7 @@ async def monitored_operation(operation_name, **kwargs):
 
         return result
 
-    except lionprideError as e:
+    except LionprideError as e:
         # Structured error logging
         error_data = e.to_dict()
         error_data["event"] = "operation_error"
@@ -846,7 +846,7 @@ async def monitored_operation(operation_name, **kwargs):
 # Usage
 try:
     await monitored_operation("fetch_user", user_id=123)
-except lionprideError as e:
+except LionprideError as e:
     # Already logged with full context
     pass
 
@@ -965,7 +965,7 @@ except NotFoundError:  # ✅ Semantic exception
 
 ## See Also
 
-- **Protocols**: `Serializable` protocol implemented by `lionprideError`
+- **Protocols**: `Serializable` protocol implemented by `LionprideError`
 - **Base Collections**: `Pile`, `Graph`, `Flow` raise semantic exceptions
 - **Concurrency Patterns**: `retry()` uses `.retryable` flag
 - **Testing**: Error handling in test suite (`tests/test_errors.py`)

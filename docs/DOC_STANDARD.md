@@ -305,7 +305,7 @@ This class implements the following protocols
 - **Containable**: Membership testing via `__contains__()` (if applicable)
 - **Allowable**: Allowed values via `allowed()` (if applicable)
 
-See [Protocols Guide](user_guide/protocols.md) or [Protocols Notebook](../notebooks/references/protocols.ipynb) for implementation patterns.
+See [Protocols Guide](user_guide/protocols.md) or [Protocols Notebook](../notebooks/protocols.ipynb) for implementation patterns.
 ```
 
 ### Async Documentation

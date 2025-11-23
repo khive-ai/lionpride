@@ -4,10 +4,6 @@
 
 ---
 
-> **⚠️ Migration Notice**: Breaking changes in v1.0.0-alpha5. See the [comprehensive migration guide](../../migration/v1.0.0-alpha5.md) for detailed upgrade instructions.
-
----
-
 ## Overview
 
 **Flow** is a state machine built from two specialized [Pile](pile.md) instances:
@@ -40,9 +36,9 @@ This dual-pile architecture enables M:N relationships where items can exist in m
 
 ---
 
-## Migration Guide (v1.0.0a4 → v1.0.0a5)
+## API Design Notes
 
-### 1. Constructor - New `progressions` Parameter
+### 1. Constructor - `progressions` Parameter
 
 ```python
 # Before: flow.add_progression(Progression(name="pending"))

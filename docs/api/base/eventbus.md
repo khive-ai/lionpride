@@ -614,7 +614,7 @@ EventBus does NOT implement lionpride protocols (Observable, Serializable, etc.)
 
 - [`Broadcaster`](broadcaster.md): Singleton pub/sub for global event channels
 - [`Event`](event.md): Base event class for lifecycle tracking
-- [Pub/Sub Patterns Notebook](../../../notebooks/references/broadcaster_eventbus.ipynb): Comprehensive examples
+- [Pub/Sub Patterns Notebook](../../../notebooks/broadcaster_eventbus.ipynb): Comprehensive examples
 
 ---
 

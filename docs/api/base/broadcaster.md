@@ -537,7 +537,7 @@ Broadcaster does NOT implement lionpride protocols (Observable, Serializable, et
 
 - [`EventBus`](eventbus.md): Instance-based pub/sub with topic routing and concurrent handlers
 - [`Event`](event.md): Base event class for lifecycle tracking
-- [Pub/Sub Patterns Notebook](../../../notebooks/references/broadcaster_eventbus.ipynb): Comprehensive examples
+- [Pub/Sub Patterns Notebook](../../../notebooks/broadcaster_eventbus.ipynb): Comprehensive examples
 
 ---
 
