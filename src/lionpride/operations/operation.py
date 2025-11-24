@@ -13,7 +13,7 @@ from lionpride.core import Event, Node
 if TYPE_CHECKING:
     pass
 
-__all__ = ("Operation", "OperationType")
+__all__ = ("ExecutableOperation", "Operation", "OperationType", "create_operation")
 
 OperationType = Literal["communicate", "operate", "react", "generate"]
 
@@ -95,3 +95,34 @@ class Operation(Node, Event):
 
     def __repr__(self) -> str:
         return f"Operation(type={self.operation_type}, status={self.status}, id={str(self.id)[:8]})"
+
+
+def create_operation(
+    operation_type: OperationType | str,
+    parameters: dict[str, Any] | None = None,
+    **kwargs,
+) -> Operation:
+    """Create an Operation instance.
+
+    Args:
+        operation_type: Type of operation to execute
+        parameters: Parameters for operation execution
+        **kwargs: Additional Operation fields (session_id, branch_id, etc.)
+
+    Returns:
+        Operation instance
+    """
+    from uuid import uuid4
+
+    return Operation(
+        operation_type=operation_type,
+        parameters=parameters or {},
+        session_id=kwargs.pop("session_id", uuid4()),
+        branch_id=kwargs.pop("branch_id", uuid4()),
+        **kwargs,
+    )
+
+
+# ExecutableOperation is an alias for Operation (used in flow.py)
+# Kept for backward compatibility and intermediate development
+ExecutableOperation = Operation

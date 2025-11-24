@@ -8,7 +8,7 @@ This is the validation layer of the IPU (Intelligence Processing Unit).
 """
 
 from abc import abstractmethod
-from dataclasses import field
+from dataclasses import dataclass, field
 from enum import IntEnum, auto
 from typing import Any
 
@@ -80,6 +80,7 @@ def _decide_qualifier_order(
     return [qualifier, *default_order]
 
 
+@dataclass(slots=True, frozen=True)
 class RuleParams(Params):
     """Immutable configuration for rules.
 

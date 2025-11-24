@@ -8,7 +8,9 @@ from .libs import (
     schema_handlers as schema_handlers,
     string_handlers as string_handlers,
 )
-from .operations import Builder
+
+# NOTE: Temporarily commented due to missing modules in operations/
+# from .operations import Builder
 from .protocols import implements
 from .services.types import Endpoint, Tool, iModel
 from .session import Branch, Message, Session

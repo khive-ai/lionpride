@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from lionpride.core import Edge, Graph
 
-from .node import Operation, OperationType, create_operation
+from .operation import Operation, OperationType, create_operation
 
 __all__ = ("Builder", "OperationGraphBuilder")
 

@@ -12,8 +12,7 @@ from lionpride.core import EventStatus, Graph
 from lionpride.libs import concurrency
 from lionpride.libs.concurrency import CapacityLimiter, CompletionStream
 
-from .executable import ExecutableOperation
-from .node import Operation
+from .operation import ExecutableOperation, Operation
 
 if TYPE_CHECKING:
     from lionpride.session import Branch, Session

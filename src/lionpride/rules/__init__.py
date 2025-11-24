@@ -12,6 +12,7 @@ from .boolean import BooleanRule
 from .choice import ChoiceRule
 from .number import NumberRule
 from .string import StringRule
+from .validator import Validator
 
 __all__ = (
     "BooleanRule",
@@ -22,4 +23,5 @@ __all__ = (
     "RuleQualifier",
     "StringRule",
     "ValidationError",
+    "Validator",
 )
