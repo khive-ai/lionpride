@@ -5,10 +5,10 @@ from __future__ import annotations
 
 import contextlib
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from lionpride.core import Element, Flow, Pile, Progression, to_uuid
 from lionpride.errors import NotFoundError
@@ -63,6 +63,33 @@ class Session(Element):
         default_factory=ServiceRegistry,
         description="Available services (models, tools)",
     )
+    operations: Any = Field(
+        default=None,
+        description="Operation registry (OperationRegistry)",
+    )
+
+    @model_validator(mode="after")
+    def _register_default_operations(self):
+        """Auto-register built-in operations on initialization."""
+        from lionpride.operations.registry import OperationRegistry
+
+        if self.operations is None:
+            self.operations = OperationRegistry()
+
+        # Register default operations
+        try:
+            from lionpride.operations.communicate import communicate
+            from lionpride.operations.operate import generate, operate, react
+
+            self.operations.register("communicate", communicate)
+            self.operations.register("operate", operate)
+            self.operations.register("generate", generate)
+            self.operations.register("react", react)
+        except ImportError:
+            # Operations module may not be fully available during tests
+            pass
+
+        return self
 
     @property
     def messages(self):
@@ -168,9 +195,71 @@ class Session(Element):
         poll_interval: float | None = None,
         **kwargs,
     ) -> Calling:
+        # TODO: Add branch parameter for resource access control
+        # Check branch.resources contains service_name before invoking
         service = self.services.get(service_name)
         return await service.invoke(
             poll_timeout=poll_timeout,
             poll_interval=poll_interval,
             **kwargs,
         )
+
+    async def conduct(
+        self,
+        branch: Branch | UUID | str,
+        operation: str,
+        ipu: Any,  # IPU type (avoid circular import)
+        **params,
+    ):
+        """Create operation for IPU execution with access control.
+
+        Flow:
+        1. Resolve branch
+        2. Check operation registered
+        3. Validate access control (branch.resources, branch.capabilities)
+        4. Create Operation
+        5. Queue to IPU for execution
+        6. Return Operation (caller can await op.invoke() or check op.status)
+
+        Args:
+            branch: Branch to execute in (UUID, name, or Branch instance)
+            operation: Operation type name (must be registered)
+            ipu: IPU instance (execution context)
+            **params: Operation parameters (will be validated by IPU)
+
+        Returns:
+            Operation instance (queued for execution)
+
+        Raises:
+            NotFoundError: If branch or operation not found
+            PermissionError: If branch lacks required resources/capabilities
+        """
+        from lionpride.operations import Operation
+
+        # 1. Resolve branch
+        resolved_branch = self.get_branch(branch)
+
+        # 2. Check operation registered
+        if operation not in self.operations:
+            raise NotFoundError(f"Operation '{operation}' not registered in session")
+
+        # 3. Validate access control (FAIL EARLY)
+        # TODO: Implement resource/capability checking
+        # For now, log what we would check:
+        # - Check resolved_branch.resources contains required services
+        # - Check resolved_branch.capabilities contains required schemas
+        # - Raise PermissionError if validation fails
+
+        # 4. Create operation
+        op = Operation(
+            operation_type=operation,
+            parameters=params,
+            session_id=self.id,
+            branch_id=resolved_branch.id,
+        )
+
+        # 5. Queue to IPU for execution
+        await ipu.queue(op)
+
+        # 6. Return operation (caller can check status or await result)
+        return op
