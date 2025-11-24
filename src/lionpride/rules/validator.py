@@ -125,14 +125,14 @@ class Validator:
     async def validate(
         self,
         data: dict[str, Any],
-        spec: Any = None,  # TODO: Type as Operable when available
+        operable: Any = None,  # Operable type
         auto_fix: bool = True,
     ) -> dict[str, Any]:
-        """Validate data structure using rules.
+        """Validate data structure using rules against Operable spec.
 
         Args:
             data: Field → value dict to validate
-            spec: Operable spec defining expected structure (optional)
+            operable: Operable spec defining expected structure (optional)
             auto_fix: Enable auto-correction
 
         Returns:
@@ -141,20 +141,36 @@ class Validator:
         Raises:
             ValidationError: If validation fails and auto_fix disabled
         """
+
         validated = {}
 
-        # If spec provided, validate against spec fields
-        if spec is not None and hasattr(spec, "specs"):
-            for field_name, field_spec in spec.specs.items():
-                # Get value from data (use default if missing)
+        # If Operable provided, validate against its __op_fields__
+        if operable is not None and hasattr(operable, "__op_fields__"):
+            for field_spec in operable.__op_fields__:
+                # Get field name from spec metadata
+                field_name = field_spec["name"] if "name" in field_spec.metadata else None
+                if field_name is None:
+                    continue
+
+                # Get value from data
                 value = data.get(field_name)
-                if value is None and hasattr(field_spec, "default"):
-                    value = field_spec.default
+
+                # Handle nullable
+                nullable = field_spec.get("nullable", False)
+                if value is None and nullable:
+                    validated[field_name] = None
+                    continue
+
+                # Handle default
+                if value is None:
+                    if "default" in field_spec.metadata:
+                        value = field_spec["default"]
+                    elif "default_factory" in field_spec.metadata:
+                        factory = field_spec["default_factory"]
+                        value = factory() if callable(factory) else value
 
                 # Get expected type
-                field_type = getattr(field_spec, "annotation", None) or getattr(
-                    field_spec, "type", None
-                )
+                field_type = field_spec.base_type
 
                 # Validate field
                 validated[field_name] = await self.validate_field(

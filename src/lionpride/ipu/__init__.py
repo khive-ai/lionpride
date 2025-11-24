@@ -6,6 +6,7 @@
 The IPU pattern from lionagi v0.2.2: validation → structure → usefulness
 """
 
-from .ipu import IPU
+from .ipu import IPU, get_current_ipu
+from .operation_spec import OperationSpec
 
-__all__ = ("IPU",)
+__all__ = ("IPU", "OperationSpec", "get_current_ipu")
