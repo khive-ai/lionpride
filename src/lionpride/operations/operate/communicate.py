@@ -16,8 +16,8 @@ from lionpride.session.messages import (
 from lionpride.session.messages.utils import prepare_messages_for_chat
 from lionpride.types.spec_adapters.pydantic_field import PydanticSpecAdapter
 
-from .dispatcher import register_operation
-from .operate.generate import generate
+from ..dispatcher import register_operation
+from .generate import generate
 
 if TYPE_CHECKING:
     from lionpride.session import Branch, Session

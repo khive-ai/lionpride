@@ -133,7 +133,7 @@ class Branch(Progression):
         Returns:
             Based on return_as: text, raw dict, Message, or validated model
         """
-        from lionpride.operations.communicate import communicate as communicate_op
+        from lionpride.operations.operate import communicate as communicate_op
 
         if imodel is None:
             raise ValueError("communicate requires 'imodel' parameter")

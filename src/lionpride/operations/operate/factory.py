@@ -83,7 +83,7 @@ async def operate(
         communicate_params.pop("operable", None)
 
     # 6. Call communicate
-    from ..communicate import communicate
+    from .communicate import communicate
 
     result = await communicate(session, branch, communicate_params)
 

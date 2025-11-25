@@ -10,6 +10,7 @@ from .node import Operation, OperationType, create_operation
 from .operate import (
     ReactResult,
     ReactStep,
+    communicate,
     generate,
     operate,
     react,
@@ -28,6 +29,7 @@ __all__ = (
     "ReactResult",
     "ReactStep",
     "Reason",
+    "communicate",
     "create_operation",
     "flow",
     "flow_stream",
