@@ -115,21 +115,12 @@ class Operation(Node, Event):
         session, branch = self._require_binding()
 
         # Get factory from session's operation registry
-        try:
-            factory = session.operations.get(self.operation_type)
-        except KeyError as e:
-            raise KeyError(
-                f"Operation type '{self.operation_type}' not registered. "
-                f"Available: {session.operations.list_names()}"
-            ) from e
+        # Let KeyError propagate directly - registry.get() provides good error message
+        factory = session.operations.get(self.operation_type)
 
         # Execute operation via factory
         # Factory signature: (session, branch, parameters) -> result
-        try:
-            result = await factory(session, branch, self.parameters)
-            return result
-        except Exception as e:
-            raise RuntimeError(f"Operation '{self.operation_type}' failed: {e}") from e
+        return await factory(session, branch, self.parameters)
 
     def __repr__(self) -> str:
         bound = "bound" if self._session is not None else "unbound"

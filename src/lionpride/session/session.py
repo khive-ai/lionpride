@@ -326,6 +326,9 @@ class Session(Element):
         description="Operation factories (operate, react, communicate, generate)",
     )
 
+    # Private: Reference to default branch (stored by UUID to avoid serialization issues)
+    _default_branch_id: UUID | None = PrivateAttr(default=None)
+
     @property
     def messages(self):
         """Read-only view of conversations.items (Pile[Message])."""
@@ -336,18 +339,69 @@ class Session(Element):
         """Read-only view of conversations.progressions (Pile[Branch])."""
         return self.conversations.progressions
 
+    @property
+    def default_branch(self) -> Branch | None:
+        """Get the default branch for operations when none specified."""
+        if self._default_branch_id is None:
+            return None
+        try:
+            return self.conversations.get_progression(self._default_branch_id)
+        except (KeyError, ValueError):
+            # Branch was removed, clear reference
+            self._default_branch_id = None
+            return None
+
+    def set_default_branch(self, branch: Branch | UUID | str) -> None:
+        """Set the default branch for operations.
+
+        Args:
+            branch: Branch instance, UUID, or name to set as default
+
+        Raises:
+            ValueError: If branch not found in session
+        """
+        if isinstance(branch, Branch):
+            branch_id = branch.id
+        elif isinstance(branch, UUID):
+            branch_id = branch
+        else:
+            # Lookup by name
+            resolved = self.conversations.get_progression(branch)
+            branch_id = resolved.id
+
+        # Verify branch exists
+        if branch_id not in self.branches:
+            raise ValueError(f"Branch {branch_id} not found in session")
+
+        self._default_branch_id = branch_id
+
     def create_branch(
         self,
         *,
         name: str | None = None,
         system_message: Message | UUID | None = None,
         capabilities: set[str] | None = None,
+        set_as_default: bool | None = None,
     ) -> Branch:
         """Create new branch for isolated conversation threads.
 
         The branch is automatically bound to this session, enabling
         convenience methods like branch.generate(), branch.operate(), etc.
+
+        Args:
+            name: Optional branch name (auto-generated if None)
+            system_message: Optional system message to set
+            capabilities: Optional capabilities set
+            set_as_default: If True, set as default branch. If None (default),
+                           auto-sets as default if this is the first branch.
+
+        Returns:
+            The created Branch
         """
+        # Auto-set first branch as default if not specified
+        is_first_branch = len(self.branches) == 0
+        should_set_default = set_as_default if set_as_default is not None else is_first_branch
+
         branch_name = name or f"branch_{len(self.branches)}"
         branch = Branch(
             session_id=self.id,
@@ -368,6 +422,11 @@ class Session(Element):
                 branch.set_system_message(system_message)
 
         self.conversations.add_progression(branch)
+
+        # Set as default if appropriate
+        if should_set_default:
+            self._default_branch_id = branch.id
+
         return branch
 
     def fork(
@@ -613,11 +672,12 @@ class Session(Element):
 
         # Resolve branch
         if branch is None:
-            # Use first branch or create default
-            if len(self.branches) == 0:
-                branch = self.create_branch(name="default")
+            # Use default_branch or create one
+            if self.default_branch is not None:
+                branch = self.default_branch
             else:
-                branch = next(iter(self.branches.values()))
+                # No default set - create one (which auto-sets as default)
+                branch = self.create_branch(name="default")
         elif isinstance(branch, (UUID, str)):
             branch = self.conversations.get_progression(branch)
 

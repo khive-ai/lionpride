@@ -662,6 +662,466 @@ class TestFactories:
 
 
 # -------------------------------------------------------------------------
+# Session.conduct() Tests
+# -------------------------------------------------------------------------
+
+
+class TestSessionConduct:
+    """Test Session.conduct() unified operation interface."""
+
+    async def test_conduct_basic_generate(self, session_with_model):
+        """Test basic conduct() with generate operation."""
+        session, model = session_with_model
+        branch = session.create_branch(name="test")
+
+        op = await session.conduct(
+            "generate",
+            branch,
+            imodel=model,
+            messages=[{"role": "user", "content": "Hello"}],
+        )
+
+        # Verify operation lifecycle
+        from lionpride.core import EventStatus
+
+        assert op.status == EventStatus.COMPLETED
+        assert op.response is not None
+        assert "mock response" in op.response
+
+    async def test_conduct_with_default_imodel(self, mock_model):
+        """Test conduct() using default_imodel."""
+        session = Session(default_imodel=mock_model)
+        session.services.register(mock_model, update=True)
+        branch = session.create_branch(name="test")
+
+        # No imodel= passed, should use default
+        op = await session.conduct(
+            "generate",
+            branch,
+            messages=[{"role": "user", "content": "Hello"}],
+        )
+
+        from lionpride.core import EventStatus
+
+        assert op.status == EventStatus.COMPLETED
+        assert op.response is not None
+
+    async def test_conduct_explicit_imodel_overrides_default(self, mock_model):
+        """Test explicit imodel overrides default_imodel."""
+        from dataclasses import dataclass
+        from unittest.mock import AsyncMock
+
+        from lionpride import Event, EventStatus
+        from lionpride.services.providers.oai_chat import OAIChatEndpoint
+        from lionpride.services.types.imodel import iModel
+
+        @dataclass
+        class MockResponse:
+            status: str = "success"
+            data: str = ""
+            raw_response: dict = None
+            metadata: dict = None
+
+            def __post_init__(self):
+                if self.raw_response is None:
+                    self.raw_response = {"id": "mock-id", "choices": []}
+                if self.metadata is None:
+                    self.metadata = {"usage": {"prompt_tokens": 10, "completion_tokens": 20}}
+
+        # Create second model with different response
+        endpoint = OAIChatEndpoint(config=None, name="explicit_model", api_key="mock-key")
+        explicit_model = iModel(backend=endpoint)
+
+        async def explicit_mock_invoke(model_name=None, messages=None, **kwargs):
+            class MockCalling(Event):
+                def __init__(self):
+                    super().__init__()
+                    self.status = EventStatus.COMPLETED
+                    self.execution.response = MockResponse(
+                        status="success", data="explicit model response"
+                    )
+
+            return MockCalling()
+
+        object.__setattr__(explicit_model, "invoke", AsyncMock(side_effect=explicit_mock_invoke))
+
+        session = Session(default_imodel=mock_model)
+        session.services.register(mock_model, update=True)
+        session.services.register(explicit_model, update=True)
+        branch = session.create_branch(name="test")
+
+        # Pass explicit imodel
+        op = await session.conduct(
+            "generate",
+            branch,
+            imodel=explicit_model,
+            messages=[{"role": "user", "content": "Hello"}],
+        )
+
+        assert "explicit model response" in op.response
+
+    async def test_conduct_no_imodel_raises_error(self):
+        """Test conduct() raises ValueError when no imodel available."""
+        session = Session()  # No default_imodel
+        branch = session.create_branch(name="test")
+
+        with pytest.raises(ValueError, match="requires imodel"):
+            await session.conduct(
+                "generate",
+                branch,
+                messages=[{"role": "user", "content": "Hello"}],
+            )
+
+    async def test_conduct_branch_uses_default(self, session_with_model):
+        """Test conduct() uses default_branch when None passed."""
+        session, model = session_with_model
+        branch1 = session.create_branch(name="first")  # Auto-set as default
+        _branch2 = session.create_branch(name="second")
+
+        # Verify first branch is default
+        assert session.default_branch is branch1
+
+        # Pass None for branch - should use default_branch
+        op = await session.conduct(
+            "generate",
+            None,
+            imodel=model,
+            messages=[{"role": "user", "content": "Hello"}],
+        )
+
+        from lionpride.core import EventStatus
+
+        assert op.status == EventStatus.COMPLETED
+        assert op._branch is branch1
+
+    async def test_conduct_branch_auto_create_default(self, mock_model):
+        """Test conduct() creates default branch when session has none."""
+        session = Session(default_imodel=mock_model)
+        session.services.register(mock_model, update=True)
+        # No branches created yet
+        assert len(session.branches) == 0
+        assert session.default_branch is None
+
+        op = await session.conduct(
+            "generate",
+            None,
+            messages=[{"role": "user", "content": "Hello"}],
+        )
+
+        from lionpride.core import EventStatus
+
+        assert op.status == EventStatus.COMPLETED
+        # Verify default branch was created and set as default
+        assert len(session.branches) == 1
+        assert session.default_branch is not None
+        assert session.default_branch.name == "default"
+
+    async def test_conduct_branch_by_uuid(self, session_with_model):
+        """Test conduct() accepts branch by UUID."""
+        session, model = session_with_model
+        branch = session.create_branch(name="test")
+
+        # Pass UUID string
+        op = await session.conduct(
+            "generate",
+            str(branch.id),
+            imodel=model,
+            messages=[{"role": "user", "content": "Hello"}],
+        )
+
+        from lionpride.core import EventStatus
+
+        assert op.status == EventStatus.COMPLETED
+
+    async def test_conduct_branch_by_name(self, session_with_model):
+        """Test conduct() accepts branch by name."""
+        session, model = session_with_model
+        _branch = session.create_branch(name="named_branch")
+
+        # Pass branch name (string lookup)
+        op = await session.conduct(
+            "generate",
+            "named_branch",
+            imodel=model,
+            messages=[{"role": "user", "content": "Hello"}],
+        )
+
+        from lionpride.core import EventStatus
+
+        assert op.status == EventStatus.COMPLETED
+
+    async def test_conduct_unknown_operation_fails(self, session_with_model):
+        """Test conduct() with unregistered operation returns FAILED status."""
+        from lionpride.core import EventStatus
+
+        session, model = session_with_model
+        branch = session.create_branch(name="test")
+
+        # KeyError is caught by Event.invoke() machinery
+        op = await session.conduct(
+            "nonexistent_operation",
+            branch,
+            imodel=model,
+        )
+
+        # Verify operation failed with appropriate error
+        assert op.status == EventStatus.FAILED
+        assert "not registered" in str(op.execution.error)
+
+    async def test_conduct_returns_operation_node(self, session_with_model):
+        """Test conduct() returns Operation node with full lifecycle."""
+        session, model = session_with_model
+        branch = session.create_branch(name="test")
+
+        op = await session.conduct(
+            "generate",
+            branch,
+            imodel=model,
+            messages=[{"role": "user", "content": "Hello"}],
+        )
+
+        from lionpride.operations import Operation
+
+        # Verify it's an Operation node
+        assert isinstance(op, Operation)
+        assert op.operation_type == "generate"
+        # Parameters contain operation-specific args (imodel resolved internally)
+        assert op.parameters is not None
+
+        # Verify lifecycle properties
+        from lionpride.core import EventStatus
+
+        assert op.status == EventStatus.COMPLETED
+        assert op.response is not None
+        assert op.execution is not None
+
+    async def test_conduct_operation_is_bound(self, session_with_model):
+        """Test conducted operation is bound to session/branch."""
+        session, model = session_with_model
+        branch = session.create_branch(name="test")
+
+        op = await session.conduct(
+            "generate",
+            branch,
+            imodel=model,
+            messages=[{"role": "user", "content": "Hello"}],
+        )
+
+        # Verify binding
+        assert op._session is session
+        assert op._branch is branch
+
+    async def test_conduct_operate_with_response_model(self):
+        """Test conduct() with operate and response_model."""
+        from dataclasses import dataclass
+        from unittest.mock import AsyncMock
+
+        from lionpride import Event, EventStatus
+        from lionpride.services.providers.oai_chat import OAIChatEndpoint
+        from lionpride.services.types.imodel import iModel
+
+        @dataclass
+        class MockResponse:
+            status: str = "success"
+            data: str = ""
+            raw_response: dict | None = None
+            metadata: dict | None = None
+
+            def __post_init__(self):
+                if self.raw_response is None:
+                    self.raw_response = {"content": self.data}
+                if self.metadata is None:
+                    self.metadata = {}
+
+        endpoint = OAIChatEndpoint(config=None, name="json_model", api_key="mock-key")
+        json_model = iModel(backend=endpoint)
+
+        async def mock_invoke_json(model_name=None, messages=None, **kwargs):
+            class MockCalling(Event):
+                def __init__(self):
+                    super().__init__()
+                    self.status = EventStatus.COMPLETED
+                    self.execution.response = MockResponse(
+                        status="success",
+                        data='{"analysis": "test result", "confidence": 0.95}',
+                    )
+
+            return MockCalling()
+
+        object.__setattr__(json_model, "invoke", AsyncMock(side_effect=mock_invoke_json))
+
+        session = Session(default_imodel=json_model)
+        session.services.register(json_model, update=True)
+        branch = session.create_branch(name="test")
+
+        op = await session.conduct(
+            "operate",
+            branch,
+            instruction="Analyze this",
+            response_model=ExampleOutput,
+            model_kwargs={"model_name": "gpt-4.1-mini"},
+        )
+
+        # Verify structured response
+        assert isinstance(op.response, ExampleOutput)
+        assert op.response.analysis == "test result"
+        assert op.response.confidence == 0.95
+
+
+# -------------------------------------------------------------------------
+# Operation Lifecycle Tests
+# -------------------------------------------------------------------------
+
+
+class TestOperationLifecycle:
+    """Test Operation bind/invoke lifecycle."""
+
+    async def test_operation_require_binding_error(self):
+        """Test _require_binding raises RuntimeError when not bound."""
+        from lionpride.operations import Operation
+
+        op = Operation(
+            operation_type="generate",
+            parameters={"instruction": "Test"},
+        )
+
+        with pytest.raises(RuntimeError, match="not bound"):
+            op._require_binding()
+
+    async def test_operation_bind_returns_self(self, session_with_model):
+        """Test bind() returns self for chaining."""
+        from lionpride.operations import Operation
+
+        session, model = session_with_model
+        branch = session.create_branch(name="test")
+
+        op = Operation(
+            operation_type="generate",
+            parameters={"imodel": model, "messages": [{"role": "user", "content": "Hi"}]},
+        )
+
+        result = op.bind(session, branch)
+        assert result is op
+
+    async def test_operation_chained_bind_invoke(self, session_with_model):
+        """Test fluent bind().invoke() pattern."""
+        from lionpride.core import EventStatus
+        from lionpride.operations import Operation
+
+        session, model = session_with_model
+        branch = session.create_branch(name="test")
+
+        op = Operation(
+            operation_type="generate",
+            parameters={"imodel": model, "messages": [{"role": "user", "content": "Hi"}]},
+        )
+
+        # Fluent pattern
+        await op.bind(session, branch).invoke()
+
+        assert op.status == EventStatus.COMPLETED
+        assert op.response is not None
+
+
+# -------------------------------------------------------------------------
+# OperationRegistry Edge Cases
+# -------------------------------------------------------------------------
+
+
+class TestOperationRegistryEdgeCases:
+    """Test OperationRegistry edge cases and dunder methods."""
+
+    def test_registry_unregister(self):
+        """Test unregistering an operation."""
+        registry = OperationRegistry(auto_register_defaults=False)
+
+        async def test_factory(session, branch, parameters):
+            return "test"
+
+        registry.register("test_op", test_factory)
+        assert registry.has("test_op")
+
+        result = registry.unregister("test_op")
+        assert result is True
+        assert not registry.has("test_op")
+
+    def test_registry_unregister_nonexistent(self):
+        """Test unregistering non-existent operation returns False."""
+        registry = OperationRegistry(auto_register_defaults=False)
+        result = registry.unregister("nonexistent")
+        assert result is False
+
+    def test_registry_duplicate_registration_error(self):
+        """Test duplicate registration raises ValueError."""
+        registry = OperationRegistry(auto_register_defaults=False)
+
+        async def factory1(session, branch, parameters):
+            return "first"
+
+        async def factory2(session, branch, parameters):
+            return "second"
+
+        registry.register("test_op", factory1)
+
+        with pytest.raises(ValueError, match="already registered"):
+            registry.register("test_op", factory2)
+
+    def test_registry_duplicate_with_override(self):
+        """Test duplicate registration with override=True succeeds."""
+        registry = OperationRegistry(auto_register_defaults=False)
+
+        async def factory1(session, branch, parameters):
+            return "first"
+
+        async def factory2(session, branch, parameters):
+            return "second"
+
+        registry.register("test_op", factory1)
+        registry.register("test_op", factory2, override=True)
+
+        assert registry.get("test_op") is factory2
+
+    def test_registry_contains(self):
+        """Test __contains__ (in operator)."""
+        registry = OperationRegistry(auto_register_defaults=False)
+
+        async def test_factory(session, branch, parameters):
+            return "test"
+
+        registry.register("test_op", test_factory)
+
+        assert "test_op" in registry
+        assert "nonexistent" not in registry
+
+    def test_registry_len(self):
+        """Test __len__."""
+        registry = OperationRegistry(auto_register_defaults=False)
+        assert len(registry) == 0
+
+        async def test_factory(session, branch, parameters):
+            return "test"
+
+        registry.register("op1", test_factory)
+        assert len(registry) == 1
+
+        registry.register("op2", test_factory)
+        assert len(registry) == 2
+
+    def test_registry_repr(self):
+        """Test __repr__."""
+        registry = OperationRegistry(auto_register_defaults=False)
+
+        async def test_factory(session, branch, parameters):
+            return "test"
+
+        registry.register("test_op", test_factory)
+
+        repr_str = repr(registry)
+        assert "OperationRegistry" in repr_str
+        assert "test_op" in repr_str
+
+
+# -------------------------------------------------------------------------
 # Integration Tests
 # -------------------------------------------------------------------------
 

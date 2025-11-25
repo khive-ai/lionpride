@@ -140,7 +140,9 @@ class TestFlowErrorHandling:
     async def test_none_branch_uses_default(self, session_with_model):
         """Test line 133: None branch fallback when default_branch not set."""
         session, model = session_with_model
-        _branch = session.create_branch(name="test")
+        # Create branch without setting as default to test None fallback
+        _branch = session.create_branch(name="test", set_as_default=False)
+        assert session.default_branch is None  # Verify no default set
 
         builder = Builder()
         builder.add(
