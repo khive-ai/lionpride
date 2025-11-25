@@ -39,8 +39,9 @@ class Broadcaster:
 
         # Store as weakref for automatic cleanup
         # Use WeakMethod for bound methods, weakref for regular callables
+        weak_callback: weakref.ref[Callable[[Any], None] | Callable[[Any], Awaitable[None]]]
         if hasattr(callback, "__self__"):
-            weak_callback = weakref.WeakMethod(callback)
+            weak_callback = weakref.WeakMethod(callback)  # type: ignore[assignment]
         else:
             weak_callback = weakref.ref(callback)
         cls._subscribers.append(weak_callback)

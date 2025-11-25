@@ -235,7 +235,7 @@ class Processor:
                         # Streaming: consume async generator with optional output sink
                         async def consume_stream(event: Event, output_sink: OutputSink | None):
                             try:
-                                async for chunk in event.stream():
+                                async for chunk in event.stream():  # type: ignore[attr-defined]
                                     if output_sink:
                                         await output_sink.write(chunk, event.id)
                                 # Update progression after completion
@@ -397,8 +397,10 @@ class Executor:
             await self._create_processor()
             # Backfill all pending events into processor queue
             for event in self.pending_events:
-                await self.processor.enqueue(event.id)
-        await self.processor.start()
+                if self.processor is not None:
+                    await self.processor.enqueue(event.id)
+        if self.processor is not None:
+            await self.processor.start()
 
     async def stop(self) -> None:
         """Stop processor if exists."""
@@ -448,7 +450,7 @@ class Executor:
 
     def status_counts(self) -> dict[str, int]:
         """Get event count per status."""
-        return {prog.name: len(prog) for prog in self.states.progressions}
+        return {prog.name: len(prog) for prog in self.states.progressions if prog.name is not None}
 
     async def cleanup_events(self, statuses: list[EventStatus] | None = None) -> int:
         """Remove events with specified statuses (default: COMPLETED, FAILED, ABORTED)."""

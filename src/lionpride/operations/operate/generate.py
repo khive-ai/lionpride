@@ -56,20 +56,24 @@ async def generate(
         raise RuntimeError(f"Generation failed: {error}")
 
     response = calling.execution.response
+    # Extract response attributes safely
+    response_data = getattr(response, "data", None)
+    response_raw = getattr(response, "raw_response", {})
+    response_meta = getattr(response, "metadata", {}) or {}
 
     match parameters.return_as:
         case "text":
-            return response.data
+            return response_data
         case "raw":
-            return response.raw_response
+            return response_raw
         case "message":
             return Message(
                 content=AssistantResponseContent(
-                    assistant_response=response.data,
+                    assistant_response=str(response_data) if response_data is not None else "",
                 ),
                 metadata={
-                    "raw_response": response.raw_response,
-                    **response.metadata,
+                    "raw_response": response_raw,
+                    **response_meta,
                 },
             )
         case "calling":

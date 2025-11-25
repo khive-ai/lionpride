@@ -130,7 +130,9 @@ class LNDLOutput:
     """
 
     fields: dict[str, BaseModel | ActionCall | Scalar]  # BaseModel, ActionCall, or scalar values
-    lvars: dict[str, str] | dict[str, LvarMetadata]  # Preserved for debugging
+    lvars: (
+        dict[str, str] | dict[str, LvarMetadata] | dict[str, LvarMetadata | RLvarMetadata]
+    )  # Preserved for debugging
     lacts: dict[str, LactMetadata]  # All declared actions (for debugging/reference)
     actions: dict[str, ActionCall]  # Actions referenced in OUT{} (pending execution)
     raw_out_block: str  # Preserved for debugging

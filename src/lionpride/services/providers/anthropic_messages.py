@@ -21,6 +21,7 @@ def create_anthropic_config(
     base_url: str = "https://api.anthropic.com/v1",
     endpoint: str = "messages",
     anthropic_version: str = "2023-06-01",
+    **kwargs,  # Accept extra kwargs (e.g., model) to allow pass-through from iModel
 ) -> dict:
     """Factory for Anthropic Messages API config.
 
@@ -140,4 +141,5 @@ class AnthropicMessagesEndpoint(Endpoint):
             data=text,
             raw_response=response,
             metadata=metadata,
+            error=None,
         )

@@ -130,10 +130,10 @@ async def react(
 
     tool_names = []
     for tool in parameters.tools:
-        if isinstance(tool, type) and issubclass(tool, Tool):
-            tool_instance = tool()
-        elif isinstance(tool, Tool):
+        if isinstance(tool, Tool):
             tool_instance = tool
+        elif isinstance(tool, type) and issubclass(tool, Tool):
+            tool_instance = tool()  # type: ignore[call-arg]
         else:
             raise ValueError(f"Invalid tool type: {type(tool)}")
 

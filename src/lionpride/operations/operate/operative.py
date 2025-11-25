@@ -48,6 +48,7 @@ class Operative:
         self.response_model: BaseModel | None = None
         self.response_str_dict: str | None = None
         self._should_retry: bool | None = None
+        self._supports_actions: bool = False
 
     def create_request_model(self) -> type[BaseModel]:
         """Materialize request model (excludes runtime fields)."""

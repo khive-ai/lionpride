@@ -38,7 +38,7 @@ def generate_lndl_spec_format(
         spec_name = spec.name or "output"
         base_type = spec.base_type
 
-        if hasattr(base_type, "model_fields"):
+        if hasattr(base_type, "model_json_schema"):
             # Pydantic model - use typescript_schema
             schema = base_type.model_json_schema()
             ts = typescript_schema(schema)

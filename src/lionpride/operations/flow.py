@@ -181,7 +181,8 @@ class DependencyAwareExecutor:
 
         # For now, all operations use the same branch
         for node in self.graph.nodes:
-            self.operation_branches[node.id] = default_branch
+            if default_branch is not None:
+                self.operation_branches[node.id] = default_branch
 
         if self.verbose:
             print(f"Pre-allocated branches for {len(self.operation_branches)} operations")
@@ -336,7 +337,7 @@ class DependencyAwareExecutor:
         typed_params = self.session._kwargs_to_param(operation_type, parameters)
 
         # Create Operation with session/branch context
-        operation = Operation(
+        operation = Operation(  # type: ignore[call-arg]
             operation_type=operation_type,
             parameters=typed_params,
             session_id=self.session.id,

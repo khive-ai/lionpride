@@ -26,6 +26,7 @@ __all__ = (
 
 def create_claude_code_config(
     name: str | None = None,
+    **kwargs,  # Accept extra kwargs to allow pass-through from iModel
 ) -> dict:
     """Factory for Claude Code CLI endpoint config.
 
@@ -100,12 +101,13 @@ class ClaudeCodeEndpoint(Endpoint):
                 f"'messages' required for Claude Code endpoint. Got keys: {list(req_dict.keys())}"
             )
 
-        # Create ClaudeCodeRequest object
-        req_obj = ClaudeCodeRequest(messages=messages, **req_dict)
+        # Create ClaudeCodeRequest object - remove messages from req_dict since we pass it separately
+        req_dict.pop("messages", None)
+        req_obj = ClaudeCodeRequest(prompt=" ".join(messages), **req_dict)
 
         return {"request": req_obj}, {}
 
-    async def stream(
+    async def stream(  # type: ignore[override]
         self, request: dict | BaseModel, **kwargs
     ) -> AsyncIterator[ClaudeChunk | dict | ClaudeSession]:
         """Stream Claude Code CLI response chunks.
@@ -230,4 +232,5 @@ class ClaudeCodeEndpoint(Endpoint):
             data=text,
             raw_response=raw_cli_result,  # Use actual raw CLI result chunk
             metadata=metadata,
+            error=None,
         )

@@ -270,7 +270,7 @@ class OperativeStrategy(ValidationStrategy):
 
             # Extract action calls if present
             action_calls = []
-            if has_action_calls(lndl_output):
+            if has_action_calls(lndl_output):  # type: ignore[arg-type]
                 from lionpride.lndl.types import ActionCall
 
                 for field_data in lndl_output.fields.values():

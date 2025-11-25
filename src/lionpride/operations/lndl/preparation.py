@@ -55,11 +55,12 @@ def prepare_lndl_messages(
         lndl_prompt = f"{lndl_prompt}\n\n{spec_format}"
 
     # Create LNDL system message (merged with existing if present)
+    sender_str = str(ins_msg.sender) if ins_msg.sender is not None else "system"
     lndl_system_msg = create_lndl_system_message(
         lndl_prompt,
         session,
         branch,
-        ins_msg.sender,
+        sender_str,
     )
 
     # Get branch messages and prepare for chat
@@ -72,7 +73,13 @@ def prepare_lndl_messages(
     )
 
     # Insert LNDL system message at the beginning
-    return [lndl_system_msg.chat_msg, *list(messages)]
+    result: list[dict[str, Any]] = []
+    if lndl_system_msg.chat_msg is not None:
+        result.append(lndl_system_msg.chat_msg)
+    for msg in messages:
+        if isinstance(msg, dict):
+            result.append(msg)
+    return result
 
 
 def create_lndl_system_message(

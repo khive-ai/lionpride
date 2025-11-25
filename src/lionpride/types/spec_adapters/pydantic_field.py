@@ -100,17 +100,19 @@ class PydanticSpecAdapter(SpecAdapter["BaseModel"]):
     @classmethod
     def create_model(
         cls,
-        op: "Operable",
+        operable: "Operable",
         model_name: str,
         include: set[str] | None = None,
         exclude: set[str] | None = None,
+        *,
         base_type: type["BaseModel"] | None = None,
         doc: str | None = None,
+        **kwargs: Any,
     ) -> type["BaseModel"]:
         """Generate Pydantic BaseModel from Operable using pydantic.create_model()."""
         from pydantic import BaseModel, create_model
 
-        use_specs = op.get_specs(include=include, exclude=exclude)
+        use_specs = operable.get_specs(include=include, exclude=exclude)
         use_fields = {i.name: cls.create_field(i) for i in use_specs if i.name}
 
         # Convert fields to (type, FieldInfo) tuples for create_model
@@ -138,7 +140,7 @@ class PydanticSpecAdapter(SpecAdapter["BaseModel"]):
             actual_base = base_type or BaseModel
 
         # Create model using pydantic's create_model
-        model_cls = create_model(
+        model_cls: type[BaseModel] = create_model(  # type: ignore[call-overload]
             model_name,
             __base__=actual_base,
             __doc__=doc,
@@ -150,18 +152,25 @@ class PydanticSpecAdapter(SpecAdapter["BaseModel"]):
 
     @classmethod
     def fuzzy_match_fields(
-        cls, data: dict, model_cls: type["BaseModel"], strict: bool = False
+        cls,
+        data: dict,
+        model_cls: type["BaseModel"],
+        strict: bool = False,  # type: ignore[override]
     ) -> dict[str, Any]:
         """Match data keys to Pydantic fields (fuzzy). Filters sentinels. Args: data, model_cls, strict."""
+        from typing import Literal
+
         from lionpride.ln._fuzzy_match import fuzzy_match_keys
 
         from .._sentinel import not_sentinel
 
         # "ignore" mode only includes successfully matched fields (no sentinel injection)
         # "raise" mode raises on unmatched keys for strict validation
-        handle_mode = "raise" if strict else "ignore"
+        handle_mode: Literal["ignore", "raise"] = "raise" if strict else "ignore"
 
-        matched = fuzzy_match_keys(data, model_cls.model_fields, handle_unmatched=handle_mode)
+        matched = fuzzy_match_keys(
+            data, list(model_cls.model_fields.keys()), handle_unmatched=handle_mode
+        )
 
         # Filter out sentinel values (Unset, Undefined)
         return {k: v for k, v in matched.items() if not_sentinel(v)}

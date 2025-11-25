@@ -15,7 +15,6 @@
 
 - **Model Agnostic** - Built-in providers for OpenAI-compatible APIs, Anthropic, Gemini, Claude Code
 - **LNDL** - Domain-specific language for LLM structured output and enhanced reasoning (JSON fallback supported)
-- **75% Token Reduction** - Efficient instruction representation for complex agentic workflows (e.g., 20+ tools)
 - **Async Native** - Operation graph building, dependency-aware execution, auto-extensions
 - **Modular Architecture** - Protocol-based composition, zero framework lock-in
 
@@ -30,17 +29,22 @@ pip install lionpride
 ```python
 from lionpride import Session
 from lionpride.services import iModel
+from lionpride.operations import communicate
 
 # Create session with model
 session = Session()
 model = iModel(provider="openai", model="gpt-4o-mini")
-session.register_service(model)
+session.services.register(model)
 
-# Create branch and operate
-branch = session.create_branch()
-result = await branch.operate(
-    instruction="Analyze this data",
-    imodel=model,
+# Create branch and communicate
+branch = session.create_branch(name="main")
+result = await communicate(
+    session=session,
+    branch=branch,
+    parameters={
+        "instruction": "Analyze this data",
+        "imodel": model.name,
+    }
 )
 ```
 

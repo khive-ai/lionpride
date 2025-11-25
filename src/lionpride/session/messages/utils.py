@@ -27,7 +27,7 @@ def _get_text(content: MessageContent, attr: str) -> str:
 def _build_context(content: InstructionContent, action_outputs: list[str]) -> list[Any]:
     """Build context list by appending action outputs to existing context."""
     existing = content.context
-    if content._is_sentinel(existing):
+    if content._is_sentinel(existing) or not isinstance(existing, list):
         return list(action_outputs)
     return list(existing) + action_outputs
 
@@ -64,7 +64,9 @@ def prepare_messages_for_chat(
             content = new_instruction.content.with_updates(copy_containers="deep")
             if to_chat:
                 chat_msg = content.chat_msg
-                return [chat_msg] if not_sentinel(chat_msg, True, True) else []
+                if not_sentinel(chat_msg, True, True) and chat_msg is not None:
+                    return [chat_msg]
+                return []
             return [content]
         return []
 
@@ -98,7 +100,7 @@ def prepare_messages_for_chat(
 
         # InstructionContent: embed pending action outputs
         if isinstance(content, InstructionContent):
-            updates = {"tool_schemas": None, "response_model": None}
+            updates: dict[str, Any] = {"tool_schemas": None, "response_model": None}
             if pending_actions:
                 updates["context"] = _build_context(content, pending_actions)
                 pending_actions = []
@@ -128,12 +130,14 @@ def prepare_messages_for_chat(
             # No history: embed into new_instruction
             if isinstance(new_instruction.content, InstructionContent):
                 curr = _get_text(new_instruction.content, "instruction")
-                updates = {"instruction": f"{system_text}\n\n{curr}"}
+                phase4_updates: dict[str, Any] = {"instruction": f"{system_text}\n\n{curr}"}
                 if pending_actions:
-                    updates["context"] = _build_context(new_instruction.content, pending_actions)
+                    phase4_updates["context"] = _build_context(
+                        new_instruction.content, pending_actions
+                    )
                     pending_actions = []
                 _use_msgs.append(
-                    new_instruction.content.with_updates(copy_containers="deep", **updates)
+                    new_instruction.content.with_updates(copy_containers="deep", **phase4_updates)
                 )
                 new_instruction = None
         elif _use_msgs and isinstance(_use_msgs[0], InstructionContent):
@@ -142,11 +146,18 @@ def prepare_messages_for_chat(
 
     # Phase 5: Append new_instruction (with any remaining action outputs)
     if new_instruction:
-        updates = {}
+        phase5_updates: dict[str, Any] = {}
         if pending_actions and isinstance(new_instruction.content, InstructionContent):
-            updates["context"] = _build_context(new_instruction.content, pending_actions)
-        _use_msgs.append(new_instruction.content.with_updates(copy_containers="deep", **updates))
+            phase5_updates["context"] = _build_context(new_instruction.content, pending_actions)
+        _use_msgs.append(
+            new_instruction.content.with_updates(copy_containers="deep", **phase5_updates)
+        )
 
     if to_chat:
-        return [m.chat_msg for m in _use_msgs if not_sentinel(m.chat_msg, True, True)]
+        result = [
+            m.chat_msg
+            for m in _use_msgs
+            if not_sentinel(m.chat_msg, True, True) and m.chat_msg is not None
+        ]
+        return result  # type: ignore[return-value]
     return _use_msgs

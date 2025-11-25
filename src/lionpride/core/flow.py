@@ -86,12 +86,15 @@ class Flow(Element, Generic[E, P]):
             data["items"] = items
         elif items is not None or item_type is not None or strict_type:
             # Normalize to list
+            items_list: list[E] | None = None
             if isinstance(items, Element):
-                items = [items]
+                items_list = [items]  # type: ignore[list-item]
+            elif items is not None:
+                items_list = list(items)  # type: ignore[arg-type]
 
             # Create Pile with items and type validation (item_type/strict_type are frozen)
             # Even if items=None, create Pile if item_type/strict_type specified
-            data["items"] = Pile(items=items, item_type=item_type, strict_type=strict_type)
+            data["items"] = Pile(items=items_list, item_type=item_type, strict_type=strict_type)
 
         # Handle progressions - let field validator convert dict/list to Pile
         if progressions is not None:
@@ -114,7 +117,7 @@ class Flow(Element, Generic[E, P]):
             return Pile.from_dict(v)
         if isinstance(v, list):
             # List input (can be list[Element] or list[dict]), convert to Pile
-            pile = Pile()
+            pile: Pile[Element] = Pile()
             for item in v:
                 if isinstance(item, dict):
                     pile.add(Element.from_dict(item))
@@ -237,7 +240,7 @@ class Flow(Element, Generic[E, P]):
                 raise KeyError(f"Progression '{key}' not found in flow")
 
         # UUID or Progression instance
-        return self.progressions[key]
+        return self.progressions[key]  # type: ignore[return-value]
 
     # ==================== Item Management ====================
 

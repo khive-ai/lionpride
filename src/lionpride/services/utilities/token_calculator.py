@@ -82,7 +82,7 @@ class TokenCalculator:
         decoder: Callable | None = None,
         return_tokens: bool = False,
         return_decoded: bool = False,
-    ) -> int | list[int]:
+    ) -> int | list[int] | tuple[int, str]:
         if not s_:
             return 0
 
@@ -114,7 +114,8 @@ class TokenCalculator:
     ) -> int:
         try:
             if isinstance(i_, str):
-                return TokenCalculator.tokenize(i_, tokenizer=tokenizer)
+                result = TokenCalculator.tokenize(i_, tokenizer=tokenizer)
+                return result if isinstance(result, int) else 0
 
             if isinstance(i_, dict):
                 if "text" in i_:
@@ -146,7 +147,8 @@ class TokenCalculator:
     def _calculate_embed_item(s_, tokenizer: Callable) -> int:
         try:
             if isinstance(s_, str):
-                return TokenCalculator.tokenize(s_, tokenizer=tokenizer)
+                result = TokenCalculator.tokenize(s_, tokenizer=tokenizer)
+                return result if isinstance(result, int) else 0
 
             if isinstance(s_, list):
                 return sum(TokenCalculator._calculate_embed_item(x, tokenizer) for x in s_)

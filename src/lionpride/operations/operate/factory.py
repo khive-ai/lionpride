@@ -7,10 +7,12 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
-from lionpride.types import Operable, Spec
+from lionpride.types import Operable
+
+if TYPE_CHECKING:
+    from .operative import Operative
 
 # Operations registered in Session._register_default_operations()
-from ..models import ActionRequestModel, ActionResponseModel, Reason
 from .tool_executor import execute_tools, has_action_requests
 
 
@@ -162,8 +164,12 @@ def _build_operable(
     operable: Operable | None,
     actions: bool,
     reason: bool,
-) -> tuple[Operable | None, type[BaseModel] | None]:
-    """Build Operable from response_model + action/reason specs."""
+) -> tuple[Operable | Operative | None, type[BaseModel] | None]:
+    """Build Operable from response_model + action/reason specs.
+
+    Delegates to create_action_operative() for the common case of building
+    an Operable with action/reason specs.
+    """
     # If operable provided, use it directly
     # Handle both Operable (lionpride) and Operative (lionpride wrapper)
     if operable:
@@ -187,55 +193,15 @@ def _build_operable(
     if not actions and not reason:
         return None, response_model
 
-    # Build Operable with additional specs
-    specs = []
+    # Delegate to create_action_operative for building specs
+    # This consolidates the duplicate spec-building logic
+    from lionpride.operations.operate.operative import create_action_operative
 
-    # Add base model as a spec
-    if response_model:
-        spec_name = response_model.__name__.lower()
-        specs.append(
-            Spec(
-                base_type=response_model,
-                name=spec_name,
-            )
-        )
-
-    # Add reason spec
-    if reason:
-        specs.append(
-            Spec(
-                base_type=Reason,
-                name="reason",
-                default=None,
-            )
-        )
-
-    # Add action specs
-    if actions:
-        specs.append(
-            Spec(
-                base_type=list[ActionRequestModel],
-                name="action_requests",
-                default=None,
-            )
-        )
-        specs.append(
-            Spec(
-                base_type=list[ActionResponseModel],
-                name="action_responses",
-                default=None,
-            )
-        )
-
-    # Create Operable
-    name = response_model.__name__ if response_model else "OperateResponse"
-    operable = Operable(specs=tuple(specs), name=name)
-
-    # Create validation model (excluding action_responses for request)
-    # For JSON mode, we need a model that includes all fields except action_responses
-    validation_model = operable.create_model(
-        model_name=f"{name}Response",
-        exclude={"action_responses"} if actions else None,
+    operative = create_action_operative(
+        base_model=response_model,
+        reason=reason,
+        actions=actions,
+        name=response_model.__name__ if response_model else "OperateResponse",
     )
 
-    return operable, validation_model
+    return operative, operative.create_response_model()

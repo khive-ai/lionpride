@@ -47,7 +47,7 @@ class ServiceRegistry:
         with contextlib.suppress(ValueError):
             id_ = to_uuid(name)
 
-        if not id_ and name in self._name_index:
+        if not id_ and isinstance(name, str) and name in self._name_index:
             id_ = self._name_index[name]
 
         with contextlib.suppress(TypeError):
