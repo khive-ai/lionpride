@@ -119,6 +119,167 @@ class Lact(Stmt):
     call: str  # Raw function call string
 
 
+# =================================================================== #
+# v2: Context Management Nodes                                         #
+# =================================================================== #
+
+
+@dataclass(slots=True)
+class IncludeDirective(Stmt):
+    """Include full message in context.
+
+    Syntax: <include msg="msg_id"/>
+
+    Example:
+        <include msg="inst_001"/>
+        → IncludeDirective(msg_ref="inst_001")
+    """
+
+    msg_ref: str  # Message ID to include
+
+
+@dataclass(slots=True)
+class CompressDirective(Stmt):
+    """Compress messages to symbolic representation.
+
+    Syntax: <compress msgs="range" to="alias"/>
+
+    Example:
+        <compress msgs="0..50" to="summary"/>
+        → CompressDirective(msg_refs="0..50", alias="summary")
+    """
+
+    msg_refs: str  # Range like "0..50" or list
+    alias: str  # Store compressed result as
+
+
+@dataclass(slots=True)
+class DropDirective(Stmt):
+    """Explicitly drop message from context.
+
+    Syntax: <drop msg="msg_id"/>
+
+    Example:
+        <drop msg="verbose_output"/>
+        → DropDirective(msg_ref="verbose_output")
+    """
+
+    msg_ref: str  # Message ID to drop
+
+
+@dataclass(slots=True)
+class NoticeDirective(Stmt):
+    """Include brief notice instead of full content.
+
+    Syntax: <notice msg="msg_id" brief="description"/>
+
+    Example:
+        <notice msg="tools" brief="search, calculate, retrieve"/>
+        → NoticeDirective(msg_ref="tools", brief="search, calculate, retrieve")
+    """
+
+    msg_ref: str  # Message ID
+    brief: str  # Short description
+
+
+# Type alias for all context directives
+ContextDirective = IncludeDirective | CompressDirective | DropDirective | NoticeDirective
+
+
+@dataclass(slots=True)
+class ContextBlock(Stmt):
+    """Context engineering block.
+
+    Syntax:
+        <context>
+          <include msg="..."/>
+          <compress msgs="..." to="..."/>
+        </context>
+
+    Example:
+        <context>
+          <include msg="inst_001"/>
+          <compress msgs="0..50" to="summary"/>
+        </context>
+        → ContextBlock(directives=[IncludeDirective(...), CompressDirective(...)])
+    """
+
+    directives: list[ContextDirective]
+
+
+# =================================================================== #
+# v2: Continuation Control Nodes                                       #
+# =================================================================== #
+
+
+@dataclass(slots=True)
+class YieldStmt(Stmt):
+    """Yield control for approval/continuation.
+
+    Syntax: <yield for="ref" reason="..." keep="..." drop_full="true|false" transform="..."/>
+
+    Example:
+        <yield for="search" reason="need results" keep="top_5" drop_full="true"/>
+        → YieldStmt(for_ref="search", reason="need results", keep="top_5", drop_full=True)
+    """
+
+    for_ref: str | None = None  # What we're waiting for
+    reason: str | None = None  # Why continuation needed
+    drop_full: bool = False  # Drop verbose result
+    keep: str | None = None  # What to keep (e.g., "top_5", "summary")
+    transform: str | None = None  # Transformation to apply
+
+
+# =================================================================== #
+# v2: Multi-Agent Communication Nodes                                  #
+# =================================================================== #
+
+
+@dataclass(slots=True)
+class SendStmt(Stmt):
+    """Send message to another agent.
+
+    Syntax:
+        <send to="agent" type="MsgType" timeout="30s">
+          <include msg="..."/>
+        </send>
+
+    Example:
+        <send to="critic" type="ReviewRequest" timeout="30s">
+          <include msg="analysis"/>
+        </send>
+        → SendStmt(to="critic", msg_type="ReviewRequest", timeout="30s", content=[...])
+    """
+
+    to: str  # Target agent
+    msg_type: str | None = None  # Message type for validation
+    timeout: str | None = None  # Timeout duration (e.g., "30s")
+    content: list[ContextDirective] | None = None  # What to send
+
+
+# =================================================================== #
+# v2: Reference Expression                                             #
+# =================================================================== #
+
+
+@dataclass(slots=True)
+class Ref(Expr):
+    """Reference to prior result: {{alias.path}}
+
+    Syntax: {{alias}} or {{alias.path.to.field}}
+
+    Examples:
+        {{search}}
+        → Ref(alias="search", path=None)
+
+        {{search.result.items}}
+        → Ref(alias="search", path=["result", "items"])
+    """
+
+    alias: str  # Variable/action name
+    path: list[str] | None = None  # Optional path for nested access
+
+
 @dataclass(slots=True)
 class OutBlock(Stmt):
     """Output specification block.
@@ -147,7 +308,12 @@ class Program:
         - Action declarations (lacts)
         - Output specification (out_block)
 
-    Example:
+    v2 additions:
+        - Context block (context engineering)
+        - Yield statements (continuation control)
+        - Send statements (multi-agent communication)
+
+    Example (v1):
         <lvar Report.title t>Title</lvar>
         <lvar reasoning>Analysis text</lvar>
         <lact Report.summary s>summarize()</lact>
@@ -158,22 +324,48 @@ class Program:
             lacts=[Lact(...)],
             out_block=OutBlock(...)
         )
+
+    Example (v2):
+        <context>
+          <include msg="user_question"/>
+          <compress msgs="0..50" to="ctx"/>
+        </context>
+        <lvar reasoning r>...</lvar>
+        <lact search s>search(query="AI")</lact>
+        <yield for="s" reason="need results"/>
+        OUT{answer: [r]}
     """
 
     lvars: list[Lvar | RLvar]  # Both namespaced and raw lvars
     lacts: list[Lact]
     out_block: OutBlock | None
+    # v2 additions
+    context: ContextBlock | None = None  # Context engineering
+    yields: list[YieldStmt] | None = None  # Continuation control
+    sends: list[SendStmt] | None = None  # Multi-agent communication
 
 
 __all__ = (
     "ASTNode",
+    # v2: Context Management
+    "CompressDirective",
+    "ContextBlock",
+    "ContextDirective",
+    "DropDirective",
     "Expr",
     "Identifier",
+    "IncludeDirective",
     "Lact",
     "Literal",
     "Lvar",
+    "NoticeDirective",
     "OutBlock",
     "Program",
     "RLvar",
+    "Ref",
+    # v2: Multi-Agent
+    "SendStmt",
     "Stmt",
+    # v2: Continuation
+    "YieldStmt",
 )

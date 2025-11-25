@@ -1,7 +1,29 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-from .ast import Identifier, Lact, Literal, Lvar, OutBlock, Program, RLvar
+from .ast import (
+    # v2 nodes - Context Management
+    CompressDirective,
+    ContextBlock,
+    ContextDirective,
+    DropDirective,
+    # v1 nodes
+    Identifier,
+    IncludeDirective,
+    Lact,
+    Literal,
+    Lvar,
+    NoticeDirective,
+    OutBlock,
+    Program,
+    # v2 nodes - References
+    Ref,
+    RLvar,
+    # v2 nodes - Multi-Agent
+    SendStmt,
+    # v2 nodes - Continuation
+    YieldStmt,
+)
 from .errors import (
     AmbiguousMatchError,
     InvalidConstructorError,
@@ -33,7 +55,13 @@ __all__ = (
     "LNDL_SYSTEM_PROMPT",
     "ActionCall",
     "AmbiguousMatchError",
+    # v2: Context Management
+    "CompressDirective",
+    "ContextBlock",
+    "ContextDirective",
+    "DropDirective",
     "Identifier",
+    "IncludeDirective",
     "InvalidConstructorError",
     "LNDLError",
     "LNDLOutput",
@@ -46,6 +74,7 @@ __all__ = (
     "MissingFieldError",
     "MissingLvarError",
     "MissingOutBlockError",
+    "NoticeDirective",
     "OutBlock",
     "ParseError",
     "ParsedConstructor",
@@ -53,10 +82,16 @@ __all__ = (
     "Program",
     "RLvar",
     "RLvarMetadata",
+    # v2: References
+    "Ref",
     "Scalar",
+    # v2: Multi-Agent
+    "SendStmt",
     "Token",
     "TokenType",
     "TypeMismatchError",
+    # v2: Continuation
+    "YieldStmt",
     "ensure_no_action_calls",
     "get_lndl_system_prompt",
     "has_action_calls",

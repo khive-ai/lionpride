@@ -8,13 +8,28 @@ from enum import Enum, auto
 class TokenType(Enum):
     """Token types for LNDL structured outputs."""
 
-    # Tags
+    # Tags - Core (v1)
     LVAR_OPEN = auto()  # <lvar
     LVAR_CLOSE = auto()  # </lvar>
     LACT_OPEN = auto()  # <lact
     LACT_CLOSE = auto()  # </lact>
     OUT_OPEN = auto()  # OUT{
     OUT_CLOSE = auto()  # }
+
+    # Tags - Context Management (v2)
+    CONTEXT_OPEN = auto()  # <context>
+    CONTEXT_CLOSE = auto()  # </context>
+    INCLUDE = auto()  # <include
+    COMPRESS = auto()  # <compress
+    DROP = auto()  # <drop
+    NOTICE = auto()  # <notice
+
+    # Tags - Continuation (v2)
+    YIELD = auto()  # <yield
+
+    # Tags - Multi-Agent (v2)
+    SEND_OPEN = auto()  # <send
+    SEND_CLOSE = auto()  # </send>
 
     # Literals
     ID = auto()  # identifiers
@@ -30,6 +45,10 @@ class TokenType(Enum):
     LPAREN = auto()  # (
     RPAREN = auto()  # )
     GT = auto()  # >
+    SLASH_GT = auto()  # /> (self-closing)
+    EQ = auto()  # =
+    LBRACE_LBRACE = auto()  # {{ (reference open)
+    RBRACE_RBRACE = auto()  # }} (reference close)
 
     # Control
     NEWLINE = auto()
@@ -218,6 +237,7 @@ class Lexer:
             8  # OUT_OPEN, ID, COLON, LBRACKET, ID, RBRACKET, OUT_CLOSE, EOF
         """
         in_out_block = False  # Track whether we're inside OUT{} block
+        in_directive = False  # Track whether inside a directive tag (v2)
         while char := self.current_char():
             # Skip whitespace (not newlines)
             if char in " \t\r":
@@ -271,6 +291,81 @@ class Lexer:
                     self.column += 5
                     continue
 
+                # v2: Context management tags
+                if self.text[self.pos : self.pos + 10] == "</context>":
+                    self.tokens.append(
+                        Token(TokenType.CONTEXT_CLOSE, "</context>", start_line, start_column)
+                    )
+                    self.pos += 10
+                    self.column += 10
+                    continue
+
+                if self.text[self.pos : self.pos + 9] == "<context>":
+                    self.tokens.append(
+                        Token(TokenType.CONTEXT_OPEN, "<context>", start_line, start_column)
+                    )
+                    self.pos += 9
+                    self.column += 9
+                    continue
+
+                if self.text[self.pos : self.pos + 8] == "<include":
+                    self.tokens.append(
+                        Token(TokenType.INCLUDE, "<include", start_line, start_column)
+                    )
+                    self.pos += 8
+                    self.column += 8
+                    in_directive = True  # v2: entering directive
+                    continue
+
+                if self.text[self.pos : self.pos + 9] == "<compress":
+                    self.tokens.append(
+                        Token(TokenType.COMPRESS, "<compress", start_line, start_column)
+                    )
+                    self.pos += 9
+                    self.column += 9
+                    in_directive = True  # v2: entering directive
+                    continue
+
+                if self.text[self.pos : self.pos + 5] == "<drop":
+                    self.tokens.append(Token(TokenType.DROP, "<drop", start_line, start_column))
+                    self.pos += 5
+                    self.column += 5
+                    in_directive = True  # v2: entering directive
+                    continue
+
+                if self.text[self.pos : self.pos + 7] == "<notice":
+                    self.tokens.append(Token(TokenType.NOTICE, "<notice", start_line, start_column))
+                    self.pos += 7
+                    self.column += 7
+                    in_directive = True  # v2: entering directive
+                    continue
+
+                # v2: Continuation tag
+                if self.text[self.pos : self.pos + 6] == "<yield":
+                    self.tokens.append(Token(TokenType.YIELD, "<yield", start_line, start_column))
+                    self.pos += 6
+                    self.column += 6
+                    in_directive = True  # v2: entering directive
+                    continue
+
+                # v2: Multi-agent tags
+                if self.text[self.pos : self.pos + 7] == "</send>":
+                    self.tokens.append(
+                        Token(TokenType.SEND_CLOSE, "</send>", start_line, start_column)
+                    )
+                    self.pos += 7
+                    self.column += 7
+                    continue
+
+                if self.text[self.pos : self.pos + 5] == "<send":
+                    self.tokens.append(
+                        Token(TokenType.SEND_OPEN, "<send", start_line, start_column)
+                    )
+                    self.pos += 5
+                    self.column += 5
+                    in_directive = True  # v2: has attributes
+                    continue
+
                 # Not a recognized tag, skip
                 self.advance()
                 continue
@@ -310,12 +405,34 @@ class Lexer:
                 self.tokens.append(Token(TokenType.NUM, number, start_line, start_column))
                 continue
 
-            # Strings (only tokenize inside OUT{} blocks to avoid narrative text)
-            if char in "\"'" and in_out_block:
+            # Strings (tokenize inside OUT{} blocks and directive tags to avoid narrative text)
+            if char in "\"'" and (in_out_block or in_directive):
                 start_line = self.line
                 start_column = self.column
                 string_val = self.read_string()
                 self.tokens.append(Token(TokenType.STR, string_val, start_line, start_column))
+                continue
+
+            # Multi-character punctuation (check before single-char)
+            # v2: Self-closing tag />
+            if char == "/" and self.peek_char() == ">":
+                self.tokens.append(Token(TokenType.SLASH_GT, "/>", self.line, self.column))
+                self.advance()
+                self.advance()
+                in_directive = False  # v2: exiting directive
+                continue
+
+            # v2: Reference delimiters {{ and }}
+            if char == "{" and self.peek_char() == "{":
+                self.tokens.append(Token(TokenType.LBRACE_LBRACE, "{{", self.line, self.column))
+                self.advance()
+                self.advance()
+                continue
+
+            if char == "}" and self.peek_char() == "}":
+                self.tokens.append(Token(TokenType.RBRACE_RBRACE, "}}", self.line, self.column))
+                self.advance()
+                self.advance()
                 continue
 
             # Single-character punctuation
@@ -338,6 +455,10 @@ class Lexer:
                 in_out_block = False  # Exiting OUT{} block
             elif char == ">":
                 self.tokens.append(Token(TokenType.GT, char, self.line, self.column))
+                in_directive = False  # v2: exiting directive (for non-self-closing tags)
+            elif char == "=":
+                # v2: Equals sign for attribute assignment
+                self.tokens.append(Token(TokenType.EQ, char, self.line, self.column))
             else:
                 # Unknown character - skip silently
                 pass

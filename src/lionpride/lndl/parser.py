@@ -6,7 +6,21 @@ import re
 import warnings
 from typing import Any
 
-from .ast import Lact, Lvar, OutBlock, Program, RLvar
+from .ast import (
+    CompressDirective,
+    ContextBlock,
+    ContextDirective,
+    DropDirective,
+    IncludeDirective,
+    Lact,
+    Lvar,
+    NoticeDirective,
+    OutBlock,
+    Program,
+    RLvar,
+    SendStmt,
+    YieldStmt,
+)
 from .lexer import Token, TokenType
 
 # Track warned action names to prevent duplicate warnings
@@ -211,6 +225,10 @@ class Parser:
         lvars: list[Lvar] = []
         lacts: list[Lact] = []
         out_block: OutBlock | None = None
+        # v2 additions
+        context: ContextBlock | None = None
+        yields: list[YieldStmt] = []
+        sends: list[SendStmt] = []
 
         # Token-based parsing for all LNDL constructs
         # Track aliases to detect duplicates (lvars and lacts share same namespace)
@@ -221,6 +239,23 @@ class Parser:
 
             if self.match(TokenType.EOF):
                 break
+
+            # v2: Parse context block
+            if self.match(TokenType.CONTEXT_OPEN):
+                context = self.parse_context_block()
+                continue
+
+            # v2: Parse yield statement
+            if self.match(TokenType.YIELD):
+                yield_stmt = self.parse_yield()
+                yields.append(yield_stmt)
+                continue
+
+            # v2: Parse send statement
+            if self.match(TokenType.SEND_OPEN):
+                send_stmt = self.parse_send()
+                sends.append(send_stmt)
+                continue
 
             # Parse lvar declaration
             if self.match(TokenType.LVAR_OPEN):
@@ -256,7 +291,14 @@ class Parser:
             # Skip all other tokens (narrative text, punctuation, etc.)
             self.advance()
 
-        return Program(lvars=lvars, lacts=lacts, out_block=out_block)
+        return Program(
+            lvars=lvars,
+            lacts=lacts,
+            out_block=out_block,
+            context=context,
+            yields=yields if yields else None,
+            sends=sends if sends else None,
+        )
 
     def parse_lvar(self) -> Lvar | RLvar:
         """Parse lvar declaration (namespaced or raw).
@@ -591,6 +633,235 @@ class Parser:
             self.advance()  # consume }
 
         return OutBlock(fields=fields)
+
+    # =================================================================== #
+    # v2: Context Management Parsing                                       #
+    # =================================================================== #
+
+    def parse_attributes(self) -> dict[str, str]:
+        """Parse key=value attribute pairs until /> or >.
+
+        Returns:
+            Dict of attribute name to value
+
+        Example:
+            msg="inst_001" to="summary"
+            → {"msg": "inst_001", "to": "summary"}
+        """
+        attrs: dict[str, str] = {}
+        self.skip_newlines()
+
+        while not self.match(TokenType.SLASH_GT, TokenType.GT, TokenType.EOF):
+            self.skip_newlines()
+
+            if self.match(TokenType.SLASH_GT, TokenType.GT, TokenType.EOF):
+                break
+
+            # Expect identifier (attribute name)
+            if not self.match(TokenType.ID):
+                self.advance()
+                continue
+
+            attr_name = self.current_token().value
+            self.advance()
+            self.skip_newlines()
+
+            # Expect =
+            if not self.match(TokenType.EQ):
+                continue
+            self.advance()
+            self.skip_newlines()
+
+            # Expect string value
+            if not self.match(TokenType.STR):
+                continue
+            attr_value = self.current_token().value
+            self.advance()
+
+            attrs[attr_name] = attr_value
+            self.skip_newlines()
+
+        return attrs
+
+    def parse_context_directive(self) -> ContextDirective | None:
+        """Parse a single context directive.
+
+        Returns:
+            ContextDirective node or None if not a recognized directive
+        """
+        self.skip_newlines()
+
+        # <include msg="..."/>
+        if self.match(TokenType.INCLUDE):
+            self.advance()  # consume <include
+            attrs = self.parse_attributes()
+
+            if self.match(TokenType.SLASH_GT):
+                self.advance()  # consume />
+
+            msg_ref = attrs.get("msg", "")
+            return IncludeDirective(msg_ref=msg_ref)
+
+        # <compress msgs="..." to="..."/>
+        if self.match(TokenType.COMPRESS):
+            self.advance()  # consume <compress
+            attrs = self.parse_attributes()
+
+            if self.match(TokenType.SLASH_GT):
+                self.advance()  # consume />
+
+            msg_refs = attrs.get("msgs", "")
+            alias = attrs.get("to", "")
+            return CompressDirective(msg_refs=msg_refs, alias=alias)
+
+        # <drop msg="..."/>
+        if self.match(TokenType.DROP):
+            self.advance()  # consume <drop
+            attrs = self.parse_attributes()
+
+            if self.match(TokenType.SLASH_GT):
+                self.advance()  # consume />
+
+            msg_ref = attrs.get("msg", "")
+            return DropDirective(msg_ref=msg_ref)
+
+        # <notice msg="..." brief="..."/>
+        if self.match(TokenType.NOTICE):
+            self.advance()  # consume <notice
+            attrs = self.parse_attributes()
+
+            if self.match(TokenType.SLASH_GT):
+                self.advance()  # consume />
+
+            msg_ref = attrs.get("msg", "")
+            brief = attrs.get("brief", "")
+            return NoticeDirective(msg_ref=msg_ref, brief=brief)
+
+        return None
+
+    def parse_context_block(self) -> ContextBlock:
+        """Parse context engineering block.
+
+        Grammar:
+            ContextBlock ::= '<context>' ContextDirective* '</context>'
+
+        Returns:
+            ContextBlock node with list of directives
+
+        Example:
+            <context>
+              <include msg="inst_001"/>
+              <compress msgs="0..50" to="summary"/>
+            </context>
+        """
+        self.expect(TokenType.CONTEXT_OPEN)  # <context>
+        self.skip_newlines()
+
+        directives: list[ContextDirective] = []
+
+        while not self.match(TokenType.CONTEXT_CLOSE, TokenType.EOF):
+            self.skip_newlines()
+
+            if self.match(TokenType.CONTEXT_CLOSE, TokenType.EOF):
+                break
+
+            directive = self.parse_context_directive()
+            if directive:
+                directives.append(directive)
+            else:
+                # Skip unrecognized token
+                self.advance()
+
+        if self.match(TokenType.CONTEXT_CLOSE):
+            self.advance()  # consume </context>
+
+        return ContextBlock(directives=directives)
+
+    # =================================================================== #
+    # v2: Continuation Control Parsing                                     #
+    # =================================================================== #
+
+    def parse_yield(self) -> YieldStmt:
+        """Parse yield statement for continuation control.
+
+        Grammar:
+            YieldStmt ::= '<yield' Attrs '/>'
+
+        Returns:
+            YieldStmt node
+
+        Example:
+            <yield for="search" reason="need results" keep="top_5" drop_full="true"/>
+        """
+        self.expect(TokenType.YIELD)  # <yield
+        attrs = self.parse_attributes()
+
+        if self.match(TokenType.SLASH_GT):
+            self.advance()  # consume />
+
+        # Parse drop_full as boolean
+        drop_full_str = attrs.get("drop_full", "false")
+        drop_full = drop_full_str.lower() == "true"
+
+        return YieldStmt(
+            for_ref=attrs.get("for"),
+            reason=attrs.get("reason"),
+            drop_full=drop_full,
+            keep=attrs.get("keep"),
+            transform=attrs.get("transform"),
+        )
+
+    # =================================================================== #
+    # v2: Multi-Agent Communication Parsing                                #
+    # =================================================================== #
+
+    def parse_send(self) -> SendStmt:
+        """Parse send statement for multi-agent communication.
+
+        Grammar:
+            SendStmt ::= '<send' Attrs '>' ContextDirective* '</send>'
+
+        Returns:
+            SendStmt node
+
+        Example:
+            <send to="critic" type="ReviewRequest" timeout="30s">
+              <include msg="analysis"/>
+            </send>
+        """
+        self.expect(TokenType.SEND_OPEN)  # <send
+        attrs = self.parse_attributes()
+
+        # Expect > to close opening tag
+        if self.match(TokenType.GT):
+            self.advance()
+        self.skip_newlines()
+
+        # Parse content directives until </send>
+        content: list[ContextDirective] = []
+
+        while not self.match(TokenType.SEND_CLOSE, TokenType.EOF):
+            self.skip_newlines()
+
+            if self.match(TokenType.SEND_CLOSE, TokenType.EOF):
+                break
+
+            directive = self.parse_context_directive()
+            if directive:
+                content.append(directive)
+            else:
+                # Skip unrecognized token
+                self.advance()
+
+        if self.match(TokenType.SEND_CLOSE):
+            self.advance()  # consume </send>
+
+        return SendStmt(
+            to=attrs.get("to", ""),
+            msg_type=attrs.get("type"),
+            timeout=attrs.get("timeout"),
+            content=content if content else None,
+        )
 
 
 def parse_value(value_str: Any) -> Any:
