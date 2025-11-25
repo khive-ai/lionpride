@@ -49,7 +49,8 @@ class StringRule(Rule):
         Args:
             min_length: Minimum string length (inclusive)
             max_length: Maximum string length (inclusive)
-            pattern: Regex pattern to match
+            pattern: Regex pattern to match. Note: Complex patterns on untrusted
+                input could cause ReDoS. Use simple patterns or validate separately.
             params: Custom RuleParams (uses default if None)
             **kw: Additional validation kwargs
         """
