@@ -3,15 +3,11 @@
 
 from .factory import operate
 from .generate import generate
-from .operative import Operative, create_action_operative, create_operative_from_model
 from .react import ReactResult, ReactStep, react
 
 __all__ = (
-    "Operative",
     "ReactResult",
     "ReactStep",
-    "create_action_operative",
-    "create_operative_from_model",
     "generate",
     "operate",
     "react",

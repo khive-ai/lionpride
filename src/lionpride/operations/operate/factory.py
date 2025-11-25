@@ -196,14 +196,7 @@ def _build_operable(
 ) -> tuple[Operable | None, type[BaseModel] | None]:
     """Build Operable from response_model + action/reason specs."""
     # If operable provided, use it directly
-    # Handle both Operable (lionpride) and Operative (lionpride wrapper)
     if operable:
-        from lionpride.operations.operate.operative import Operative
-
-        if isinstance(operable, Operative):
-            # Operative wraps an Operable - return the Operative for validation
-            return operable, operable.create_response_model()
-        # Raw Operable from lionpride
         return operable, operable.create_model() if operable else None
 
     # Validate response_model

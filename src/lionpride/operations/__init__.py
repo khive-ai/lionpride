@@ -8,11 +8,8 @@ from .flow import DependencyAwareExecutor, flow, flow_stream
 from .models import ActionRequestModel, ActionResponseModel, Reason
 from .node import Operation, OperationType, create_operation
 from .operate import (
-    Operative,
     ReactResult,
     ReactStep,
-    create_action_operative,
-    create_operative_from_model,
     generate,
     operate,
     react,
@@ -28,13 +25,10 @@ __all__ = (
     "OperationDispatcher",
     "OperationGraphBuilder",
     "OperationType",
-    "Operative",
     "ReactResult",
     "ReactStep",
     "Reason",
-    "create_action_operative",
     "create_operation",
-    "create_operative_from_model",
     "flow",
     "flow_stream",
     "generate",
