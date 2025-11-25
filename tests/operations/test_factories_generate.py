@@ -268,3 +268,24 @@ class TestParameterPassthrough:
         assert call_kwargs["model"] == "gpt-4"
         assert call_kwargs["temperature"] == 0.7
         assert call_kwargs["max_tokens"] == 100
+
+
+class TestGenerateCoverage:
+    """Test generate.py uncovered lines."""
+
+    async def test_return_as_calling(self, session_with_model):
+        """Test line 59: return_as='calling' returns the Calling object."""
+        session, _ = session_with_model
+        branch = session.create_branch(name="test")
+
+        parameters = {
+            "imodel": "mock_model",
+            "return_as": "calling",
+            "messages": [{"role": "user", "content": "test"}],
+        }
+
+        result = await generate(session, branch, parameters)
+
+        # Should return Calling object (Event subclass)
+        assert isinstance(result, Event)
+        assert result.status == EventStatus.COMPLETED

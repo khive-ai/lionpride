@@ -4,10 +4,12 @@
 """Tests for action execution (tool calling)."""
 
 import asyncio
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from lionpride.operations.actions import act
+from lionpride.core.event import Event, EventStatus
+from lionpride.operations.actions import _execute_single_action, act
 from lionpride.rules import ActionRequest, ActionResponse
 from lionpride.services import ServiceRegistry, iModel
 from lionpride.services.types.backend import NormalizedResponse
@@ -355,3 +357,74 @@ class TestAct:
         assert responses[0].output == 1  # 1 * 1
         assert responses[1].output == 4  # 2 + 2
         assert responses[2].output == 9  # 3 * 3
+
+
+class TestActionsCoverage:
+    """Test actions.py uncovered lines."""
+
+    async def test_action_request_with_empty_function_string(self):
+        """Test line 39: Empty function string raises ValueError."""
+        registry = ServiceRegistry()
+
+        # ActionRequest with empty string function (passes validation but triggers line 39)
+        requests = [ActionRequest(function="", arguments={})]
+
+        with pytest.raises(ValueError, match="Action request missing function name"):
+            await act(requests, registry)
+
+    async def test_execution_status_not_completed_without_error(self):
+        """Test line 113: Non-completed status without error returns Exception."""
+
+        async def test_func():
+            return "result"
+
+        tool = Tool(func_callable=test_func, config=ToolConfig(name="test_tool", provider="tool"))
+        model = iModel(backend=tool)
+
+        # Mock invoke to return non-completed status without error
+        async def mock_invoke_pending(**kwargs):
+            class PendingCalling(Event):
+                def __init__(self):
+                    super().__init__()
+                    self.status = EventStatus.PROCESSING
+                    self.execution.error = None
+                    self.execution.response = MagicMock(data="no data")
+
+            return PendingCalling()
+
+        object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_invoke_pending))
+
+        registry = ServiceRegistry()
+        registry.register(model)
+
+        request = ActionRequest(function="test_tool", arguments={})
+        result = await _execute_single_action(request, registry)
+
+        # Should return Exception with status message (line 113)
+        assert isinstance(result, Exception)
+        assert "processing" in str(result).lower()
+
+    async def test_execute_single_action_exception_path(self):
+        """Test lines 118-120: Exception during execution returns exception."""
+
+        async def test_func():
+            return "result"
+
+        tool = Tool(func_callable=test_func, config=ToolConfig(name="exc_tool", provider="tool"))
+        model = iModel(backend=tool)
+
+        # Mock invoke to raise exception
+        async def mock_invoke_exception(**kwargs):
+            raise RuntimeError("Test execution error")
+
+        object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_invoke_exception))
+
+        registry = ServiceRegistry()
+        registry.register(model)
+
+        request = ActionRequest(function="exc_tool", arguments={})
+        result = await _execute_single_action(request, registry)
+
+        # Should return the exception (lines 118-120)
+        assert isinstance(result, RuntimeError)
+        assert "Test execution error" in str(result)
