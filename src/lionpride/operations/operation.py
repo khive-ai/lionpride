@@ -84,6 +84,8 @@ class Operation(Node, Event):
         branch = session.get_branch(self.branch_id)
 
         # Get operation function from session registry
+        if session.operations is None:
+            raise RuntimeError("Session has no operations registry")
         operation_func = session.operations.get(self.operation_type)
 
         # Execute operation

@@ -58,16 +58,16 @@ async def act(
             )
             for request in action_requests
         ]
-        responses = await concurrency.gather(*tasks, return_exceptions=True)
+        gather_results = await concurrency.gather(*tasks, return_exceptions=True)
 
-        # Convert any exceptions to error responses
-        return [
+        # Convert any exceptions to error responses (type ignore: _handle_execution_result always returns ActionResponseModel)
+        return [  # type: ignore[return-value]
             _handle_execution_result(req, resp)
-            for req, resp in zip(action_requests, responses, strict=True)
+            for req, resp in zip(action_requests, gather_results, strict=True)
         ]
     else:
         # Sequential execution (preserves order, easier debugging)
-        responses = []
+        seq_results: list[ActionResponseModel] = []
         for request in action_requests:
             result = await _execute_single_action(
                 request,
@@ -77,8 +77,8 @@ async def act(
                 poll_interval=poll_interval,
             )
             response = _handle_execution_result(request, result)
-            responses.append(response)
-        return responses
+            seq_results.append(response)
+        return seq_results
 
 
 async def _execute_single_action(
@@ -114,7 +114,10 @@ async def _execute_single_action(
             return Exception(f"Execution {calling.execution.status.value}")
 
         # Return data from NormalizedResponse
-        return calling.execution.response.data
+        response = calling.execution.response
+        if hasattr(response, "data"):
+            return response.data
+        return response
 
     except Exception as e:
         # Return exception for error handling in _handle_execution_result

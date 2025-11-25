@@ -1,6 +1,8 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import Any
+
 from pydantic import (
     BaseModel,
     ValidationError as PydanticValidationError,
@@ -15,7 +17,7 @@ from .types import ActionCall, LactMetadata, LNDLOutput, LvarMetadata, RLvarMeta
 
 
 def resolve_references_prefixed(
-    out_fields: dict[str, list[str] | str],
+    out_fields: dict[str, list[str] | str | int | float | bool],
     lvars: dict[str, LvarMetadata | RLvarMetadata],
     lacts: dict[str, LactMetadata],
     operable: Operable,
@@ -55,18 +57,23 @@ def resolve_references_prefixed(
             raise MissingFieldError(f"Required field '{spec.name}' missing from OUT{{}}")
 
     # Resolve and validate each field (collect all errors)
-    validated_fields = {}
+    from pydantic import BaseModel as PydanticBaseModel
+
+    from .types import Scalar
+
+    validated_fields: dict[str, PydanticBaseModel | ActionCall | Scalar] = {}
     parsed_actions: dict[str, ActionCall] = {}  # Actions referenced in OUT{}
     errors: list[Exception] = []
 
     for field_name, value in out_fields.items():
         try:
             # Get spec for this field
-            spec = operable.get(field_name)
-            if spec is None:
+            spec_or_unset = operable.get(field_name)
+            if spec_or_unset is None or not hasattr(spec_or_unset, "base_type"):
                 raise ValueError(
                     f"OUT{{}} field '{field_name}' has no corresponding Spec in Operable"
                 )
+            spec = spec_or_unset  # type: ignore[assignment]
 
             # Get type from spec
             target_type = spec.base_type
@@ -189,7 +196,7 @@ def resolve_references_prefixed(
                     # If namespaced, fall through to mixing logic below
 
                 # Build kwargs from variable list - supports mixing lvars and namespaced actions
-                kwargs = {}
+                kwargs: dict[str, Any] = {}
                 for var_name in var_list:
                     # Check if this is an action reference
                     if var_name in lacts:

@@ -66,13 +66,15 @@ async def communicate(
         raise ValueError("communicate requires 'imodel' parameter")
 
     # Support both string name and iModel object
+    imodel_name: str
+    imodel_direct = None
     if isinstance(parameters.imodel, str):
         imodel_name = parameters.imodel
-        imodel_direct = None
     else:
-        imodel_name = getattr(parameters.imodel, "name", None)
-        if not imodel_name:
+        name_attr = getattr(parameters.imodel, "name", None)
+        if not name_attr:
             raise ValueError("imodel must be a string name or have a 'name' attribute")
+        imodel_name = str(name_attr)
         imodel_direct = parameters.imodel
 
     # Determine validation mode
@@ -91,12 +93,16 @@ async def communicate(
     imodel = imodel_direct if imodel_direct else session.services.get(imodel_name)
 
     # Create initial instruction message
+    from lionpride.types import Unset
+
     ins_content = InstructionContent(
         instruction=parameters.instruction,
         context=parameters.context,
-        images=parameters.images,
-        image_detail=parameters.image_detail,
-        response_model=parameters.response_model if use_json else None,
+        images=parameters.images if parameters.images else Unset,
+        image_detail=parameters.image_detail if parameters.image_detail else Unset,
+        response_model=parameters.response_model
+        if use_json and parameters.response_model
+        else Unset,
     )
     ins_msg = Message(
         content=ins_content,
@@ -108,18 +114,20 @@ async def communicate(
     last_error: str | None = None
     for attempt in range(parameters.max_retries + 1):
         # Prepare messages based on mode
-        if use_lndl:
+        if use_lndl and parameters.operable:
             messages = prepare_lndl_messages(session, branch, ins_msg, parameters.operable)
         else:
             branch_msgs = session.messages[branch]
-            messages = list(
-                prepare_messages_for_chat(
+            messages = [
+                msg
+                for msg in prepare_messages_for_chat(
                     messages=branch_msgs,
                     progression=branch,
                     new_instruction=ins_msg,
                     to_chat=True,
                 )
-            )
+                if isinstance(msg, dict)
+            ]
 
         # Call generate (stateless)
         from lionpride.operations.types import GenerateParam
@@ -132,8 +140,10 @@ async def communicate(
         )
         result_msg = await generate(session, branch, gen_params)
 
-        # Extract response data
-        response_text = result_msg.content.assistant_response
+        # Extract response data (with type narrowing for Message content)
+        if not isinstance(result_msg, Message):
+            raise RuntimeError(f"Expected Message, got {type(result_msg)}")
+        response_text = getattr(result_msg.content, "assistant_response", None) or ""
         raw_response = result_msg.metadata.get("raw_response", {})
         metadata = {k: v for k, v in result_msg.metadata.items() if k != "raw_response"}
 

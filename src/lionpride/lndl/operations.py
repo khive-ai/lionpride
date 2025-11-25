@@ -148,7 +148,8 @@ SUMMARY (be concise):"""
         error = calling.execution.error or f"status: {calling.execution.status}"
         raise RuntimeError(f"Compression failed: {error}")
 
-    summary_text = calling.execution.response.data
+    response = calling.execution.response
+    summary_text = response.data if hasattr(response, "data") else str(response)
 
     # Create summary message
     return Message(
@@ -274,7 +275,7 @@ async def stream_cognitive(
     # Final parse of complete response
     if buffer:
         async for result in execute_cognitive(buffer):
-            yield result
+            yield result  # type: ignore[misc]
 
 
 # =============================================================================
@@ -409,7 +410,8 @@ Use these to engineer your cognitive context efficiently."""
             result.reason_stopped = f"Model call failed: {error}"
             return result
 
-        response_text = calling.execution.response.data
+        response = calling.execution.response
+        response_text = response.data if hasattr(response, "data") else str(response)
 
         if verbose:
             print(f"Response:\n{response_text[:500]}...")
@@ -427,7 +429,7 @@ Use these to engineer your cognitive context efficiently."""
             content=AssistantResponseContent(assistant_response=response_text),
             sender=resolved_model.name,
             recipient=str(resolved_branch.user),
-            metadata={"raw_response": calling.execution.response.raw_response},
+            metadata={"raw_response": getattr(response, "raw_response", {})},
         )
         session.add_message(assistant_msg, branches=resolved_branch)
 

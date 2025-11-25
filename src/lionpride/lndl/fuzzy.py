@@ -71,7 +71,7 @@ def _correct_name(
 
     # Calculate scores for tie detection
     algo_func = SIMILARITY_ALGO_MAP["jaro_winkler"]
-    scores = {candidate: algo_func(target, candidate) for candidate in result}
+    scores = {candidate: algo_func(target, candidate) for candidate in result}  # type: ignore[operator]
 
     # Find max score
     max_score = max(scores.values())
@@ -253,21 +253,21 @@ def parse_lndl_fuzzy(
     # If threshold is 1.0 (strict mode), validate strictly then call resolver
     if threshold >= 1.0:
         # Validate lvar model names (skip raw lvars - they have no model/field)
-        for lvar in lvars_raw.values():
-            if isinstance(lvar, RLvarMetadata):
+        for lvar_meta in lvars_raw.values():
+            if isinstance(lvar_meta, RLvarMetadata):
                 continue  # Raw lvars don't need model validation
-            if lvar.model not in expected_models:
+            if lvar_meta.model not in expected_models:
                 raise MissingFieldError(
-                    f"Model '{lvar.model}' not found. "
+                    f"Model '{lvar_meta.model}' not found. "
                     f"Available: {list(expected_models)} (strict mode: exact match required)"
                 )
 
         # Validate field names exist for each model (skip raw lvars)
-        for lvar in lvars_raw.values():
-            if isinstance(lvar, RLvarMetadata):
+        for lvar_meta in lvars_raw.values():
+            if isinstance(lvar_meta, RLvarMetadata):
                 continue  # Raw lvars don't have fields
-            # Get spec for this model (guaranteed to exist if lvar.model in expected_models)
-            spec, is_model_based = spec_map[lvar.model]
+            # Get spec for this model (guaranteed to exist if lvar_meta.model in expected_models)
+            spec, is_model_based = spec_map[lvar_meta.model]
 
             # Check if field exists
             if is_model_based:
@@ -277,31 +277,31 @@ def parse_lndl_fuzzy(
                 # Field-based: fields are the spec names in operable
                 expected_fields = list(active_spec_names)
 
-            if lvar.field not in expected_fields:
+            if lvar_meta.field not in expected_fields:
                 raise MissingFieldError(
-                    f"Field '{lvar.field}' not found in model {lvar.model}. "
+                    f"Field '{lvar_meta.field}' not found in model {lvar_meta.model}. "
                     f"Available: {expected_fields} (strict mode: exact match required)"
                 )
 
         # Validate namespaced action model/field names (strict mode)
-        for lact in lacts_raw.values():
-            if lact.model:  # Namespaced action
-                if lact.model not in expected_models:
+        for lact_meta in lacts_raw.values():
+            if lact_meta.model:  # Namespaced action
+                if lact_meta.model not in expected_models:
                     raise MissingFieldError(
-                        f"Action model '{lact.model}' not found. "
+                        f"Action model '{lact_meta.model}' not found. "
                         f"Available: {list(expected_models)} (strict mode: exact match required)"
                     )
 
                 # Find spec and validate field
-                spec, is_model_based = spec_map[lact.model]
+                spec, is_model_based = spec_map[lact_meta.model]
                 if is_model_based:
                     expected_fields = list(spec.base_type.model_fields.keys())
                 else:
                     expected_fields = list(active_spec_names)
 
-                if lact.field not in expected_fields:
+                if lact_meta.field not in expected_fields:
                     raise MissingFieldError(
-                        f"Action field '{lact.field}' not found in model {lact.model}. "
+                        f"Action field '{lact_meta.field}' not found in model {lact_meta.model}. "
                         f"Available: {expected_fields} (strict mode: exact match required)"
                     )
 
@@ -318,14 +318,14 @@ def parse_lndl_fuzzy(
 
     # 2. Pre-correct lvar metadata (model names and field names - skip raw lvars)
     # Collect all unique model names and field names from namespaced lvars only
-    raw_model_names = {lvar.model for lvar in lvars_raw.values() if isinstance(lvar, LvarMetadata)}
+    raw_model_names = {m.model for m in lvars_raw.values() if isinstance(m, LvarMetadata)}
     raw_field_names_by_model: dict[str, set[str]] = {}
-    for lvar in lvars_raw.values():
-        if isinstance(lvar, RLvarMetadata):
+    for lvar_meta in lvars_raw.values():
+        if isinstance(lvar_meta, RLvarMetadata):
             continue  # Skip raw lvars - no model/field to correct
-        if lvar.model not in raw_field_names_by_model:
-            raw_field_names_by_model[lvar.model] = set()
-        raw_field_names_by_model[lvar.model].add(lvar.field)
+        if lvar_meta.model not in raw_field_names_by_model:
+            raw_field_names_by_model[lvar_meta.model] = set()
+        raw_field_names_by_model[lvar_meta.model].add(lvar_meta.field)
 
     # Correct model names in lvars
     model_corrections: dict[str, str] = {}  # raw_model → corrected_model
@@ -354,45 +354,48 @@ def parse_lndl_fuzzy(
 
     # Rebuild lvars with corrected model and field names (preserve raw lvars as-is)
     lvars_corrected: dict[str, LvarMetadata | RLvarMetadata] = {}
-    for local_name, lvar in lvars_raw.items():
-        if isinstance(lvar, RLvarMetadata):
+    for local_name, lvar_meta in lvars_raw.items():
+        if isinstance(lvar_meta, RLvarMetadata):
             # Raw lvars pass through unchanged
-            lvars_corrected[local_name] = lvar
+            lvars_corrected[local_name] = lvar_meta
         else:
             # Namespaced lvars get fuzzy correction
-            corrected_model = model_corrections.get(lvar.model, lvar.model)
-            corrected_field = field_corrections.get((lvar.model, lvar.field), lvar.field)
+            corrected_model = model_corrections.get(lvar_meta.model, lvar_meta.model)
+            corrected_field = field_corrections.get(
+                (lvar_meta.model, lvar_meta.field), lvar_meta.field
+            )
 
             lvars_corrected[local_name] = LvarMetadata(
                 model=corrected_model,
                 field=corrected_field,
-                local_name=lvar.local_name,
-                value=lvar.value,
+                local_name=lvar_meta.local_name,
+                value=lvar_meta.value,
             )
 
     # 2b. Pre-correct lact metadata (model names and field names for namespaced actions)
     # Namespaced actions share the same model/field correction as lvars
     lacts_corrected: dict[str, LactMetadata] = {}
-    for local_name, lact in lacts_raw.items():
-        if lact.model:  # Namespaced action
+    for local_name, lact_meta in lacts_raw.items():
+        if lact_meta.model:  # Namespaced action
             # Use existing model_corrections (same as lvars)
-            corrected_model = model_corrections.get(lact.model, lact.model)
+            corrected_model = model_corrections.get(lact_meta.model, lact_meta.model)
 
             # For field correction, use existing field_corrections
-            corrected_field = field_corrections.get((lact.model, lact.field), lact.field)
+            lact_field = lact_meta.field if lact_meta.field else ""
+            corrected_field = field_corrections.get((lact_meta.model, lact_field), lact_field)
 
             lacts_corrected[local_name] = LactMetadata(
                 model=corrected_model,
-                field=corrected_field,
-                local_name=lact.local_name,
-                call=lact.call,
+                field=corrected_field if corrected_field else None,
+                local_name=lact_meta.local_name,
+                call=lact_meta.call,
             )
         else:  # Direct action - no correction needed
-            lacts_corrected[local_name] = lact
+            lacts_corrected[local_name] = lact_meta
 
     # 3. Pre-correct OUT{} spec names (keys in out_fields_raw)
     expected_spec_names = list(active_spec_names)
-    out_fields_corrected: dict[str, list[str] | str] = {}
+    out_fields_corrected: dict[str, list[str] | str | int | float | bool] = {}
 
     for raw_spec_name, value in out_fields_raw.items():
         corrected_spec_name = _correct_name(
@@ -404,7 +407,7 @@ def parse_lndl_fuzzy(
     available_lvar_names = list(lvars_corrected.keys())
     available_lact_names = list(lacts_corrected.keys())
     available_var_or_action_names = available_lvar_names + available_lact_names
-    out_fields_final: dict[str, list[str] | str] = {}
+    out_fields_final: dict[str, list[str] | str | int | float | bool] = {}
 
     for spec_name, value in out_fields_corrected.items():
         if isinstance(value, list):

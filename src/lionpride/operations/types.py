@@ -35,9 +35,9 @@ class GenerateParam(Params):
     """
 
     _config: ClassVar[ModelConfig] = ModelConfig(none_as_sentinel=True)
-    imodel: str | iModel = None
-    messages: list[dict] = None
-    model: str = None  # Model name for API (e.g., "gpt-4o")
+    imodel: str | iModel | None = None
+    messages: list[dict] | None = None
+    model: str | None = None  # Model name for API (e.g., "gpt-4o")
     return_as: Literal["text", "raw", "message", "calling"] = "text"
 
 
@@ -62,15 +62,15 @@ class CommunicateParam(Params):
     """
 
     _config: ClassVar[ModelConfig] = ModelConfig(none_as_sentinel=True)
-    instruction: str = None
-    imodel: str | iModel = None
-    model: str = None  # Model name for API (e.g., "gpt-4o")
+    instruction: str | None = None
+    imodel: str | iModel | None = None
+    model: str | None = None  # Model name for API (e.g., "gpt-4o")
     context: Any = None
-    images: list = None
-    image_detail: Literal["low", "high", "auto"] = None
+    images: list | None = None
+    image_detail: Literal["low", "high", "auto"] | None = None
     return_as: Literal["text", "raw", "message", "model"] = "text"
-    response_model: type[BaseModel] = None
-    operable: Operable = None
+    response_model: type[BaseModel] | None = None
+    operable: Operable | None = None
     strict_validation: bool = False
     fuzzy_parse: bool = True
     lndl_threshold: float = 0.85
@@ -102,14 +102,14 @@ class OperateParam(Params):
     """
 
     _config: ClassVar[ModelConfig] = ModelConfig(none_as_sentinel=True)
-    instruction: str = None
-    imodel: str | iModel = None
-    response_model: type[BaseModel] = None
-    operable: Operable = None
+    instruction: str | None = None
+    imodel: str | iModel | None = None
+    response_model: type[BaseModel] | None = None
+    operable: Operable | None = None
     context: Any = None
-    images: list = None
-    image_detail: Literal["low", "high", "auto"] = None
-    tool_schemas: list[dict] = None
+    images: list | None = None
+    image_detail: Literal["low", "high", "auto"] | None = None
+    tool_schemas: list[dict] | None = None
     tools: bool = False
     actions: bool = False
     reason: bool = False
@@ -139,11 +139,11 @@ class ReactParam(Params):
     """
 
     _config: ClassVar[ModelConfig] = ModelConfig(none_as_sentinel=True)
-    instruction: str = None
-    imodel: str | iModel = None
-    tools: list = None
-    response_model: type[BaseModel] = None
-    model_name: str = None
+    instruction: str | None = None
+    imodel: str | iModel | None = None
+    tools: list | None = None
+    response_model: type[BaseModel] | None = None
+    model_name: str | None = None
     context: Any = None
     max_steps: int = 5
     use_lndl: bool = False

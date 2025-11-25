@@ -222,7 +222,7 @@ class Parser:
                 "Parser requires source_text for content extraction", self.current_token()
             )
 
-        lvars: list[Lvar] = []
+        lvars: list[Lvar | RLvar] = []
         lacts: list[Lact] = []
         out_block: OutBlock | None = None
         # v2 additions
@@ -373,7 +373,8 @@ class Parser:
             # Raw: <lvar alias>content</lvar>
             pattern = rf"<lvar\s+{re.escape(alias)}\s*>(.*?)</lvar>"
         else:
-            # Namespaced
+            # Namespaced - model and field are guaranteed non-None here
+            assert model is not None and field is not None
             if has_explicit_alias:
                 # Explicit alias: <lvar Model.field alias>content</lvar>
                 pattern = rf"<lvar\s+{re.escape(model)}\.{re.escape(field)}\s+{re.escape(alias)}\s*>(.*?)</lvar>"
@@ -404,6 +405,7 @@ class Parser:
         if is_raw:
             return RLvar(alias=alias, content=content)
         else:
+            assert model is not None and field is not None
             return Lvar(model=model, field=field, alias=alias, content=content)
 
     def parse_lact(self) -> Lact:
@@ -470,6 +472,7 @@ class Parser:
 
         # Build regex pattern based on parsed structure
         if model:
+            assert field is not None  # field is set when model is set
             if has_explicit_alias:
                 # Explicit alias: <lact Model.field alias>call</lact>
                 pattern = rf"<lact\s+{re.escape(model)}\.{re.escape(field)}\s+{re.escape(alias)}\s*>(.*?)</lact>"
