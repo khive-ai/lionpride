@@ -26,13 +26,13 @@ async def operate(
 
     Args:
         parameters: Must include 'instruction', 'imodel', and 'response_model' or 'operable'.
-            Optional: actions, reason, tools, use_lndl, max_retries, return_message.
+            Optional: actions, reason, tools, max_retries, return_message.
     """
     # 1. Validate and extract parameters
     params = _validate_parameters(parameters)
 
     # 2. Build Operable from response_model + action/reason specs
-    operable, validation_model = _build_operable(
+    _operable, validation_model = _build_operable(
         response_model=params["response_model"],
         operable=params["operable"],
         actions=params["actions"],
@@ -65,11 +65,9 @@ async def operate(
                 "tool_schemas": tool_schemas,
             }
 
-    # 5. Choose mode: LNDL (operable) vs JSON (response_model)
-    if params["use_lndl"] and operable:
-        communicate_params["operable"] = operable
-        communicate_params["lndl_threshold"] = params["lndl_threshold"]
-    elif validation_model:
+    # 5. Set response_model for JSON validation
+    # Note: LNDL mode removed for this PR, will be reintroduced later
+    if validation_model:
         communicate_params["response_model"] = validation_model
     else:
         raise ValueError("operate requires response_model or operable")
@@ -141,8 +139,6 @@ def _validate_parameters(params: dict[str, Any]) -> dict[str, Any]:
         "tools": params.get("tools", False),
         "actions": params.get("actions", False),
         "reason": params.get("reason", False),
-        "use_lndl": params.get("use_lndl", False),
-        "lndl_threshold": params.get("lndl_threshold", 0.85),
         "max_retries": params.get("max_retries", 0),
         "skip_validation": params.get("skip_validation", False),
         "return_message": params.get("return_message", False),
@@ -166,8 +162,6 @@ def _extract_model_kwargs(params: dict[str, Any]) -> dict[str, Any]:
         "tools",
         "actions",
         "reason",
-        "use_lndl",
-        "lndl_threshold",
         "max_retries",
         "skip_validation",
         "return_message",

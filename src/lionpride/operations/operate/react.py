@@ -97,7 +97,7 @@ async def react(
 
     Args:
         parameters: Must include 'instruction', 'imodel', 'tools', and 'model_name'.
-            Optional: response_model, max_steps, use_lndl, verbose.
+            Optional: response_model, max_steps, verbose.
     """
     from .factory import operate
 
@@ -117,8 +117,6 @@ async def react(
     response_model = parameters.get("response_model")
     context = parameters.get("context", {})
     max_steps = parameters.get("max_steps", 5)
-    use_lndl = parameters.get("use_lndl", False)
-    lndl_threshold = parameters.get("lndl_threshold", 0.85)
     verbose = parameters.get("verbose", False)
 
     # Extract model_kwargs - may be nested dict or flat in parameters
@@ -134,8 +132,6 @@ async def react(
             "response_model",
             "context",
             "max_steps",
-            "use_lndl",
-            "lndl_threshold",
             "verbose",
             "model_kwargs",
             "reason",  # Legacy param
@@ -223,8 +219,6 @@ Final answer: {{"reasoning": "...", "action_requests": [], "is_done": true, "fin
                     "instruction": current_instruction,
                     "imodel": imodel,
                     "response_model": step_model,
-                    "use_lndl": use_lndl,
-                    "lndl_threshold": lndl_threshold,
                     "model": model_name,
                     **model_kwargs,
                 },

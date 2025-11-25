@@ -161,7 +161,6 @@ class TestFactoryCoverage:
             "instruction": "Test",
             "imodel": model,
             "operable": operable,
-            "use_lndl": False,
             "skip_validation": True,  # Skip validation to test operable path
             "model_kwargs": {"model_name": "gpt-4"},
         }
@@ -195,7 +194,6 @@ class TestFactoryCoverage:
         parameters = {
             "instruction": "Test",
             "imodel": model,
-            "use_lndl": False,
             # No response_model or operable
         }
 
@@ -531,11 +529,10 @@ class TestFactoryCoverage:
         session, model = session_with_model
         branch = session.create_branch(name="test")
 
-        # Neither response_model nor operable, and use_lndl is False (default)
+        # Neither response_model nor operable
         parameters = {
             "instruction": "Test",
             "imodel": model,
-            "use_lndl": False,
             # No response_model
             # No operable
             "model_kwargs": {"model_name": "gpt-4"},
@@ -631,52 +628,6 @@ class TestFactoryCoverage:
             assert result.action_responses is not None
             assert len(result.action_responses) == 1
             assert result.action_responses[0].output == 12
-
-    @pytest.mark.asyncio
-    async def test_operate_lndl_mode(self, session_with_model):
-        """Test lines 70-71: LNDL mode with operable."""
-        from lionpride.operations.operate.factory import operate
-        from lionpride.types import Operable, Spec
-
-        session, model = session_with_model
-        branch = session.create_branch(name="test")
-
-        class TestSpec(BaseModel):
-            value: str
-
-        operable = Operable(
-            specs=(Spec(base_type=TestSpec, name="test_spec"),),
-            name="TestOperable",
-        )
-
-        # Mock to return valid JSON
-        async def mock_json_invoke(**kwargs):
-            class MockCalling(Event):
-                def __init__(self):
-                    super().__init__()
-                    self.status = EventStatus.COMPLETED
-                    self.execution.response = MockNormalizedResponse(data='{"value": "test"}')
-
-            return MockCalling()
-
-        object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_json_invoke))
-
-        parameters = {
-            "instruction": "Test",
-            "imodel": model,
-            "operable": operable,
-            "use_lndl": True,  # Line 70
-            "lndl_threshold": 0.5,  # Line 71
-            "model_kwargs": {"model_name": "gpt-4"},
-        }
-
-        # This will hit lines 70-71 (LNDL mode)
-        # The actual LNDL parsing might fail, but we're testing the code path
-        try:
-            _result = await operate(session, branch, parameters)
-        except ValueError:
-            # Expected if LNDL parsing fails
-            pass
 
     @pytest.mark.asyncio
     async def test_operate_action_execution_with_branch_string(self, session_with_model):
