@@ -168,4 +168,5 @@ class OAIChatEndpoint(Endpoint):
             data=text,
             raw_response=raw_response,
             metadata=metadata,
+            error=None,
         )

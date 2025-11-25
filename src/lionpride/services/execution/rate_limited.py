@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Self
 
 from typing_extensions import override
 
-from lionpride.core import Event, Executor, Processor
+from lionpride.core import Event, Executor, Pile, Processor
 from lionpride.libs.concurrency import get_cancelled_exc_class, sleep
 
 from ..types.endpoint import APICalling
@@ -16,8 +16,6 @@ from ..utilities.rate_limiter import TokenBucket
 
 if TYPE_CHECKING:
     import asyncio
-
-    from lionpride.core import Pile
 
 __all__ = ("RateLimitedExecutor", "RateLimitedProcessor")
 
@@ -66,6 +64,9 @@ class RateLimitedProcessor(Processor):
             max_queue_size: Max queue size (default: 1000)
             max_denial_tracking: Max denial entries to track (default: 10000)
         """
+        # Create a dummy pile if none provided (will be set by executor)
+        if pile is None:
+            pile = Pile(item_type=Event)  # type: ignore[type-abstract]
         super().__init__(
             queue_capacity=queue_capacity,
             capacity_refresh_time=capacity_refresh_time,
@@ -107,9 +108,8 @@ class RateLimitedProcessor(Processor):
         except get_cancelled_exc_class():
             logger.info("Rate limit replenisher task cancelled.")
 
-    @override
     @classmethod
-    async def create(
+    async def create(  # type: ignore[override]
         cls,
         queue_capacity: int,
         capacity_refresh_time: float,

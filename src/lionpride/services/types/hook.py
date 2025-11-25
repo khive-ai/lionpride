@@ -98,25 +98,25 @@ class HookEvent(Event):
 
 
 def get_handler(d_: dict, k: str | type, get: bool = False, /):
-    handler = d_.get(k)
+    handler = d_.get(k)  # type: ignore[arg-type]
     if handler is None and not get:
         return None
 
     if handler is not None:
         if not concurrency.is_coro_func(handler):
 
-            async def _func(*args, **kwargs):
+            async def _async_wrapper(*args, **kwargs):
                 await concurrency.sleep(0)
                 return handler(*args, **kwargs)
 
-            return _func
+            return _async_wrapper
         return handler
 
-    async def _func(*args, **_kwargs):
+    async def _default_handler(*args, **_kwargs):
         await concurrency.sleep(0)
         return args[0] if args else None
 
-    return _func
+    return _default_handler
 
 
 def validate_hooks(kw):
@@ -167,7 +167,7 @@ class HookRegistry:
     async def _call(
         self,
         hp_: HookPhase,
-        ct_: str | type,
+        ct_: str | type | None,
         ch_: Any,
         ev_: E | type[E],
         /,
@@ -182,7 +182,7 @@ class HookRegistry:
         elif not ct_:
             raise RuntimeError("Hook type is required when chunk_type is not provided")
         else:
-            validate_stream_handlers({ct_: self._stream_handlers.get(ct_)})
+            validate_stream_handlers({ct_: self._stream_handlers.get(ct_)})  # type: ignore[arg-type]
             h = get_handler(self._stream_handlers, ct_, True)
             return await h(ev_, ct_, ch_, **kw)
 
@@ -194,7 +194,7 @@ class HookRegistry:
         /,
         **kw,
     ):
-        validate_stream_handlers({ct_: self._stream_handlers.get(ct_)})
+        validate_stream_handlers({ct_: self._stream_handlers.get(ct_)})  # type: ignore[arg-type]
         handler = get_handler(self._stream_handlers, ct_, True)
         return await handler(ev_, ct_, ch_, **kw)
 
@@ -222,9 +222,9 @@ class HookRegistry:
                 exit=exit,
                 **kw,
             )
-            return (res, False, EventStatus.COMPLETED)
+            return (res, False, EventStatus.COMPLETED)  # type: ignore[return-value]
         except concurrency.get_cancelled_exc_class() as e:
-            return ((Undefined, e), True, EventStatus.CANCELLED)
+            return ((Undefined, e), True, EventStatus.CANCELLED)  # type: ignore[return-value]
         except Exception as e:
             return (e, exit, EventStatus.CANCELLED)
 
@@ -270,9 +270,9 @@ class HookRegistry:
                 exit=exit,
                 **kw,
             )
-            return (res, False, EventStatus.COMPLETED)
+            return (res, False, EventStatus.COMPLETED)  # type: ignore[return-value]
         except concurrency.get_cancelled_exc_class() as e:
-            return ((Undefined, e), True, EventStatus.CANCELLED)
+            return ((Undefined, e), True, EventStatus.CANCELLED)  # type: ignore[return-value]
         except Exception as e:
             return (e, exit, EventStatus.ABORTED)
 
@@ -321,25 +321,25 @@ class HookRegistry:
             raise ValueError("Either method or chunk_type must be provided")
 
         if hook_phase:
-            meta = {"lion_class": event_like.class_name(full=True)}
+            meta: dict[str, Any] = {"lion_class": event_like.class_name(full=True)}
             match hook_phase:
                 case HookPhase.PreEventCreate | HookPhase.PreEventCreate.value:
                     return (
-                        await self.pre_event_create(event_like, exit=exit, **kw),
+                        await self.pre_event_create(event_like, exit=exit, **kw),  # type: ignore[arg-type]
                         meta,
                     )
                 case HookPhase.PreInvocation | HookPhase.PreInvocation.value:
-                    meta["event_id"] = str(event_like.id)
-                    meta["event_created_at"] = event_like.created_at
+                    meta["event_id"] = str(event_like.id)  # type: ignore[union-attr]
+                    meta["event_created_at"] = str(event_like.created_at)  # type: ignore[union-attr]
                     return (
-                        await self.pre_invocation(event_like, exit=exit, **kw),
+                        await self.pre_invocation(event_like, exit=exit, **kw),  # type: ignore[arg-type, type-var]
                         meta,
                     )
                 case HookPhase.PostInvocation | HookPhase.PostInvocation.value:
-                    meta["event_id"] = str(event_like.id)
-                    meta["event_created_at"] = event_like.created_at
+                    meta["event_id"] = str(event_like.id)  # type: ignore[union-attr]
+                    meta["event_created_at"] = str(event_like.created_at)  # type: ignore[union-attr]
                     return (
-                        await self.post_invocation(event_like, exit=exit, **kw),
+                        await self.post_invocation(event_like, exit=exit, **kw),  # type: ignore[arg-type, type-var]
                         meta,
                     )
         return await self.handle_streaming_chunk(chunk_type, chunk, exit=exit, **kw)

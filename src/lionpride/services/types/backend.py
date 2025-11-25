@@ -98,7 +98,7 @@ class NormalizedResponse(HashableModel):
     raw_response: dict = Field(..., description="Original unmodified response")
     metadata: dict | None = Field(None, description="Provider-specific metadata")
 
-    def to_dict(self) -> dict:
+    def to_dict(self, mode: str = "python", **kwargs: Any) -> dict[str, Any]:  # type: ignore[override]
         """Convert to dict, excluding None values."""
         return self.model_dump(exclude_none=True)
 
@@ -124,7 +124,7 @@ class Calling(Event):
         """Get normalized response from execution."""
         if is_sentinel(self.execution.response):
             return Unset
-        return self.execution.response
+        return self.execution.response  # type: ignore[return-value]
 
     @property
     @abstractmethod
@@ -200,10 +200,10 @@ class Calling(Event):
             hook_phase=HookPhase.PreInvocation,
             event_like=self,
             registry=hook_registry,
-            exit=exit_hook,
+            exit=exit_hook if exit_hook is not None else False,
             timeout=hook_timeout,
             params=hook_params or {},
-        )
+        )  # type: ignore[call-arg]
         self._pre_invoke_hook_event = h_ev
 
     def create_post_invoke_hook(
@@ -218,10 +218,10 @@ class Calling(Event):
             hook_phase=HookPhase.PostInvocation,
             event_like=self,
             registry=hook_registry,
-            exit=exit_hook,
+            exit=exit_hook if exit_hook is not None else False,
             timeout=hook_timeout,
             params=hook_params or {},
-        )
+        )  # type: ignore[call-arg]
         self._post_invoke_hook_event = h_ev
 
 
@@ -281,6 +281,8 @@ class ServiceBackend(Element):
             status="success",
             data=raw_response,
             raw_response=raw_response,
+            error=None,
+            metadata=None,
         )
 
     @abstractmethod

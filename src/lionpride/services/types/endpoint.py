@@ -209,12 +209,11 @@ class Endpoint(ServiceBackend):
         else:
             raise ValueError("Config must be a dict or EndpointConfig instance")
 
-        # Initialize ServiceBackend with config and resilience components
-        super().__init__(
-            config=_config,
-            circuit_breaker=circuit_breaker,
-            retry_config=retry_config,
-        )
+        # Initialize ServiceBackend with config only (resilience components are our own fields)
+        super().__init__(config=_config)
+        # Set resilience components directly
+        self.circuit_breaker = circuit_breaker
+        self.retry_config = retry_config
 
         # Inject SecretStr directly to _api_key if provided
         if secret_api_key is not None:
@@ -341,7 +340,7 @@ class Endpoint(ServiceBackend):
 
             inner_call = cb_wrapped_call
         else:
-            inner_call = base_call
+            inner_call = base_call  # type: ignore[assignment]
 
         # Step 2: Wrap (possibly CB-wrapped) call with retry (if configured)
         if self.retry_config:

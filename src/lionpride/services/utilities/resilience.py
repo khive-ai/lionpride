@@ -105,7 +105,7 @@ class CircuitBreaker:
         self._lock = Lock()  # libs.concurrency.Lock
 
         # Metrics
-        self._metrics = {
+        self._metrics: dict[str, int | list[dict[str, Any]]] = {
             "success_count": 0,
             "failure_count": 0,
             "rejected_count": 0,
@@ -122,11 +122,14 @@ class CircuitBreaker:
         """Get circuit breaker metrics (deep copy for thread-safety)."""
         # Note: This is a sync property, so we can't use async lock here.
         # For observability use only - not guaranteed consistent under concurrent writes.
+        state_changes = self._metrics["state_changes"]
         return {
             "success_count": self._metrics["success_count"],
             "failure_count": self._metrics["failure_count"],
             "rejected_count": self._metrics["rejected_count"],
-            "state_changes": list(self._metrics["state_changes"]),  # Deep copy list
+            "state_changes": list(state_changes)
+            if isinstance(state_changes, list)
+            else [],  # Deep copy list
         }
 
     def to_dict(self) -> dict[str, Any]:
@@ -143,13 +146,15 @@ class CircuitBreaker:
         old_state = self.state
         if new_state != old_state:
             self.state = new_state
-            self._metrics["state_changes"].append(
-                {
-                    "time": current_time(),
-                    "from": old_state.value,
-                    "to": new_state.value,
-                }
-            )
+            state_changes = self._metrics["state_changes"]
+            if isinstance(state_changes, list):
+                state_changes.append(
+                    {
+                        "time": current_time(),
+                        "from": old_state.value,
+                        "to": new_state.value,
+                    }
+                )
 
             logger.info(
                 f"Circuit '{self.name}' state changed from {old_state.value} to {new_state.value}"
@@ -180,7 +185,10 @@ class CircuitBreaker:
                     await self._change_state(CircuitState.HALF_OPEN)
                 else:
                     recovery_remaining = self.recovery_time - (now - self.last_failure_time)
-                    self._metrics["rejected_count"] += 1
+                    rejected = self._metrics["rejected_count"]
+                    self._metrics["rejected_count"] = (
+                        (rejected + 1) if isinstance(rejected, int) else 1
+                    )
 
                     logger.warning(
                         f"Circuit '{self.name}' is OPEN, rejecting request. "
@@ -192,7 +200,10 @@ class CircuitBreaker:
             if self.state == CircuitState.HALF_OPEN:
                 # Only allow a limited number of calls in half-open state
                 if self._half_open_calls >= self.half_open_max_calls:
-                    self._metrics["rejected_count"] += 1
+                    rejected = self._metrics["rejected_count"]
+                    self._metrics["rejected_count"] = (
+                        (rejected + 1) if isinstance(rejected, int) else 1
+                    )
 
                     logger.warning(
                         f"Circuit '{self.name}' is HALF_OPEN and at capacity. Try again later."
@@ -222,7 +233,8 @@ class CircuitBreaker:
 
             # Handle success
             async with self._lock:
-                self._metrics["success_count"] += 1
+                success = self._metrics["success_count"]
+                self._metrics["success_count"] = (success + 1) if isinstance(success, int) else 1
 
                 # On success in half-open state, close the circuit
                 if self.state == CircuitState.HALF_OPEN:
@@ -238,7 +250,10 @@ class CircuitBreaker:
                 async with self._lock:
                     self.failure_count += 1
                     self.last_failure_time = current_time()
-                    self._metrics["failure_count"] += 1
+                    fail_count = self._metrics["failure_count"]
+                    self._metrics["failure_count"] = (
+                        (fail_count + 1) if isinstance(fail_count, int) else 1
+                    )
 
                     # Log failure
                     logger.warning(

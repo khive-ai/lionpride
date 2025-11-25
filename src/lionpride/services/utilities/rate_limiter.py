@@ -42,7 +42,10 @@ class TokenBucket:
     def __init__(self, config: RateLimitConfig):
         self.capacity = config.capacity
         self.refill_rate = config.refill_rate
-        self.tokens = float(config.initial_tokens)
+        # initial_tokens is guaranteed to be set by __post_init__ in RateLimitConfig
+        self.tokens = float(
+            config.initial_tokens if config.initial_tokens is not None else config.capacity
+        )
         self.last_refill = current_time()
         self._lock = Lock()
 

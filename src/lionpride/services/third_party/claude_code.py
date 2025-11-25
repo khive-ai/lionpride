@@ -296,9 +296,9 @@ class ClaudeSession:
 
 
 def _extract_summary(session: ClaudeSession) -> dict[str, Any]:
-    tool_counts = {}
-    tool_details = []
-    file_operations = {"reads": [], "writes": [], "edits": []}
+    tool_counts: dict[str, int] = {}
+    tool_details: list[dict[str, Any]] = []
+    file_operations: dict[str, list[str]] = {"reads": [], "writes": [], "edits": []}
     key_actions = []
 
     # Process tool uses from the clean materialized view
@@ -400,6 +400,8 @@ async def _ndjson_from_cli(request: ClaudeCodeRequest):
     workspace = request.cwd()
     workspace.mkdir(parents=True, exist_ok=True)
 
+    if CLAUDE_CLI is None:
+        raise RuntimeError("Claude CLI binary not found")
     proc = await asyncio.create_subprocess_exec(
         CLAUDE_CLI,
         *request.as_cmd_args(),
@@ -414,6 +416,8 @@ async def _ndjson_from_cli(request: ClaudeCodeRequest):
 
     try:
         while True:
+            if proc.stdout is None:
+                break
             chunk = await proc.stdout.read(4096)
             if not chunk:
                 break
@@ -452,7 +456,7 @@ async def _ndjson_from_cli(request: ClaudeCodeRequest):
 
         # 4) propagate non-zero exit code
         if await proc.wait() != 0:
-            err = (await proc.stderr.read()).decode().strip()
+            err = (await proc.stderr.read()).decode().strip() if proc.stderr else ""
             raise RuntimeError(err or "CLI exited non-zero")
 
     finally:

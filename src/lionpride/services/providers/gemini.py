@@ -27,6 +27,7 @@ __all__ = (
 def create_gemini_code_config(
     name: str | None = None,
     model: str | None = "gemini-2.5-pro",
+    **kwargs,  # Accept extra kwargs to allow pass-through from iModel
 ) -> dict:
     """Factory for Gemini CLI endpoint config.
 
@@ -120,7 +121,7 @@ class GeminiCodeEndpoint(Endpoint):
 
         return {"request": req_obj}, {}
 
-    async def stream(
+    async def stream(  # type: ignore[override]
         self, request: dict | BaseModel, **kwargs
     ) -> AsyncIterator[GeminiChunk | dict | GeminiSession]:
         """Stream Gemini CLI response chunks.
@@ -223,4 +224,5 @@ class GeminiCodeEndpoint(Endpoint):
             data=text,
             raw_response=raw_cli_result,
             metadata=metadata,
+            error=None,
         )

@@ -279,7 +279,7 @@ class Tool(ServiceBackend):
         )
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any], **kwargs):
+    def from_dict(cls, data: dict[str, Any], meta_key: str | None = None, **kwargs):  # type: ignore[override]
         """Not implemented - Tools are created from callables, not dicts."""
         raise NotImplementedError("Tool.from_dict is not supported - create from callable")
 
@@ -304,6 +304,8 @@ class Tool(ServiceBackend):
             status="success",
             data=result,
             raw_response={"result": result, "arguments": arguments},
+            error=None,
+            metadata=None,
         )
 
 

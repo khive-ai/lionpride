@@ -155,7 +155,7 @@ class iModel(Element):  # noqa: N801
                 }
             )
 
-        super().__init__(
+        super().__init__(  # type: ignore[call-arg]
             backend=backend,
             rate_limiter=rate_limiter,
             executor=executor,
@@ -166,16 +166,22 @@ class iModel(Element):  # noqa: N801
     @property
     def name(self) -> str:
         """Service name from backend."""
+        if self.backend is None:
+            raise ValueError("Backend not initialized")
         return self.backend.name
 
     @property
-    def version(self) -> str:
+    def version(self) -> str | None:
         """Service version from backend."""
+        if self.backend is None:
+            raise ValueError("Backend not initialized")
         return self.backend.version
 
     @property
     def tags(self) -> set[str]:
         """Service tags from backend."""
+        if self.backend is None:
+            raise ValueError("Backend not initialized")
         return self.backend.tags
 
     async def create_calling(
@@ -225,6 +231,8 @@ class iModel(Element):  # noqa: N801
             arguments["resume"] = self.provider_metadata["session_id"]
 
         # Get Calling type from backend
+        if self.backend is None:
+            raise ValueError("Backend not initialized")
         calling_type = self.backend.event_type
 
         # Pre-event create hook
@@ -238,7 +246,7 @@ class iModel(Element):  # noqa: N801
                 exit=create_event_exit_hook if create_event_exit_hook is not None else False,
                 timeout=create_event_hook_timeout,
                 params=create_event_hook_params or {},
-            )
+            )  # type: ignore[call-arg]
             await h_ev.invoke()
 
             if h_ev._should_exit:
@@ -247,18 +255,19 @@ class iModel(Element):  # noqa: N801
                 )
 
         # Type-based dispatch for Calling creation
+        calling: APICalling | ToolCalling
         if isinstance(self.backend, Endpoint):
             payload, headers = self.backend.create_payload(request=arguments)
             calling = APICalling(
                 backend=self.backend,
                 payload=payload,
                 headers=headers,
-            )
+            )  # type: ignore[call-arg]
         elif isinstance(self.backend, Tool):
             calling = ToolCalling(
                 backend=self.backend,
                 payload=arguments,  # Direct arguments dict, not wrapped
-            )
+            )  # type: ignore[call-arg]
         else:
             raise RuntimeError(f"Unsupported backend type: {type(self.backend)}")
 
@@ -399,15 +408,21 @@ class iModel(Element):  # noqa: N801
         When using the same iModel instance for multiple Claude Code calls,
         subsequent calls automatically resume the previous session context.
         """
+        from lionpride.types import is_sentinel
+
+        response = calling.execution.response
         if (
             isinstance(self.backend, Endpoint)
             and self.backend.config.provider == "claude_code"
-            and calling.execution.response is not None
+            and not is_sentinel(response)
+            and response is not None
         ):
             # session_id is in response metadata
-            session_id = calling.execution.response.metadata.get("session_id")
-            if session_id:
-                self.provider_metadata["session_id"] = session_id
+            metadata = getattr(response, "metadata", None)
+            if metadata is not None:
+                session_id = metadata.get("session_id")
+                if session_id:
+                    self.provider_metadata["session_id"] = session_id
 
     @field_serializer("backend")
     def _serialize_backend(self, backend: ServiceBackend) -> dict[str, Any] | None:
@@ -590,7 +605,7 @@ class iModel(Element):  # noqa: N801
             if not acquired:
                 raise TimeoutError("Rate limit acquisition timeout (30s)")
 
-        async for chunk in calling.stream():
+        async for chunk in calling.stream():  # type: ignore[attr-defined]
             yield chunk
 
     async def invoke_stream_with_channel(
@@ -621,4 +636,6 @@ class iModel(Element):  # noqa: N801
 
     def __repr__(self) -> str:
         """String representation."""
+        if self.backend is None:
+            return "iModel(backend=None)"
         return f"iModel(backend={self.backend.name}, version={self.backend.version})"
