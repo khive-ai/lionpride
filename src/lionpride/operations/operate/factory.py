@@ -186,7 +186,11 @@ def _build_operable(
     actions: bool,
     reason: bool,
 ) -> tuple[Operable | None, type[BaseModel] | None]:
-    """Build Operable from response_model + action/reason specs."""
+    """Build Operable from response_model + action/reason specs.
+
+    Following lionagi v0 pattern: fields are FLAT (not nested).
+    response_model fields are flattened into top-level specs.
+    """
     # If operable provided, use it directly
     if operable:
         return operable, operable.create_model() if operable else None
@@ -203,21 +207,28 @@ def _build_operable(
     if not actions and not reason:
         return None, response_model
 
-    # Build Operable with additional specs
+    # Build Operable with FLAT field specs (lionagi pattern)
     specs = []
+    existing_field_names = set()
 
-    # Add base model as a spec
+    # Flatten response_model fields into top-level specs
     if response_model:
-        spec_name = response_model.__name__.lower()
-        specs.append(
-            Spec(
-                base_type=response_model,
-                name=spec_name,
-            )
-        )
+        for field_name, field_info in response_model.model_fields.items():
+            existing_field_names.add(field_name)
+            # Determine if field has a default
+            has_default = field_info.default is not None or field_info.default_factory is not None
+            default_val = field_info.default if has_default else None
 
-    # Add reason spec
-    if reason:
+            specs.append(
+                Spec(
+                    base_type=field_info.annotation,
+                    name=field_name,
+                    default=default_val,
+                )
+            )
+
+    # Add reason spec (optional) - skip if already exists
+    if reason and "reason" not in existing_field_names:
         specs.append(
             Spec(
                 base_type=Reason,
@@ -226,31 +237,33 @@ def _build_operable(
             )
         )
 
-    # Add action specs
+    # Add action specs (optional) - skip if already exist
     if actions:
-        specs.append(
-            Spec(
-                base_type=list[ActionRequest],
-                name="action_requests",
-                default=None,
+        if "action_requests" not in existing_field_names:
+            specs.append(
+                Spec(
+                    base_type=list[ActionRequest],
+                    name="action_requests",
+                    default=None,
+                )
             )
-        )
-        specs.append(
-            Spec(
-                base_type=list[ActionResponse],
-                name="action_responses",
-                default=None,
+        if "action_responses" not in existing_field_names:
+            specs.append(
+                Spec(
+                    base_type=list[ActionResponse],
+                    name="action_responses",
+                    default=None,
+                )
             )
-        )
 
-    # Create Operable
+    # Create Operable with all flat fields
     name = response_model.__name__ if response_model else "OperateResponse"
     operable = Operable(specs=tuple(specs), name=name)
 
     # Create validation model (excluding action_responses for request)
-    # For JSON mode, we need a model that includes all fields except action_responses
+    # LLM fills request fields; action_responses filled after tool execution
     validation_model = operable.create_model(
-        model_name=f"{name}Response",
+        model_name=f"{name}Request",
         exclude={"action_responses"} if actions else None,
     )
 

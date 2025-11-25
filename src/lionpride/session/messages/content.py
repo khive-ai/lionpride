@@ -311,34 +311,62 @@ class InstructionContent(MessageContent):
             f"- Booleans: use true or false"
         )
 
-    def _create_example_from_schema(self, schema: dict[str, Any]) -> dict[str, Any]:
+    def _create_example_from_schema(
+        self, schema: dict[str, Any], defs: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """Create simple example dict from JSON schema (lionagi pattern)."""
         example = {}
         properties = schema.get("properties", {})
+        # Get $defs from root schema or use passed defs
+        if defs is None:
+            defs = schema.get("$defs", {})
 
         for field_name, field_schema in properties.items():
-            field_type = field_schema.get("type")
-            if field_type == "string":
-                example[field_name] = "..."
-            elif field_type == "number" or field_type == "integer":
-                example[field_name] = 0
-            elif field_type == "boolean":
-                example[field_name] = False
-            elif field_type == "array":
-                items_schema = field_schema.get("items", {})
-                items_type = items_schema.get("type")
-                if items_type == "string":
-                    example[field_name] = ["..."]
-                elif items_type == "object":
-                    example[field_name] = [self._create_example_from_schema(items_schema)]
-                else:
-                    example[field_name] = []
-            elif field_type == "object":
-                example[field_name] = self._create_example_from_schema(field_schema)
-            else:
-                example[field_name] = None
+            example[field_name] = self._create_example_value(field_schema, defs)
 
         return example
+
+    def _create_example_value(self, field_schema: dict[str, Any], defs: dict[str, Any]) -> Any:
+        """Create example value for a single field schema."""
+        # Handle $ref
+        if "$ref" in field_schema:
+            ref_path = field_schema["$ref"]
+            # Extract definition name from "#/$defs/ModelName"
+            if ref_path.startswith("#/$defs/"):
+                def_name = ref_path.split("/")[-1]
+                if def_name in defs:
+                    return self._create_example_from_schema(defs[def_name], defs)
+            return {}
+
+        # Handle anyOf (nullable types, union types)
+        if "anyOf" in field_schema:
+            # Find first non-null type
+            for option in field_schema["anyOf"]:
+                if option.get("type") != "null":
+                    return self._create_example_value(option, defs)
+            return None
+
+        # Handle allOf (composition)
+        if "allOf" in field_schema:
+            if field_schema["allOf"]:
+                return self._create_example_value(field_schema["allOf"][0], defs)
+            return {}
+
+        field_type = field_schema.get("type")
+        if field_type == "string":
+            return "..."
+        elif field_type == "number" or field_type == "integer":
+            return 0
+        elif field_type == "boolean":
+            return False
+        elif field_type == "array":
+            items_schema = field_schema.get("items", {})
+            item_example = self._create_example_value(items_schema, defs)
+            return [item_example] if item_example is not None else []
+        elif field_type == "object":
+            return self._create_example_from_schema(field_schema, defs)
+        else:
+            return None
 
     def _format_image_content(self, text: str) -> list[dict[str, Any]]:
         content_blocks = [{"type": "text", "text": text}]
