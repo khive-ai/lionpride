@@ -92,7 +92,9 @@ class IPU(Element):
             validator: Custom validator (uses default if None)
             **kwargs: Additional Element kwargs
         """
-        super().__init__(validator=validator or Validator(), **kwargs)
+        super().__init__(**kwargs)
+        # Set validator after super().__init__ to avoid Element signature issues
+        object.__setattr__(self, "validator", validator or Validator())
 
     def register_session(self, session: Session) -> None:
         """Register session for operation execution.
@@ -188,7 +190,7 @@ class IPU(Element):
             branch = session.get_branch(operation.branch_id)
 
             # Check operation exists
-            if operation.operation_type not in session.operations:
+            if session.operations is None or operation.operation_type not in session.operations:
                 raise NotFoundError(
                     f"Operation '{operation.operation_type}' not registered in session"
                 )
@@ -215,6 +217,8 @@ class IPU(Element):
                 validated_params = operation.parameters
 
             # 3. EXECUTE: Run operation function
+            if session.operations is None:
+                raise NotFoundError("No operations registry in session")
             operation_func = session.operations.get(operation.operation_type)
             result = await operation_func(session, branch, validated_params)
 

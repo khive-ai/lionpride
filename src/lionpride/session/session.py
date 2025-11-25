@@ -51,8 +51,7 @@ class Branch(Progression):
 
     def __repr__(self) -> str:
         name_str = f" name='{self.name}'" if self.name else ""
-        bound_str = " bound" if self._session is not None else ""
-        return f"Branch(messages={len(self)}, session={self.session_id}{name_str}{bound_str})"
+        return f"Branch(messages={len(self)}, session={self.session_id}{name_str})"
 
 
 class Session(Element):
@@ -64,7 +63,7 @@ class Session(Element):
         default_factory=ServiceRegistry,
         description="Available services (models, tools)",
     )
-    operations: OperationRegistry = Field(
+    operations: OperationRegistry | None = Field(
         default=None,
         description="Operation registry (OperationRegistry)",
     )
@@ -124,7 +123,7 @@ class Session(Element):
             name=branch_name,
             capabilities=capabilities or set(),
             resources=resources or set(),
-            order=messages or [],
+            order=list(messages) if messages else [],  # type: ignore[arg-type]
         )
         if system is not None:
             branch.set_system_message(system)
@@ -173,10 +172,10 @@ class Session(Element):
             system=from_branch.system if system is True else system,
         )
         forked.metadata["forked_from"] = {
-            "branch_id": str(branch.id),
-            "branch_name": branch.name,
-            "created_at": branch.created_at.isoformat(),
-            "message_count": len(branch),
+            "branch_id": str(from_branch.id),
+            "branch_name": from_branch.name,
+            "created_at": from_branch.created_at.isoformat(),
+            "message_count": len(from_branch),
         }
 
         self.conversations.add_progression(forked)
@@ -266,7 +265,7 @@ class Session(Element):
         resolved_branch = self.get_branch(branch)
 
         # 2. Check operation registered
-        if operation not in self.operations:
+        if self.operations is None or operation not in self.operations:
             raise NotFoundError(f"Operation '{operation}' not registered in session")
 
         # 3. Validate access control (FAIL EARLY)
@@ -296,7 +295,7 @@ class Session(Element):
             params = self._kwargs_to_param(operation, kwargs)
 
         # 5. Create operation with Param
-        op = Operation(
+        op = Operation(  # type: ignore[call-arg]
             operation_type=operation,
             parameters=params,
             session_id=self.id,

@@ -179,11 +179,13 @@ class Params:
 
         match copy_containers:
             case "shallow":
+                import copy as copy_module
+
                 for k, v in dict_.items():
                     if k not in kwargs and isinstance(
                         v, (MutableSequence, MutableMapping, MutableSet)
                     ):
-                        dict_[k] = v.copy()
+                        dict_[k] = copy_module.copy(v)
                 return _out(dict_)
 
             case "deep":
@@ -280,11 +282,13 @@ class DataClass:
 
         match copy_containers:
             case "shallow":
+                import copy as copy_module
+
                 for k, v in dict_.items():
                     if k not in kwargs and isinstance(
                         v, (MutableSequence, MutableMapping, MutableSet)
                     ):
-                        dict_[k] = v.copy()
+                        dict_[k] = copy_module.copy(v)
                 return _out(dict_)
 
             case "deep":

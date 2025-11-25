@@ -243,7 +243,7 @@ class Validator:
             ValidationError: If validation fails and (auto_fix disabled or strict=True)
         """
 
-        validated = {}
+        validated: dict[str, Any] = {}
 
         # If Operable provided, validate against its __op_fields__
         if operable is not None and hasattr(operable, "__op_fields__"):

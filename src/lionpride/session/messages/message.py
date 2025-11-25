@@ -36,7 +36,7 @@ class Message(Node):
         chat_msg: Chat API format {"role": "...", "content": "..."}
     """
 
-    content: MessageContent
+    content: MessageContent  # type: ignore[assignment]
     sender: SenderRecipient | None = None
     recipient: SenderRecipient | None = None
 
@@ -104,4 +104,4 @@ class Message(Node):
         current["metadata"] = metadata
         if sender is not None:
             current["sender"] = sender
-        return self.from_dict(current)
+        return Message.from_dict(current)  # type: ignore[return-value]

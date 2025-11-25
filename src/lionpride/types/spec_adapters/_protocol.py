@@ -89,10 +89,16 @@ class SpecAdapter(ABC, Generic[M]):
             # Step 1: Parse JSON
             data = cls.parse_json(text, fuzzy=fuzzy_parse)
 
-            # Step 2: Fuzzy match fields
+            # Step 2: Ensure data is a dict before fuzzy matching
+            if not isinstance(data, dict):
+                if strict:
+                    raise TypeError(f"Expected dict, got {type(data).__name__}")
+                return None
+
+            # Step 3: Fuzzy match fields
             matched_data = cls.fuzzy_match_fields(data, model_cls, strict=strict)
 
-            # Step 3: Validate with framework-specific method
+            # Step 4: Validate with framework-specific method
             instance = cls.validate_model(model_cls, matched_data)
 
             return instance

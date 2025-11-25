@@ -243,7 +243,7 @@ class Rule:
 
         for q in _order:
             try:
-                if await self._apply(k, v, t, q, **kw):
+                if await self._apply(k, v, t or type(v), q, **kw):
                     return True
             except NotImplementedError:
                 # Skip qualifiers not implemented by this rule
@@ -296,13 +296,14 @@ class Rule:
         Raises:
             ValidationError: If validation fails and auto_fix disabled
         """
+        effective_type = t or type(v)
         try:
-            await self.validate(v, t, **self.validation_kwargs)
+            await self.validate(v, effective_type, **self.validation_kwargs)
             return v
         except Exception as e:
             if self.auto_fix:
                 try:
-                    return await self.perform_fix(v, t)
+                    return await self.perform_fix(v, effective_type)
                 except Exception as e1:
                     raise ValidationError(f"Failed to fix field '{k}': {e1}") from e
             raise ValidationError(f"Failed to validate field '{k}': {e}") from e

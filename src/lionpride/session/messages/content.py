@@ -113,7 +113,7 @@ class MessageContent(DataClass):
         raise NotImplementedError("Subclasses must implement from_dict method")
 
     @property
-    def chat_msg(self) -> dict[str, Any]:
+    def chat_msg(self) -> dict[str, Any] | None:
         """Format for chat API: {"role": "...", "content": "..."}"""
         try:
             return {"role": self.role.value, "content": self.rendered}
@@ -141,23 +141,23 @@ class SystemContent(MessageContent):
         if not cls._is_sentinel(system_datetime) and not cls._is_sentinel(datetime_factory):
             raise ValueError("Cannot set both system_datetime and datetime_factory")
         return cls(
-            system_message=system_message,
-            system_datetime=system_datetime,
-            datetime_factory=datetime_factory,
+            system_message=system_message if system_message is not None else Unset,
+            system_datetime=system_datetime if system_datetime is not None else Unset,
+            datetime_factory=datetime_factory if datetime_factory is not None else Unset,
         )
 
     @property
     def rendered(self) -> str:
-        parts = []
+        parts: list[str] = []
         if not self._is_sentinel(self.system_datetime):
             timestamp = (
-                now_utc().isoformat() if self.system_datetime is True else self.system_datetime
+                now_utc().isoformat() if self.system_datetime is True else str(self.system_datetime)
             )
             parts.append(f"System Time: {timestamp}")
-        elif not self._is_sentinel(self.datetime_factory):
+        elif not self._is_sentinel(self.datetime_factory) and callable(self.datetime_factory):
             parts.append(f"System Time: {self.datetime_factory()}")
 
-        if not self._is_sentinel(self.system_message):
+        if not self._is_sentinel(self.system_message) and isinstance(self.system_message, str):
             parts.append(self.system_message)
 
         return "\n\n".join(parts)
@@ -195,7 +195,7 @@ class InstructionContent(MessageContent):
         if not self._is_sentinel(self.context):
             doc["Context"] = self.context
 
-        if not self._is_sentinel(self.tool_schemas):
+        if not self._is_sentinel(self.tool_schemas) and isinstance(self.tool_schemas, list):
             tools_formatted = {}
             for tool in self.tool_schemas:
                 if isinstance(tool, type) and issubclass(tool, BaseModel):
@@ -203,7 +203,7 @@ class InstructionContent(MessageContent):
                     desc = schema.get("description", "")
                     params_ts = typescript_schema(schema)
                     tools_formatted[tool.__name__] = f"# {desc}\n{params_ts}" if desc else params_ts
-                else:
+                elif isinstance(tool, dict):
                     name = tool.get("name", "unknown")
                     params = tool.get("parameters", {})
                     desc = tool.get("description", "")
@@ -219,7 +219,7 @@ class InstructionContent(MessageContent):
         schema_section = ""
         response_format_section = ""
 
-        if not self._is_sentinel(self.response_model):
+        if not self._is_sentinel(self.response_model) and isinstance(self.response_model, type):
             model_schema = self.response_model.model_json_schema()
             model_ts = typescript_schema(model_schema)
 
@@ -261,7 +261,7 @@ class InstructionContent(MessageContent):
 
     def _create_example_from_schema(self, schema: dict[str, Any]) -> dict[str, Any]:
         """Create simple example dict from JSON schema (lionagi pattern)."""
-        example = {}
+        example: dict[str, Any] = {}
         properties = schema.get("properties", {})
 
         for field_name, field_schema in properties.items():
@@ -289,12 +289,13 @@ class InstructionContent(MessageContent):
         return example
 
     def _format_image_content(self, text: str) -> list[dict[str, Any]]:
-        content_blocks = [{"type": "text", "text": text}]
-        detail = "auto" if self._is_sentinel(self.image_detail) else self.image_detail
-        content_blocks.extend(
-            {"type": "image_url", "image_url": {"url": img, "detail": detail}}
-            for img in self.images
-        )
+        content_blocks: list[dict[str, Any]] = [{"type": "text", "text": text}]
+        detail: str = "auto" if self._is_sentinel(self.image_detail) else str(self.image_detail)
+        if not self._is_sentinel(self.images) and isinstance(self.images, list):
+            content_blocks.extend(
+                {"type": "image_url", "image_url": {"url": img, "detail": detail}}
+                for img in self.images
+            )
         return content_blocks
 
     @classmethod
@@ -313,12 +314,12 @@ class InstructionContent(MessageContent):
                 _validate_image_url(url)
 
         return cls(
-            instruction=instruction,
-            context=context,
-            tool_schemas=tool_schemas,
-            response_model=response_model,
-            images=images,
-            image_detail=image_detail,
+            instruction=instruction if instruction is not None else Unset,
+            context=context if context is not None else Unset,
+            tool_schemas=tool_schemas if tool_schemas is not None else Unset,
+            response_model=response_model if response_model is not None else Unset,
+            images=images if images is not None else Unset,
+            image_detail=image_detail if image_detail is not None else Unset,
         )
 
     @classmethod
@@ -338,11 +339,17 @@ class AssistantResponseContent(MessageContent):
 
     @property
     def rendered(self) -> str:
-        return "" if self._is_sentinel(self.assistant_response) else self.assistant_response
+        if self._is_sentinel(self.assistant_response) or not isinstance(
+            self.assistant_response, str
+        ):
+            return ""
+        return self.assistant_response
 
     @classmethod
     def create(cls, assistant_response: str | None = None):
-        return cls(assistant_response=assistant_response)
+        return cls(
+            assistant_response=assistant_response if assistant_response is not None else Unset
+        )
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "AssistantResponseContent":
@@ -360,15 +367,18 @@ class ActionRequestContent(MessageContent):
 
     @property
     def rendered(self) -> str:
-        doc = {}
-        if not self._is_sentinel(self.function):
+        doc: dict[str, Any] = {}
+        if not self._is_sentinel(self.function) and isinstance(self.function, str):
             doc["function"] = self.function
         doc["arguments"] = {} if self._is_sentinel(self.arguments) else self.arguments
         return minimal_yaml(doc)
 
     @classmethod
     def create(cls, function: str | None = None, arguments: dict[str, Any] | None = None):
-        return cls(function=function, arguments=arguments)
+        return cls(
+            function=function if function is not None else Unset,
+            arguments=arguments if arguments is not None else Unset,
+        )
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ActionRequestContent":
@@ -391,14 +401,15 @@ class ActionResponseContent(MessageContent):
 
     @property
     def rendered(self) -> str:
-        doc = {"success": self.success}
-        if not self._is_sentinel(self.request_id):
+        doc: dict[str, Any] = {"success": self.success}
+        if not self._is_sentinel(self.request_id) and isinstance(self.request_id, str):
             doc["request_id"] = self.request_id
         if self.success:
             if not self._is_sentinel(self.result):
                 doc["result"] = self.result
         else:
-            doc["error"] = self.error
+            if not self._is_sentinel(self.error) and isinstance(self.error, str):
+                doc["error"] = self.error
         return minimal_yaml(doc)
 
     @classmethod
@@ -408,7 +419,11 @@ class ActionResponseContent(MessageContent):
         result: Any | None = None,
         error: str | None = None,
     ):
-        return cls(request_id=request_id, result=result, error=error)
+        return cls(
+            request_id=request_id if request_id is not None else Unset,
+            result=result if result is not None else Unset,
+            error=error if error is not None else Unset,
+        )
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ActionResponseContent":
