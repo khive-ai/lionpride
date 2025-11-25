@@ -16,7 +16,7 @@ from lionpride.libs.concurrency import (
     run_sync,
     sleep,
 )
-from lionpride.types import ModelConfig, Params, Unset, not_sentinel
+from lionpride.types import ModelConfig, Params, Unset, UnsetType, not_sentinel
 
 from ._to_list import to_list
 
@@ -151,15 +151,15 @@ async def alcall(
 
     async def call_func(item: Any) -> T:
         if coro_func:
-            # Async function
+            # Async function - func returns Awaitable[T] at runtime
             if retry_timeout is not None:
                 with move_on_after(retry_timeout) as cancel_scope:
-                    result = await func(item, **kwargs)
+                    result = await func(item, **kwargs)  # type: ignore[misc]
                 if cancel_scope.cancelled_caught:
                     raise TimeoutError(f"Function call timed out after {retry_timeout}s")
-                return result
+                return result  # type: ignore[return-value]
             else:
-                return await func(item, **kwargs)
+                return await func(item, **kwargs)  # type: ignore[misc]
         else:
             # Sync function
             if retry_timeout is not None:
@@ -296,19 +296,23 @@ class AlcallParams(Params):
     max_concurrent: int
     throttle_period: float
 
-    kw: dict[str, Any] = Unset
+    kw: dict[str, Any] | UnsetType = Unset
 
     async def __call__(self, input_: list[Any], func: Callable[..., T], **kw: Any) -> list[T]:
         kwargs = {**self.default_kw(), **kw}
-        return await alcall(input_, func, **kwargs)
+        return await alcall(input_, func, **kwargs)  # type: ignore[return-value]
 
 
 @dataclass(slots=True, init=False, frozen=True)
 class BcallParams(AlcallParams):
     _func: ClassVar[Any] = bcall
 
-    batch_size: int
+    batch_size: int = 10  # Default batch size
 
     async def __call__(self, input_: list[Any], func: Callable[..., T], **kw: Any) -> list[T]:
         kwargs = {**self.default_kw(), **kw}
-        return await bcall(input_, func, self.batch_size, **kwargs)
+        # bcall is an async generator, collect all results
+        results: list[T] = []
+        async for batch_result in bcall(input_, func, self.batch_size, **kwargs):
+            results.extend(batch_result)  # type: ignore[arg-type]
+        return results

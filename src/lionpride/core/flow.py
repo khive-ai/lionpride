@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import threading
-from typing import Any, Generic, Literal, TypeVar
+from typing import Any, Generic, Literal, TypeVar, cast
 from uuid import UUID
 
 from pydantic import Field, PrivateAttr, field_validator, model_validator
@@ -87,7 +87,7 @@ class Flow(Element, Generic[E, P]):
         elif items is not None or item_type is not None or strict_type:
             # Normalize to list
             if isinstance(items, Element):
-                items = [items]
+                items = cast(list[E], [items])
 
             # Create Pile with items and type validation (item_type/strict_type are frozen)
             # Even if items=None, create Pile if item_type/strict_type specified
@@ -114,7 +114,7 @@ class Flow(Element, Generic[E, P]):
             return Pile.from_dict(v)
         if isinstance(v, list):
             # List input (can be list[Element] or list[dict]), convert to Pile
-            pile = Pile()
+            pile: Pile[Any] = Pile()
             for item in v:
                 if isinstance(item, dict):
                     pile.add(Element.from_dict(item))
@@ -236,8 +236,9 @@ class Flow(Element, Generic[E, P]):
             except (ValueError, TypeError):
                 raise KeyError(f"Progression '{key}' not found in flow")
 
-        # UUID or Progression instance
-        return self.progressions[key]
+        # UUID or Progression instance - coerce to UUID for lookup
+        uid = key.id if isinstance(key, Progression) else key
+        return self.progressions[uid]
 
     # ==================== Item Management ====================
 

@@ -64,7 +64,12 @@ def fuzzy_match_keys(
         raise ValueError("similarity_threshold must be between 0.0 and 1.0")
 
     # Extract expected keys
-    fields_set = set(keys) if isinstance(keys, list) else set(keys.keys())
+    if isinstance(keys, (list, tuple)):
+        fields_set = set(keys)
+    elif hasattr(keys, "keys"):
+        fields_set = set(keys.keys())
+    else:
+        fields_set = set(keys)
     if not fields_set:
         return d_.copy()  # Return copy of original if no expected keys
 
@@ -108,11 +113,12 @@ def fuzzy_match_keys(
             )
 
             if matches:
-                match = matches
-                corrected_out[match] = d_[key]
-                matched_expected.add(match)
-                matched_input.add(key)
-                remaining_expected.remove(match)
+                match = matches if isinstance(matches, str) else matches[0] if matches else None
+                if match:
+                    corrected_out[match] = d_[key]
+                    matched_expected.add(match)
+                    matched_input.add(key)
+                    remaining_expected.remove(match)
             elif handle_unmatched == "ignore":
                 corrected_out[key] = d_[key]
 

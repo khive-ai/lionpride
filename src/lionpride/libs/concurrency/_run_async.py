@@ -35,4 +35,6 @@ def run_async(coro: Awaitable[T]) -> T:
 
     if exception_container:
         raise exception_container[0]
-    return result_container[0] if result_container else None
+    if not result_container:
+        raise RuntimeError("Coroutine did not produce a result")
+    return result_container[0]

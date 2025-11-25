@@ -216,7 +216,7 @@ class Processor:
                         # Streaming: consume async generator
                         async def consume_stream(event: Event):
                             try:
-                                async for _ in event.stream():
+                                async for _ in event.stream():  # type: ignore[attr-defined]
                                     pass
                                 # Update progression after completion
                                 if self.executor:
@@ -373,10 +373,12 @@ class Executor:
         """Initialize and start processor if not created, backfilling pending events."""
         if not self.processor:
             await self._create_processor()
-            # Backfill all pending events into processor queue
-            for event in self.pending_events:
-                await self.processor.enqueue(event.id)
-        await self.processor.start()
+            # Backfill all pending events into processor queue (only for newly created)
+            if self.processor:  # Narrow type after _create_processor
+                for event in self.pending_events:
+                    await self.processor.enqueue(event.id)
+        if self.processor:  # Narrow type for start() call
+            await self.processor.start()
 
     async def stop(self) -> None:
         """Stop processor if exists."""
@@ -426,7 +428,7 @@ class Executor:
 
     def status_counts(self) -> dict[str, int]:
         """Get event count per status."""
-        return {prog.name: len(prog) for prog in self.states.progressions}
+        return {prog.name or "unnamed": len(prog) for prog in self.states.progressions}
 
     async def cleanup_events(self, statuses: list[EventStatus] | None = None) -> int:
         """Remove events with specified statuses (default: COMPLETED, FAILED, ABORTED)."""

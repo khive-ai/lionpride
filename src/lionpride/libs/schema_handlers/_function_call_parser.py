@@ -97,8 +97,8 @@ def nest_arguments_by_schema(arguments: dict[str, Any], schema_cls) -> dict[str,
         return arguments
 
     # Separate top-level args from nested args
-    result = {}
-    nested_args = {}
+    result: dict[str, Any] = {}
+    nested_args: dict[str, dict[str, Any]] = {}
 
     for key, value in arguments.items():
         if key in top_level_fields:

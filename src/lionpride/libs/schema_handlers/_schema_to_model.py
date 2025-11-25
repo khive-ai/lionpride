@@ -8,7 +8,7 @@ import string
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 from pydantic import BaseModel, PydanticUserError
 
@@ -63,16 +63,18 @@ def _prepare_schema_input(
     model_name: str,
 ) -> tuple[str, dict[str, Any], str]:
     """Convert schema to JSON string and extract model name."""
+    schema_dict: dict[str, Any]
+    schema_json: str
     if isinstance(schema, dict):
         try:
             schema_dict = schema
-            schema_json = json_dumps(schema_dict)
+            schema_json = cast(str, json_dumps(schema_dict))
         except TypeError as e:
             msg = "Invalid dictionary provided for schema"
             raise ValueError(msg) from e
     elif isinstance(schema, str):
         try:
-            schema_dict = to_dict(schema)
+            schema_dict = cast(dict[str, Any], to_dict(schema))
         except Exception as e:
             msg = "Invalid JSON schema string provided"
             raise ValueError(msg) from e

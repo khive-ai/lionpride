@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Callable, Iterable
-from typing import Any, ParamSpec, TypeVar
+from typing import Any, ParamSpec, TypeVar, cast
 
 from ._to_list import to_list
 
@@ -80,12 +80,12 @@ def lcall(
     else:
         if not isinstance(input_, list):
             try:
-                input_ = list(input_)
+                input_ = list(cast(Iterable[T], input_))
             except TypeError:
-                input_ = [input_]
+                input_ = [cast(T, input_)]
 
     # Process elements and collect results
-    out = []
+    out: list[R] = []
     append = out.append
 
     for item in input_:

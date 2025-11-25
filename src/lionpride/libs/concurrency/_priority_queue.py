@@ -4,10 +4,11 @@
 from __future__ import annotations
 
 import heapq
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from ._primitives import Condition
 
+# heapq requires items to be comparable, so we use Any for the internal list
 T = TypeVar("T")
 
 __all__ = ("PriorityQueue", "QueueEmpty", "QueueFull")
@@ -37,7 +38,7 @@ class PriorityQueue(Generic[T]):
             maxsize: Max size (0 = unlimited)
         """
         self.maxsize = maxsize
-        self._queue: list[T] = []
+        self._queue: list[Any] = []  # heapq requires comparable items
         self._condition = Condition()
 
     async def put(self, item: T) -> None:
