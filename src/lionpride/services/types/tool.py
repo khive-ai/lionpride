@@ -325,3 +325,12 @@ class ToolCalling(Calling):
             Dict with arguments for Tool.call()
         """
         return {"arguments": self.payload}
+
+    async def stream(self):
+        """Tool backends do not support streaming.
+
+        Raises:
+            NotImplementedError: Always, tools don't stream
+        """
+        raise NotImplementedError("Tool backends do not support streaming")
+        yield  # Make this a generator (never reached)

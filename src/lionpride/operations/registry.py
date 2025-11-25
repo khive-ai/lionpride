@@ -10,22 +10,32 @@ __all__ = ("OperationRegistry",)
 
 
 class OperationRegistry:
-    """Simple operation registry for async function lookup.
+    """Simple operation registry: name → async function.
 
-    Pattern matches ServiceRegistry and lionagi OperationManager.
-    Stores operation functions with name-based O(1) lookup.
+    Matches ServiceRegistry pattern.
     """
 
     def __init__(self):
         self._registry: dict[str, Callable] = {}
+        self._required_resources: dict[str, set[str]] = {}
+        self._required_capabilities: dict[str, set[str]] = {}
 
-    def register(self, name: str, func: Callable, update: bool = False) -> None:
+    def register(
+        self,
+        name: str,
+        func: Callable,
+        update: bool = False,
+        required_resources: set[str] | None = None,
+        required_capabilities: set[str] | None = None,
+    ) -> None:
         """Register async operation function.
 
         Args:
             name: Operation name
-            func: Async function with signature (session, branch, params) -> result
+            func: Async function (session, branch, params) -> result
             update: If True, replaces existing operation
+            required_resources: Service names required (branch.resources)
+            required_capabilities: Schema names required (branch.capabilities)
 
         Raises:
             ValueError: If name exists and update=False, or func not async
@@ -34,9 +44,11 @@ class OperationRegistry:
             raise ValueError(f"Operation '{name}' already registered")
 
         if not asyncio.iscoroutinefunction(func):
-            raise ValueError(f"Operation '{name}' must be async function")
+            raise ValueError(f"Operation '{name}' must be async")
 
         self._registry[name] = func
+        self._required_resources[name] = required_resources or set()
+        self._required_capabilities[name] = required_capabilities or set()
 
     def get(self, name: str) -> Callable:
         """Get operation function by name."""
@@ -44,14 +56,24 @@ class OperationRegistry:
             raise KeyError(f"Operation '{name}' not found")
         return self._registry[name]
 
+    def get_metadata(self, name: str) -> dict[str, set[str]]:
+        """Get operation access control requirements.
+
+        Returns:
+            Dict with required_resources and required_capabilities sets
+        """
+        if name not in self._registry:
+            raise KeyError(f"Operation '{name}' not found")
+        return {
+            "required_resources": self._required_resources[name],
+            "required_capabilities": self._required_capabilities[name],
+        }
+
     def __contains__(self, name: str) -> bool:
         return name in self._registry
 
     def list_names(self) -> list[str]:
         return list(self._registry.keys())
-
-    def clear(self) -> None:
-        self._registry.clear()
 
     def __len__(self) -> int:
         return len(self._registry)

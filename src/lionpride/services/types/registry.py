@@ -60,6 +60,10 @@ class ServiceRegistry:
             return True
         return name in self._pile
 
+    def has(self, name: str | UUID | iModel) -> bool:
+        """Check if service is registered. Equivalent to `name in registry`."""
+        return name in self
+
     def list_names(self) -> list[str]:
         """List all registered service names."""
         return list(self._name_index.keys())
@@ -72,6 +76,14 @@ class ServiceRegistry:
     def __len__(self) -> int:
         """Return number of registered services."""
         return len(self._pile)
+
+    def count(self) -> int:
+        """Return number of registered services. Equivalent to len(registry)."""
+        return len(self)
+
+    def list_by_tag(self, tag: str) -> list[iModel]:
+        """List services that have the given tag."""
+        return [model for model in self._pile if tag in model.tags]
 
     def __repr__(self) -> str:
         """String representation."""

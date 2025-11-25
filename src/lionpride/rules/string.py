@@ -83,16 +83,20 @@ class StringRule(Rule):
         if self.pattern is not None and not re.match(self.pattern, v):
             raise ValueError(f"String does not match required pattern: {self.pattern}")
 
-    async def perform_fix(self, v: Any, _t: type) -> Any:
-        """Attempt to convert value to string.
+    async def perform_fix(self, v: Any, t: type) -> Any:
+        """Attempt to convert value to string and re-validate.
 
         Returns:
-            String representation of value
+            String representation of value (validated)
 
         Raises:
-            ValueError: If conversion fails
+            ValueError: If conversion or re-validation fails
         """
         try:
-            return str(v)
+            fixed = str(v)
         except Exception as e:
             raise ValueError(f"Failed to convert {v} to string") from e
+
+        # Re-validate the fixed value
+        await self.validate(fixed, t)
+        return fixed

@@ -12,6 +12,7 @@ from pydantic import Field, model_validator
 
 from lionpride.core import Element, Flow, Pile, Progression, to_uuid
 from lionpride.errors import NotFoundError
+from lionpride.operations import OperationRegistry
 from lionpride.services import ServiceRegistry
 
 from .messages import Message, SystemContent
@@ -63,7 +64,7 @@ class Session(Element):
         default_factory=ServiceRegistry,
         description="Available services (models, tools)",
     )
-    operations: Any = Field(
+    operations: OperationRegistry = Field(
         default=None,
         description="Operation registry (OperationRegistry)",
     )
@@ -78,13 +79,12 @@ class Session(Element):
 
         # Register default operations
         try:
-            from lionpride.operations.communicate import communicate
-            from lionpride.operations.operate import generate, operate, react
+            from lionpride.operations.operate import communicate, generate, operate, react
 
-            self.operations.register("communicate", communicate)
-            self.operations.register("operate", operate)
-            self.operations.register("generate", generate)
-            self.operations.register("react", react)
+            self.operations.register("communicate", communicate, update=True)
+            self.operations.register("operate", operate, update=True)
+            self.operations.register("generate", generate, update=True)
+            self.operations.register("react", react, update=True)
         except ImportError:
             # Operations module may not be fully available during tests
             pass
@@ -138,6 +138,20 @@ class Session(Element):
         with contextlib.suppress(KeyError):
             return self.conversations.get_progression(branch)
         raise NotFoundError("Branch not found in session branches")
+
+    def get_branch_system(self, branch: Branch | UUID | str) -> Message | None:
+        """Get the system message for a branch.
+
+        Args:
+            branch: Branch instance, UUID, or name
+
+        Returns:
+            System Message if set, None otherwise
+        """
+        resolved_branch = self.get_branch(branch)
+        if resolved_branch.system is None:
+            return None
+        return self.messages.get(resolved_branch.system)
 
     def fork(
         self,
@@ -209,7 +223,8 @@ class Session(Element):
         branch: Branch | UUID | str,
         operation: str,
         ipu: Any,  # IPU type (avoid circular import)
-        **params,
+        params: Any = None,  # Typed Param instance or None
+        **kwargs,
     ):
         """Create operation for IPU execution with access control.
 
@@ -217,15 +232,17 @@ class Session(Element):
         1. Resolve branch
         2. Check operation registered
         3. Validate access control (branch.resources, branch.capabilities)
-        4. Create Operation
-        5. Queue to IPU for execution
-        6. Return Operation (caller can await op.invoke() or check op.status)
+        4. Convert kwargs → typed Param if needed
+        5. Create Operation with Param
+        6. Queue to IPU for execution
+        7. Return Operation (caller can await op.invoke() or check op.status)
 
         Args:
             branch: Branch to execute in (UUID, name, or Branch instance)
             operation: Operation type name (must be registered)
             ipu: IPU instance (execution context)
-            **params: Operation parameters (will be validated by IPU)
+            params: Typed Param instance (GenerateParam, etc.) or None
+            **kwargs: Operation parameters (converted to Param if params=None)
 
         Returns:
             Operation instance (queued for execution)
@@ -233,6 +250,15 @@ class Session(Element):
         Raises:
             NotFoundError: If branch or operation not found
             PermissionError: If branch lacks required resources/capabilities
+            ValueError: If neither params nor kwargs provided
+
+        Usage:
+            # Flexible kwargs interface
+            op = await session.conduct(branch, "generate", ipu, imodel="gpt4", messages=[])
+
+            # Direct Param (for workflows)
+            param = GenerateParam(imodel="gpt4", messages=[])
+            op = await session.conduct(branch, "generate", ipu, params=param)
         """
         from lionpride.operations import Operation
 
@@ -244,13 +270,32 @@ class Session(Element):
             raise NotFoundError(f"Operation '{operation}' not registered in session")
 
         # 3. Validate access control (FAIL EARLY)
-        # TODO: Implement resource/capability checking
-        # For now, log what we would check:
-        # - Check resolved_branch.resources contains required services
-        # - Check resolved_branch.capabilities contains required schemas
-        # - Raise PermissionError if validation fails
+        metadata = self.operations.get_metadata(operation)
 
-        # 4. Create operation
+        # Check resources (services)
+        missing_resources = metadata["required_resources"] - resolved_branch.resources
+        if missing_resources:
+            raise PermissionError(
+                f"Branch '{resolved_branch.name}' lacks required resources for operation '{operation}': "
+                f"{sorted(missing_resources)}. Available: {sorted(resolved_branch.resources)}"
+            )
+
+        # Check capabilities (schemas)
+        missing_capabilities = metadata["required_capabilities"] - resolved_branch.capabilities
+        if missing_capabilities:
+            raise PermissionError(
+                f"Branch '{resolved_branch.name}' lacks required capabilities for operation '{operation}': "
+                f"{sorted(missing_capabilities)}. Available: {sorted(resolved_branch.capabilities)}"
+            )
+
+        # 4. Convert kwargs → typed Param if needed
+        if params is None:
+            if not kwargs:
+                raise ValueError(f"Operation '{operation}' requires either params= or **kwargs")
+            # Convert kwargs to typed Param based on operation type
+            params = self._kwargs_to_param(operation, kwargs)
+
+        # 5. Create operation with Param
         op = Operation(
             operation_type=operation,
             parameters=params,
@@ -258,8 +303,41 @@ class Session(Element):
             branch_id=resolved_branch.id,
         )
 
-        # 5. Queue to IPU for execution
+        # 6. Queue to IPU for execution
         await ipu.queue(op)
 
-        # 6. Return operation (caller can check status or await result)
+        # 7. Return operation (caller can check status or await result)
         return op
+
+    def _kwargs_to_param(self, operation: str, kwargs: dict) -> Any:
+        """Convert kwargs dict to typed Param based on operation type.
+
+        Args:
+            operation: Operation type name
+            kwargs: Parameter dict
+
+        Returns:
+            Typed Param instance (GenerateParam, CommunicateParam, etc.)
+        """
+        from lionpride.operations import (
+            CommunicateParam,
+            GenerateParam,
+            OperateParam,
+            ReactParam,
+        )
+
+        # Map operation name → Param class
+        param_map = {
+            "generate": GenerateParam,
+            "communicate": CommunicateParam,
+            "operate": OperateParam,
+            "react": ReactParam,
+        }
+
+        param_class = param_map.get(operation)
+        if param_class is None:
+            # Unknown operation - return raw dict for backward compatibility
+            return kwargs
+
+        # Create typed Param from kwargs
+        return param_class(**kwargs)

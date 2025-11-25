@@ -69,7 +69,20 @@ class Params:
 
     def __init__(self, **kwargs: Any):
         """Init from kwargs. Validates and sets attributes."""
-        # Set all attributes from kwargs, allowing for sentinel values
+        from dataclasses import MISSING
+
+        # First, set all field defaults from the dataclass definition
+        for f in fields(self):
+            if f.name.startswith("_"):
+                continue
+            # Set default value if available
+            if f.default is not MISSING:
+                object.__setattr__(self, f.name, f.default)
+            elif f.default_factory is not MISSING:
+                object.__setattr__(self, f.name, f.default_factory())
+            # If neither default nor default_factory, leave unset for _validate to handle
+
+        # Then override with kwargs
         for k, v in kwargs.items():
             if k in self.allowed():
                 object.__setattr__(self, k, v)

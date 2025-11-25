@@ -599,3 +599,25 @@ class APICalling(Calling):
             "extra_headers": self.headers,
             "skip_payload_creation": True,
         }
+
+    @property
+    def stream_args(self) -> dict:
+        """Get arguments for backend.stream(**self.stream_args).
+
+        Returns:
+            Dict with request payload and headers for streaming
+        """
+        return {
+            "request": self.payload,
+            "extra_headers": self.headers,
+        }
+
+    async def stream(self):
+        """Stream responses from the backend.
+
+        Yields:
+            Raw SSE lines from the API response.
+            Use StreamChannel for parsed content.
+        """
+        async for chunk in self.backend.stream(**self.stream_args):
+            yield chunk

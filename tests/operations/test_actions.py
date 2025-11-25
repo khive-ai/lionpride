@@ -7,8 +7,8 @@ import asyncio
 
 import pytest
 
+from lionpride.operations import ActionRequestModel, ActionResponseModel
 from lionpride.operations.actions import act
-from lionpride.operations.models import ActionRequestModel, ActionResponseModel
 from lionpride.services import ServiceRegistry, iModel
 from lionpride.services.types.backend import NormalizedResponse
 from lionpride.services.types.tool import Tool, ToolConfig

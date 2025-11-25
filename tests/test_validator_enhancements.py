@@ -85,8 +85,8 @@ class TestRuleOrder:
         validator = Validator(
             rule_order=["number", "string"],
             rules={
-                "number": TrackingNumberRule(RuleParams(apply_types={int, float})),
-                "string": TrackingStringRule(RuleParams(apply_types={str})),
+                "number": TrackingNumberRule(params=RuleParams(apply_types={int, float})),
+                "string": TrackingStringRule(params=RuleParams(apply_types={str})),
             },
         )
 
@@ -146,13 +146,16 @@ class TestStrictMode:
     @pytest.mark.asyncio
     async def test_strict_mode_with_validation_failure(self):
         """Test that strict mode still raises on validation failure."""
-        validator = Validator()
+        # Configure StringRule with min_length=1 to reject empty strings
+        # Even with auto_fix=True (default), re-validation after fix catches the error
+        validator = Validator(rules={"string": StringRule(min_length=1)})
 
-        # String rule should apply but validation should fail
+        # String rule should apply but validation should fail due to min_length
+        # (empty string -> fixed to empty string -> re-validation fails)
         with pytest.raises(ValidationError):
             await validator.validate_field(
                 "name",
-                "",  # Empty string fails min_length
+                "",  # Empty string fails min_length=1 even after auto-fix
                 str,
                 strict=True,
             )
@@ -164,12 +167,14 @@ class TestLogDuringValidation:
     @pytest.mark.asyncio
     async def test_error_logged_on_validation_failure(self):
         """Test that validation errors are logged automatically."""
-        validator = Validator()
+        # Configure StringRule with min_length=1 to reject empty strings
+        # Re-validation after auto-fix catches the error and logs it
+        validator = Validator(rules={"string": StringRule(min_length=1)})
 
         try:
             await validator.validate_field(
                 "name",
-                "",  # Empty string fails validation
+                "",  # Empty string fails min_length=1 even after auto-fix
                 str,
                 strict=True,
             )

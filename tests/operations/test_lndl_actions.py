@@ -10,8 +10,13 @@ flow in operate with tools=True.
 import pytest
 from pydantic import BaseModel, Field
 
-from lionpride.operations import create_action_operative, create_operative_from_model
-from lionpride.operations.models import ActionRequestModel, ActionResponseModel, Reason
+from lionpride.operations import (
+    ActionRequestModel,
+    ActionResponseModel,
+    Reason,
+    create_action_operative,
+    create_operative_from_model,
+)
 
 
 class Analysis(BaseModel):
@@ -165,7 +170,7 @@ OUT{reason: [r, c]}"""
 
     def test_lndl_prompt_with_actions(self):
         """Test LNDL prompt generation for action operatives."""
-        from lionpride.operations.operate.message_prep import generate_lndl_spec_format
+        from lionpride.operations.lndl import generate_lndl_spec_format
 
         operative = create_action_operative(
             base_model=Analysis,

@@ -3,38 +3,52 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 from lionpride.session.messages import AssistantResponseContent, Message
 
-from ..dispatcher import register_operation
+# Operations registered in Session._register_default_operations()
 
 if TYPE_CHECKING:
+    from lionpride.operations.types import GenerateParam
     from lionpride.session import Branch, Session
 
 
-@register_operation("generate")
 async def generate(
     session: Session,
     branch: Branch | str,
-    parameters: dict[str, Any],
+    parameters: GenerateParam | dict,
 ) -> str | dict | Message | Any:
     """Stateless text generation - does not persist messages.
 
     Args:
-        parameters: Must include 'imodel'. Optional: return_as (text|raw|message|calling).
+        parameters: GenerateParam or dict with imodel, messages, return_as
     """
-    imodel_param = parameters.pop("imodel", None)
-    if not imodel_param:
+    # Convert dict to GenerateParam for backward compatibility
+    if isinstance(parameters, dict):
+        from lionpride.operations.types import GenerateParam
+
+        parameters = GenerateParam(**parameters)
+
+    if not parameters.imodel:
         raise ValueError("generate requires 'imodel' parameter")
 
-    return_as: Literal["text", "raw", "message", "calling"] = parameters.pop("return_as", "text")
-
     # Support both string name and direct iModel object
-    imodel = session.services.get(imodel_param) if isinstance(imodel_param, str) else imodel_param
+    imodel = (
+        session.services.get(parameters.imodel)
+        if isinstance(parameters.imodel, str)
+        else parameters.imodel
+    )
+
+    # Build invoke kwargs from parameters (exclude our fields)
+    invoke_kwargs = {
+        k: v
+        for k, v in parameters.to_dict().items()
+        if k not in ("imodel", "return_as") and v is not None
+    }
 
     # Invoke via unified service interface
-    calling = await imodel.invoke(**parameters)
+    calling = await imodel.invoke(**invoke_kwargs)
 
     # Check execution status
     if calling.execution.status.value != "completed":
@@ -43,7 +57,7 @@ async def generate(
 
     response = calling.execution.response
 
-    match return_as:
+    match parameters.return_as:
         case "text":
             return response.data
         case "raw":
@@ -61,4 +75,4 @@ async def generate(
         case "calling":
             return calling
 
-    raise ValueError(f"Unsupported return_as: {return_as}")
+    raise ValueError(f"Unsupported return_as: {parameters.return_as}")

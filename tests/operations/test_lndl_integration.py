@@ -51,30 +51,16 @@ class TestLNDLIntegration:
         response_model = operative.create_response_model()
         assert response_model is SampleModel  # Should be exact same class
 
-    def test_instruction_content_with_lndl(self):
-        """Test InstructionContent generates LNDL format instructions."""
+    def test_instruction_content_json_format(self):
+        """Test InstructionContent generates JSON format."""
         content = InstructionContent(
             instruction="Test instruction",
             response_model=SampleModel,
-            use_lndl=True,
-        )
-
-        rendered = content.rendered
-        assert "LNDL FORMAT" in rendered or "ResponseFormat" in rendered
-        assert "SampleModel" in rendered
-        assert "lvar" in rendered.lower()
-
-    def test_instruction_content_without_lndl(self):
-        """Test InstructionContent generates JSON format without use_lndl."""
-        content = InstructionContent(
-            instruction="Test instruction",
-            response_model=SampleModel,
-            use_lndl=False,
         )
 
         rendered = content.rendered
         assert "JSON" in rendered
-        assert "lvar" not in rendered.lower()
+        assert "ResponseFormat" in rendered
 
     @pytest.mark.asyncio
     async def test_lndl_response_stored_raw(self):
@@ -188,17 +174,16 @@ OUT{testmodelresponse: [t, s, tg, v]}"""
 
     def test_lndl_prompt_generation(self):
         """Test LNDL prompt generation for different specs."""
-        from lionpride.operations.operate.message_prep import generate_lndl_spec_format
+        from lionpride.operations.lndl import generate_lndl_spec_format
 
         operative = create_operative_from_model(SampleModel, name="TestOp")
 
         prompt = generate_lndl_spec_format(operative)
-        assert "YOUR TASK REQUIRES LNDL FORMAT" in prompt
+        assert "Output:" in prompt
         assert "SampleModel" in prompt
-        assert "title(str)" in prompt or "title" in prompt
-        assert "score(float)" in prompt or "score" in prompt
+        assert "title" in prompt
+        assert "score" in prompt
         assert "OUT" in prompt
-        assert "fuzzy matching" in prompt.lower()
 
     def test_message_content_preservation(self):
         """Test that assistant messages preserve LNDL format."""

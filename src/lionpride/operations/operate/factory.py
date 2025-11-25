@@ -9,92 +9,131 @@ from pydantic import BaseModel
 
 from lionpride.types import Operable, Spec
 
-from ..dispatcher import register_operation
+# Operations registered in Session._register_default_operations()
 from ..models import ActionRequestModel, ActionResponseModel, Reason
-from .message_prep import prepare_tool_schemas
 from .tool_executor import execute_tools, has_action_requests
 
+
+def prepare_tool_schemas(
+    session,
+    tools: bool | list[str],
+) -> list[Any] | None:
+    """Prepare tool schemas from session services.
+
+    Args:
+        session: Session containing services
+        tools: True for all tools, list of names for specific tools, False/None for none
+
+    Returns:
+        List of tool schemas or None
+    """
+    if not tools:
+        return None
+
+    if tools is True:
+        return session.services.get_tool_schemas()
+    elif isinstance(tools, list):
+        return session.services.get_tool_schemas(tool_names=tools)
+    return None
+
+
 if TYPE_CHECKING:
+    from lionpride.operations.types import OperateParam
     from lionpride.session import Branch, Session
 
 
-@register_operation("operate")
 async def operate(
     session: Session,
     branch: Branch | str,
-    parameters: dict[str, Any],
+    parameters: OperateParam | dict,
 ) -> Any:
     """Structured output with optional actions.
 
     Args:
-        parameters: Must include 'instruction', 'imodel', and 'response_model' or 'operable'.
-            Optional: actions, reason, tools, use_lndl, max_retries, return_message.
+        parameters: OperateParam or dict with instruction, imodel, response_model/operable, etc.
     """
-    # 1. Validate and extract parameters
-    params = _validate_parameters(parameters)
+    # Convert dict to OperateParam for backward compatibility
+    if isinstance(parameters, dict):
+        from lionpride.operations.types import OperateParam
+
+        parameters = OperateParam(**parameters)
+
+    # 1. Validate required parameters
+    if not parameters.instruction:
+        raise ValueError("operate requires 'instruction' parameter")
+    if not parameters.imodel:
+        raise ValueError("operate requires 'imodel' parameter")
+    if not parameters.response_model and not parameters.operable:
+        raise ValueError("operate requires either 'response_model' or 'operable' parameter")
 
     # 2. Build Operable from response_model + action/reason specs
     operable, validation_model = _build_operable(
-        response_model=params["response_model"],
-        operable=params["operable"],
-        actions=params["actions"],
-        reason=params["reason"],
+        response_model=parameters.response_model,
+        operable=parameters.operable,
+        actions=parameters.actions,
+        reason=parameters.reason,
     )
 
     # 3. Prepare tool schemas
-    tool_schemas = params["tool_schemas"] or prepare_tool_schemas(session, params["tools"])
+    tool_schemas = parameters.tool_schemas or prepare_tool_schemas(session, parameters.tools)
 
     # 4. Build communicate parameters
-    communicate_params = {
-        "instruction": params["instruction"],
-        "imodel": params["imodel"],
-        "context": params["context"],
-        "images": params["images"],
-        "image_detail": params["image_detail"],
-        "max_retries": params["max_retries"],
-        "return_as": "model",  # We want validated model back
-        **params["model_kwargs"],
-    }
+    from lionpride.operations.types import CommunicateParam
 
-    # Add tool schemas to context if present
+    # Build context with tool schemas
+    context = parameters.context
     if tool_schemas:
-        existing_context = communicate_params.get("context") or {}
-        if isinstance(existing_context, dict):
-            communicate_params["context"] = {**existing_context, "tool_schemas": tool_schemas}
+        if isinstance(context, dict):
+            context = {**context, "tool_schemas": tool_schemas}
+        elif context:
+            context = {"original": context, "tool_schemas": tool_schemas}
         else:
-            communicate_params["context"] = {
-                "original": existing_context,
-                "tool_schemas": tool_schemas,
-            }
+            context = {"tool_schemas": tool_schemas}
 
     # 5. Choose mode: LNDL (operable) vs JSON (response_model)
-    if params["use_lndl"] and operable:
-        communicate_params["operable"] = operable
-        communicate_params["lndl_threshold"] = params["lndl_threshold"]
+    comm_operable = None
+    comm_response_model = None
+    comm_return_as = "model"
+
+    if parameters.use_lndl and operable:
+        comm_operable = operable
     elif validation_model:
-        communicate_params["response_model"] = validation_model
+        comm_response_model = validation_model
     else:
         raise ValueError("operate requires response_model or operable")
 
     # Handle skip_validation
-    if params["skip_validation"]:
-        communicate_params["return_as"] = "text"
-        communicate_params.pop("response_model", None)
-        communicate_params.pop("operable", None)
+    if parameters.skip_validation:
+        comm_return_as = "text"
+        comm_operable = None
+        comm_response_model = None
+
+    communicate_params = CommunicateParam(
+        instruction=parameters.instruction,
+        imodel=parameters.imodel,
+        context=context,
+        images=parameters.images,
+        image_detail=parameters.image_detail,
+        max_retries=parameters.max_retries,
+        return_as=comm_return_as,
+        response_model=comm_response_model,
+        operable=comm_operable,
+        lndl_threshold=parameters.lndl_threshold,
+    )
 
     # 6. Call communicate
-    from ..communicate import communicate
+    from .communicate import communicate
 
     result = await communicate(session, branch, communicate_params)
 
     # Handle validation failure
     if isinstance(result, dict) and result.get("validation_failed"):
-        if not params["return_message"]:
+        if not parameters.return_message:
             raise ValueError(f"Response validation failed: {result.get('error')}")
         return result, None
 
     # 7. Execute actions if enabled and present
-    if params["actions"] and has_action_requests(result):
+    if parameters.actions and has_action_requests(result):
         # Resolve branch for tool execution
         if isinstance(branch, str):
             branch = session.conversations.get_progression(branch)
@@ -103,87 +142,17 @@ async def operate(
             result,
             session,
             branch,
-            concurrent=params["concurrent_tool_execution"],
+            concurrent=parameters.concurrent_tool_execution,
         )
 
     # 8. Return result
-    if params["return_message"]:
+    if parameters.return_message:
         # Get the last assistant message from branch
         if isinstance(branch, str):
             branch = session.conversations.get_progression(branch)
         branch_msgs = session.messages[branch]
         assistant_msg = branch_msgs[-1] if branch_msgs else None
         return result, assistant_msg
-
-    return result
-
-
-def _validate_parameters(params: dict[str, Any]) -> dict[str, Any]:
-    """Validate and normalize parameters."""
-    # Required parameters
-    if not params.get("instruction"):
-        raise ValueError("operate requires 'instruction' parameter")
-    if not params.get("imodel"):
-        raise ValueError("operate requires 'imodel' parameter")
-
-    # Either response_model or operable/operative required
-    operable = params.get("operable") or params.get("operative")
-    if not params.get("response_model") and not operable:
-        raise ValueError("operate requires either 'response_model' or 'operable' parameter")
-
-    return {
-        "instruction": params["instruction"],
-        "imodel": params["imodel"],
-        "response_model": params.get("response_model"),
-        "operable": operable,
-        "context": params.get("context"),
-        "images": params.get("images"),
-        "image_detail": params.get("image_detail"),
-        "tool_schemas": params.get("tool_schemas"),
-        "tools": params.get("tools", False),
-        "actions": params.get("actions", False),
-        "reason": params.get("reason", False),
-        "use_lndl": params.get("use_lndl", False),
-        "lndl_threshold": params.get("lndl_threshold", 0.85),
-        "max_retries": params.get("max_retries", 0),
-        "skip_validation": params.get("skip_validation", False),
-        "return_message": params.get("return_message", False),
-        "concurrent_tool_execution": params.get("concurrent_tool_execution", True),
-        "model_kwargs": _extract_model_kwargs(params),
-    }
-
-
-def _extract_model_kwargs(params: dict[str, Any]) -> dict[str, Any]:
-    """Extract model kwargs from params, handling nested model_kwargs dict."""
-    known_keys = {
-        "instruction",
-        "imodel",
-        "response_model",
-        "operable",
-        "operative",
-        "context",
-        "images",
-        "image_detail",
-        "tool_schemas",
-        "tools",
-        "actions",
-        "reason",
-        "use_lndl",
-        "lndl_threshold",
-        "max_retries",
-        "skip_validation",
-        "return_message",
-        "concurrent_tool_execution",
-        "model_kwargs",  # Handle nested case
-    }
-
-    # Start with explicitly passed model_kwargs (from Branch.operate wrapper)
-    result = dict(params.get("model_kwargs", {}))
-
-    # Add any flat params that aren't known keys
-    for k, v in params.items():
-        if k not in known_keys:
-            result[k] = v
 
     return result
 

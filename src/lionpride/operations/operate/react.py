@@ -7,11 +7,11 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
-from ..dispatcher import register_operation
+# Operations registered in Session._register_default_operations()
 from ..models import ActionRequestModel, ActionResponseModel
 
 if TYPE_CHECKING:
-    from lionpride.services.types import iModel
+    from lionpride.operations.types import ReactParam
     from lionpride.session import Branch, Session
 
 __all__ = ("ReactResult", "ReactStep", "react")
@@ -89,67 +89,36 @@ def _create_react_response_model(
     return TypedReactStepResponse
 
 
-@register_operation("react")
 async def react(
     session: Session,
     branch: Branch | str,
-    parameters: dict[str, Any],
+    parameters: ReactParam | dict,
 ) -> ReactResult:
     """ReAct operation - multi-step reasoning with tool calling.
 
     Args:
-        parameters: Must include 'instruction', 'imodel', 'tools', and 'model_name'.
-            Optional: response_model, max_steps, use_lndl, verbose.
+        parameters: ReactParam or dict with instruction, imodel, tools, model_name, etc.
     """
+    # Convert dict to ReactParam for backward compatibility
+    if isinstance(parameters, dict):
+        from lionpride.operations.types import ReactParam
+
+        parameters = ReactParam(**parameters)
+
     from .factory import operate
 
-    # Extract and validate parameters
-    instruction = parameters.get("instruction")
-    if not instruction:
+    # Validate required parameters
+    if not parameters.instruction:
         raise ValueError("react requires 'instruction' parameter")
 
-    imodel: iModel = parameters.get("imodel")
-    if not imodel:
+    if not parameters.imodel:
         raise ValueError("react requires 'imodel' parameter")
 
-    tools = parameters.get("tools", [])
-    if not tools:
+    if not parameters.tools:
         raise ValueError("react requires 'tools' parameter with at least one tool")
 
-    response_model = parameters.get("response_model")
-    context = parameters.get("context", {})
-    max_steps = parameters.get("max_steps", 5)
-    use_lndl = parameters.get("use_lndl", False)
-    lndl_threshold = parameters.get("lndl_threshold", 0.85)
-    verbose = parameters.get("verbose", False)
-
-    # Extract model_kwargs - may be nested dict or flat in parameters
-    nested_model_kwargs = parameters.get("model_kwargs", {})
-    flat_model_kwargs = {
-        k: v
-        for k, v in parameters.items()
-        if k
-        not in {
-            "instruction",
-            "imodel",
-            "tools",
-            "response_model",
-            "context",
-            "max_steps",
-            "use_lndl",
-            "lndl_threshold",
-            "verbose",
-            "model_kwargs",
-            "reason",  # Legacy param
-        }
-    }
-    # Merge: flat params override nested
-    model_kwargs = {**nested_model_kwargs, **flat_model_kwargs}
-
-    # Model name is required - check in model_kwargs
-    model_name = model_kwargs.pop("model_name", None)
-    if not model_name:
-        raise ValueError("react requires 'model_name' in model_kwargs")
+    if not parameters.model_name:
+        raise ValueError("react requires 'model_name' parameter")
 
     # Resolve branch
     if isinstance(branch, str):
@@ -160,7 +129,7 @@ async def react(
     from lionpride.services.types.tool import Tool
 
     tool_names = []
-    for tool in tools:
+    for tool in parameters.tools:
         if isinstance(tool, type) and issubclass(tool, Tool):
             tool_instance = tool()
         elif isinstance(tool, Tool):
@@ -174,7 +143,7 @@ async def react(
 
     # Build tool descriptions for prompt
     tool_descriptions = []
-    for tool in tools:
+    for tool in parameters.tools:
         tool_instance = tool if isinstance(tool, Tool) else tool()
         schema = tool_instance.tool_schema or {}
         props = schema.get("properties", {})
@@ -184,13 +153,13 @@ async def react(
     tool_schemas_str = "\n".join(tool_descriptions)
 
     # Create step response model
-    step_model = _create_react_response_model(response_model)
+    step_model = _create_react_response_model(parameters.response_model)
 
     # Initialize result
     result = ReactResult()
 
     # Build initial instruction with tool info
-    react_instruction = f"""{instruction}
+    react_instruction = f"""{parameters.instruction}
 
 You have access to these tools:
 {tool_schemas_str}
@@ -204,35 +173,32 @@ Respond with JSON containing:
 To call a tool: {{"reasoning": "...", "action_requests": [{{"function": "tool_name", "arguments": {{...}}}}], "is_done": false, "final_answer": null}}
 Final answer: {{"reasoning": "...", "action_requests": [], "is_done": true, "final_answer": "..."}}"""
 
-    if context:
-        react_instruction += f"\n\nContext:\n{context}"
+    if parameters.context:
+        react_instruction += f"\n\nContext:\n{parameters.context}"
 
     # ReAct loop
     current_instruction = react_instruction
 
-    for step_num in range(1, max_steps + 1):
-        if verbose:
-            print(f"\n--- ReAct Step {step_num}/{max_steps} ---")
+    for step_num in range(1, parameters.max_steps + 1):
+        if parameters.verbose:
+            print(f"\n--- ReAct Step {step_num}/{parameters.max_steps} ---")
 
         step = ReactStep(step=step_num)
 
         try:
             # Call operate for this step (no actions=True - we handle actions ourselves)
-            operate_result = await operate(
-                session,
-                branch,
-                {
-                    "instruction": current_instruction,
-                    "imodel": imodel,
-                    "response_model": step_model,
-                    "use_lndl": use_lndl,
-                    "lndl_threshold": lndl_threshold,
-                    "model": model_name,
-                    **model_kwargs,
-                },
-            )
+            from lionpride.operations.types import OperateParam
 
-            if verbose:
+            operate_params = OperateParam(
+                instruction=current_instruction,
+                imodel=parameters.imodel,
+                response_model=step_model,
+                use_lndl=parameters.use_lndl,
+                lndl_threshold=parameters.lndl_threshold,
+            )
+            operate_result = await operate(session, branch, operate_params)
+
+            if parameters.verbose:
                 print(f"Operate result: {operate_result}")
 
             # Handle validation failure
@@ -244,14 +210,14 @@ Final answer: {{"reasoning": "...", "action_requests": [], "is_done": true, "fin
             # Extract step data from operate result
             if hasattr(operate_result, "reasoning"):
                 step.reasoning = operate_result.reasoning
-                if verbose and step.reasoning:
+                if parameters.verbose and step.reasoning:
                     print(f"Reasoning: {step.reasoning[:200]}...")
 
             if hasattr(operate_result, "action_requests") and operate_result.action_requests:
                 step.actions_requested = operate_result.action_requests
 
                 # Execute actions manually
-                if verbose:
+                if parameters.verbose:
                     print(f"Executing {len(step.actions_requested)} action(s)...")
 
                 from ..actions import act
@@ -278,7 +244,7 @@ Final answer: {{"reasoning": "...", "action_requests": [], "is_done": true, "fin
                     )
                     session.add_message(action_msg, branches=branch)
 
-                if verbose:
+                if parameters.verbose:
                     for resp in step.actions_executed:
                         print(f"  Tool {resp.function}: {str(resp.output)[:100]}...")
 
@@ -291,7 +257,7 @@ Final answer: {{"reasoning": "...", "action_requests": [], "is_done": true, "fin
                 result.completed = True
                 result.reason_stopped = "Task completed"
                 result.total_steps = step_num
-                if verbose:
+                if parameters.verbose:
                     print(f"Task completed at step {step_num}")
                     print(f"Final answer: {result.final_response}")
                 break
@@ -300,7 +266,7 @@ Final answer: {{"reasoning": "...", "action_requests": [], "is_done": true, "fin
             current_instruction = "Continue based on the tool results. What is the final answer?"
 
         except Exception as e:
-            if verbose:
+            if parameters.verbose:
                 import traceback
 
                 traceback.print_exc()
@@ -314,6 +280,6 @@ Final answer: {{"reasoning": "...", "action_requests": [], "is_done": true, "fin
     if not result.completed:
         result.total_steps = len(result.steps)
         if not result.reason_stopped:
-            result.reason_stopped = f"Max steps ({max_steps}) reached"
+            result.reason_stopped = f"Max steps ({parameters.max_steps}) reached"
 
     return result

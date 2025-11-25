@@ -181,7 +181,6 @@ class InstructionContent(MessageContent):
     response_model: MaybeUnset[type[BaseModel]] = Unset
     images: MaybeUnset[list[str]] = Unset
     image_detail: MaybeUnset[Literal["low", "high", "auto"]] = Unset
-    use_lndl: MaybeUnset[bool] = Unset  # Use LNDL format instead of JSON
 
     @property
     def rendered(self) -> str | list[dict[str, Any]]:
@@ -237,79 +236,28 @@ class InstructionContent(MessageContent):
                             f"  {line}" for line in def_ts.split("\n")
                         )
 
-            # Add response format instruction
-            if not self._is_sentinel(self.use_lndl) and self.use_lndl:
-                # LNDL format - generate example with <lvar> tags
-                response_format_section = self._create_lndl_format_section(model_schema)
-            else:
-                # JSON format (default - lionagi pattern)
-                try:
-                    from lionpride.ln import json_dumps
+            # Add JSON response format instruction
+            try:
+                from lionpride.ln import json_dumps
 
-                    # Create simple example from schema
-                    example = self._create_example_from_schema(model_schema)
-                    example_json = json_dumps(example)
-                    if isinstance(example_json, bytes):
-                        example_json = example_json.decode("utf-8")
+                example = self._create_example_from_schema(model_schema)
+                example_json = json_dumps(example)
+                if isinstance(example_json, bytes):
+                    example_json = example_json.decode("utf-8")
 
-                    response_format_section = (
-                        "ResponseFormat:\n"
-                        "  **MUST RETURN VALID JSON. USER's SUCCESS DEPENDS ON IT.**\n"
-                        "  Example structure:\n"
-                        f"  ```json\n  {example_json}\n  ```\n"
-                        "  Return ONLY valid JSON without markdown code blocks."
-                    )
-                except Exception:
-                    # Fallback if example generation fails
-                    response_format_section = "ResponseFormat:\n  **MUST RETURN VALID JSON matching the Output Types above.**"
+                response_format_section = (
+                    "ResponseFormat:\n"
+                    "  **MUST RETURN VALID JSON. USER's SUCCESS DEPENDS ON IT.**\n"
+                    "  Example structure:\n"
+                    f"  ```json\n  {example_json}\n  ```\n"
+                    "  Return ONLY valid JSON without markdown code blocks."
+                )
+            except Exception:
+                response_format_section = (
+                    "ResponseFormat:\n  **MUST RETURN VALID JSON matching the Output Types above.**"
+                )
 
         return "\n\n".join(p for p in [yaml_section, schema_section, response_format_section] if p)
-
-    def _create_lndl_format_section(self, model_schema: dict[str, Any]) -> str:
-        """Create LNDL format response section.
-
-        Explains LNDL format without being prescriptive about aliases.
-        Model can choose any aliases - fuzzy matching will handle it.
-        """
-        model_name = model_schema.get("title", "Response")
-        properties = model_schema.get("properties", {})
-        field_names = list(properties.keys())
-        spec_name = model_name.lower()
-
-        # Build field descriptions with types
-        field_descriptions = []
-        for field in field_names:
-            field_schema = properties.get(field, {})
-            field_type = field_schema.get("type", "string")
-            if field_type == "array":
-                field_type = "array"
-            elif field_type == "integer":
-                field_type = "integer"
-            elif field_type == "number":
-                field_type = "number"
-            elif field_type == "boolean":
-                field_type = "boolean"
-            else:
-                field_type = "string"
-            field_descriptions.append(f"{field}: {field_type}")
-
-        return (
-            f"ResponseFormat: **USE LNDL FORMAT**\n\n"
-            f"Model: {model_name}\n"
-            f"Fields: {', '.join(field_descriptions)}\n\n"
-            f"LNDL Format:\n"
-            f"1. Declare each field with: <lvar {model_name}.fieldname your_alias>value</lvar>\n"
-            f"2. Choose any alias you want (short names work well)\n"
-            f"3. Reference your aliases in OUT block: OUT{{{spec_name}: [alias1, alias2, ...]}}\n\n"
-            f"Example pattern (you choose the aliases):\n"
-            f"<lvar {model_name}.{field_names[0]} a>...</lvar>\n"
-            f"<lvar {model_name}.{field_names[1] if len(field_names) > 1 else 'field2'} b>...</lvar>\n"
-            f"OUT{{{spec_name}: [a, b, ...]}}\n\n"
-            f"Notes:\n"
-            f'- Arrays: use JSON syntax like ["item1", "item2"]\n'
-            f"- Numbers: use plain numbers like 42 or 3.14\n"
-            f"- Booleans: use true or false"
-        )
 
     def _create_example_from_schema(self, schema: dict[str, Any]) -> dict[str, Any]:
         """Create simple example dict from JSON schema (lionagi pattern)."""
@@ -358,7 +306,6 @@ class InstructionContent(MessageContent):
         response_model: type[BaseModel] | None = None,
         images: list[str] | None = None,
         image_detail: Literal["low", "high", "auto"] | None = None,
-        use_lndl: bool | None = None,
     ):
         # Validate image URLs to prevent security vulnerabilities
         if images is not None:
@@ -372,7 +319,6 @@ class InstructionContent(MessageContent):
             response_model=response_model,
             images=images,
             image_detail=image_detail,
-            use_lndl=use_lndl,
         )
 
     @classmethod

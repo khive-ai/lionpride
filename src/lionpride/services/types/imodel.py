@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
 
 from pydantic import Field, field_serializer, field_validator
@@ -550,6 +551,73 @@ class iModel(Element):  # noqa: N801
         # Exclude iModel identity (id/created_at) - fresh identity on reconstruction
         kwargs.setdefault("exclude", set()).update({"id", "created_at"})
         return super()._to_dict(**kwargs)
+
+    async def invoke_stream(
+        self,
+        calling: Calling | None = None,
+        **arguments: Any,
+    ) -> AsyncIterator[str]:
+        """Stream invoke - returns async iterator of chunks.
+
+        Creates a streaming calling and yields chunks as they arrive.
+        Does not use executor path (streaming requires direct consumption).
+
+        Args:
+            calling: Pre-created Calling instance with streaming=True.
+                If provided, **arguments are IGNORED.
+            **arguments: Request arguments passed to create_calling.
+                IGNORED if calling provided.
+
+        Yields:
+            String chunks from the streaming response.
+
+        Raises:
+            TimeoutError: If rate limit acquisition times out
+            NotImplementedError: If backend doesn't support streaming
+
+        Example:
+            async for chunk in imodel.invoke_stream(model="gpt-4", messages=[...]):
+                print(chunk, end="", flush=True)
+        """
+        if calling is None:
+            calling = await self.create_calling(streaming=True, **arguments)
+        else:
+            calling.streaming = True
+
+        # Direct invocation for streaming (no executor path)
+        if self.rate_limiter:
+            acquired = await self.rate_limiter.acquire(timeout=30.0)
+            if not acquired:
+                raise TimeoutError("Rate limit acquisition timeout (30s)")
+
+        async for chunk in calling.stream():
+            yield chunk
+
+    async def invoke_stream_with_channel(
+        self,
+        **arguments: Any,
+    ):
+        """Stream with channel abstraction for fan-out.
+
+        Creates a StreamChannel that buffers content and supports
+        multiple consumers for real-time processing.
+
+        Args:
+            **arguments: Request arguments passed to create_calling
+
+        Returns:
+            StreamChannel instance ready for iteration and consumer attachment
+
+        Example:
+            channel = await imodel.invoke_stream_with_channel(model="gpt-4", messages=[...])
+            channel.add_consumer(lambda chunk: print(chunk.content))
+            async for chunk in channel:
+                pass  # Process chunks
+            full_text = channel.get_accumulated()
+        """
+        from lionpride.operations.streaming import StreamChannel
+
+        return StreamChannel(self.invoke_stream(**arguments))
 
     def __repr__(self) -> str:
         """String representation."""

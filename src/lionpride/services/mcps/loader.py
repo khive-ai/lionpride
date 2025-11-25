@@ -73,7 +73,7 @@ async def load_mcp_tools(
             qualified_name = f"{server_name}_{tool_name}" if server_name else tool_name
 
             # Check for existing registration
-            if registry.has(qualified_name) and not update:
+            if qualified_name in registry and not update:
                 raise ValueError(
                     f"Tool '{qualified_name}' already registered. Use update=True to replace."
                 )
@@ -153,7 +153,7 @@ async def load_mcp_tools(
                 )
 
                 # Register as regular Tool with MCP-discovered schema
-                if registry.has(qualified_name) and not update:
+                if qualified_name in registry and not update:
                     logger.warning(f"Tool '{qualified_name}' already registered. Skipping.")
                     continue
 

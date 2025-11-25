@@ -8,20 +8,29 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from lionpride.core import Edge, Graph
+from lionpride.core import Edge, Graph, Node
 
-from .operation import Operation, OperationType, create_operation
+from .operation import OperationType
 
 __all__ = ("Builder", "OperationGraphBuilder")
 
 
 class OperationGraphBuilder:
-    """Fluent builder for operation graphs (DAGs)."""
+    """Fluent builder for operation graphs (DAGs).
+
+    Builds a graph of operation specs (stored as Node metadata).
+    Actual Operation instances are created at execution time by flow().
+
+    This separation allows:
+    - Build graph structure without session/branch context
+    - Execute same graph with different sessions/branches
+    - Serialize/store graph definitions
+    """
 
     def __init__(self, graph: Graph | None = None):
         """Initialize builder with optional existing graph."""
         self.graph = graph or Graph()
-        self._nodes: dict[str, Operation] = {}
+        self._nodes: dict[str, Node] = {}
         self._executed: set[UUID] = set()  # Track executed operations
         self._current_heads: list[str] = []  # Current head nodes for linking
 
@@ -38,22 +47,31 @@ class OperationGraphBuilder:
         if name in self._nodes:
             raise ValueError(f"Operation with name '{name}' already exists")
 
-        # Create operation node
-        op = create_operation(operation, parameters, **kwargs)
+        # Convert BaseModel parameters to dict
+        if isinstance(parameters, BaseModel):
+            params_dict = parameters.model_dump()
+        else:
+            params_dict = parameters or {}
 
-        # Store name in metadata for reference
-        op.metadata["name"] = name
+        # Merge kwargs into parameters
+        params_dict.update(kwargs)
+
+        # Create Node with operation spec in metadata
+        node = Node(content={"operation_type": operation, "parameters": params_dict})
+        node.metadata["name"] = name
+        node.metadata["operation_type"] = operation
+        node.metadata["parameters"] = params_dict
 
         # Store context inheritance strategy
         if inherit_context and depends_on:
-            op.metadata["inherit_context"] = True
-            op.metadata["primary_dependency"] = self._nodes[depends_on[0]].id
+            node.metadata["inherit_context"] = True
+            node.metadata["primary_dependency"] = self._nodes[depends_on[0]].id
 
         # Add to graph
-        self.graph.add_node(op)
+        self.graph.add_node(node)
 
         # Track by name
-        self._nodes[name] = op
+        self._nodes[name] = node
 
         # Handle dependencies
         if depends_on:
@@ -61,14 +79,14 @@ class OperationGraphBuilder:
                 if dep_name not in self._nodes:
                     raise ValueError(f"Dependency '{dep_name}' not found")
                 dep_node = self._nodes[dep_name]
-                edge = Edge(head=dep_node.id, tail=op.id, label=["depends_on"])
+                edge = Edge(head=dep_node.id, tail=node.id, label=["depends_on"])
                 self.graph.add_edge(edge)
         elif self._current_heads:
             # Auto-link from current heads if no explicit dependencies
             for head_name in self._current_heads:
                 if head_name in self._nodes:
                     head_node = self._nodes[head_name]
-                    edge = Edge(head=head_node.id, tail=op.id, label=["sequential"])
+                    edge = Edge(head=head_node.id, tail=node.id, label=["sequential"])
                     self.graph.add_edge(edge)
 
         # Update current heads
@@ -124,15 +142,15 @@ class OperationGraphBuilder:
         # No edges needed - operations are naturally parallel
         return self
 
-    def get(self, name: str) -> Operation:
-        """Get operation by name."""
+    def get(self, name: str) -> Node:
+        """Get operation node by name."""
         if name not in self._nodes:
             raise ValueError(f"Operation '{name}' not found")
         return self._nodes[name]
 
-    def get_by_id(self, operation_id: UUID) -> Operation | None:
-        """Get operation by UUID, or None if not found."""
-        return self.graph.nodes.get(operation_id, None)
+    def get_by_id(self, node_id: UUID) -> Node | None:
+        """Get node by UUID, or None if not found."""
+        return self.graph.nodes.get(node_id, None)
 
     def add_aggregation(
         self,
@@ -149,37 +167,43 @@ class OperationGraphBuilder:
         if not sources:
             raise ValueError("No source operations for aggregation")
 
-        # Add aggregation metadata to parameters
-        params = parameters or {}
-        if isinstance(params, dict):
-            params = {
-                "aggregation_sources": [str(self._nodes[s].id) for s in sources],
-                "aggregation_count": len(sources),
-                **params,
-            }
+        # Convert BaseModel parameters to dict
+        if isinstance(parameters, BaseModel):
+            params_dict = parameters.model_dump()
+        else:
+            params_dict = parameters or {}
 
-        # Create operation node
-        op = create_operation(operation, params, **kwargs)
-        op.metadata["name"] = name
-        op.metadata["aggregation"] = True
+        # Merge kwargs into parameters
+        params_dict.update(kwargs)
+
+        # Add aggregation metadata to parameters
+        params_dict["aggregation_sources"] = [str(self._nodes[s].id) for s in sources]
+        params_dict["aggregation_count"] = len(sources)
+
+        # Create Node with operation spec
+        node = Node(content={"operation_type": operation, "parameters": params_dict})
+        node.metadata["name"] = name
+        node.metadata["operation_type"] = operation
+        node.metadata["parameters"] = params_dict
+        node.metadata["aggregation"] = True
 
         # Store context inheritance for aggregations
         if inherit_context and sources:
-            op.metadata["inherit_context"] = True
+            node.metadata["inherit_context"] = True
             source_idx = min(inherit_from_source, len(sources) - 1)
-            op.metadata["primary_dependency"] = self._nodes[sources[source_idx]].id
-            op.metadata["inherit_from_source"] = source_idx
+            node.metadata["primary_dependency"] = self._nodes[sources[source_idx]].id
+            node.metadata["inherit_from_source"] = source_idx
 
         # Add to graph
-        self.graph.add_node(op)
-        self._nodes[name] = op
+        self.graph.add_node(node)
+        self._nodes[name] = node
 
         # Connect all sources
         for source_name in sources:
             if source_name not in self._nodes:
                 raise ValueError(f"Source operation '{source_name}' not found")
             source_node = self._nodes[source_name]
-            edge = Edge(head=source_node.id, tail=op.id, label=["aggregate"])
+            edge = Edge(head=source_node.id, tail=node.id, label=["aggregate"])
             self.graph.add_edge(edge)
 
         # Update current heads
@@ -194,9 +218,9 @@ class OperationGraphBuilder:
                 self._executed.add(self._nodes[name].id)
         return self
 
-    def get_unexecuted_nodes(self) -> list[Operation]:
+    def get_unexecuted_nodes(self) -> list[Node]:
         """Get operations that haven't been executed yet."""
-        return [op for op in self._nodes.values() if op.id not in self._executed]
+        return [node for node in self._nodes.values() if node.id not in self._executed]
 
     def build(self) -> Graph:
         """Build and validate operation graph (must be DAG)."""

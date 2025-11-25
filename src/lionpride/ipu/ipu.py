@@ -18,9 +18,13 @@ import contextvars
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
+from pydantic import Field
+
 from lionpride.core import Element
 from lionpride.errors import NotFoundError
-from lionpride.rules import ValidationError, Validator
+from lionpride.ipu.operation_spec import OperationSpec
+from lionpride.rules import ValidationError
+from lionpride.rules.validator import Validator
 
 if TYPE_CHECKING:
     from lionpride.operations import Operation
@@ -73,6 +77,14 @@ class IPU(Element):
         result = await ipu.execute(op)
     """
 
+    session_registry: dict[UUID, Any] = Field(
+        default_factory=dict, description="Registered sessions"
+    )
+    validator: Any = Field(default=None, description="Validator engine")
+    operation_specs: dict[str, Any] = Field(
+        default_factory=dict, description="Operation specs for validation"
+    )
+
     def __init__(self, validator: Validator | None = None, **kwargs):
         """Initialize IPU.
 
@@ -80,10 +92,7 @@ class IPU(Element):
             validator: Custom validator (uses default if None)
             **kwargs: Additional Element kwargs
         """
-        super().__init__(**kwargs)
-        self.session_registry: dict[UUID, Session] = {}
-        self.validator: Validator = validator or Validator()
-        # TODO: Add operation_specs registry when Operable is ready
+        super().__init__(validator=validator or Validator(), **kwargs)
 
     def register_session(self, session: Session) -> None:
         """Register session for operation execution.
@@ -130,16 +139,35 @@ class IPU(Element):
             raise NotFoundError(f"Session {session_id} not in IPU registry")
         return self.session_registry[session_id]
 
+    def register_operation_spec(self, operation_name: str, spec: OperationSpec) -> None:
+        """Register operation spec for validation.
+
+        Args:
+            operation_name: Operation name (e.g., "communicate")
+            spec: OperationSpec defining input/output Operables
+        """
+        self.operation_specs[operation_name] = spec
+
+    def get_operation_spec(self, operation_name: str) -> OperationSpec | None:
+        """Get operation spec by name.
+
+        Args:
+            operation_name: Operation name
+
+        Returns:
+            OperationSpec if registered, None otherwise
+        """
+        return self.operation_specs.get(operation_name)
+
     async def execute(self, operation: Operation) -> Any:
         """Execute operation with pre/post validation.
 
         Flow:
         1. Get session and branch from registry
-        2. PRE-VALIDATE: Check operation.parameters (TODO: against input Operable)
+        2. PRE-VALIDATE: Check operation.parameters against input Operable
         3. EXECUTE: Run operation function
-        4. PARSE: Extract OUT{} block (TODO: LNDL parser integration)
-        5. POST-VALIDATE: Check output (TODO: against output Operable)
-        6. RETURN: Guaranteed valid, structured result
+        4. POST-VALIDATE: Check output against output Operable
+        5. RETURN: Guaranteed valid, structured result
 
         Args:
             operation: Operation to execute
@@ -166,47 +194,54 @@ class IPU(Element):
                 )
 
             # 2. PRE-VALIDATE: Check inputs
-            # TODO: Get operation's input Operable spec
-            # For now, validate with basic rules
-            try:
-                validated_params = await self.validator.validate(
-                    data=operation.parameters,
-                    spec=None,  # TODO: Get from operation_specs registry
-                    auto_fix=True,
-                )
-            except ValidationError as e:
-                raise ValidationError(
-                    f"Operation '{operation.operation_type}' input validation failed: {e}"
-                ) from e
+            operation_spec = self.get_operation_spec(operation.operation_type)
+            if operation_spec:
+                # Validate field names
+                operation_spec.validate_input_names(operation.parameters)
+
+                # Validate types
+                try:
+                    validated_params = await self.validator.validate(
+                        data=operation.parameters,
+                        operable=operation_spec.input_operable,
+                        auto_fix=True,
+                    )
+                except ValidationError as e:
+                    raise ValidationError(
+                        f"Operation '{operation.operation_type}' input validation failed: {e}"
+                    ) from e
+            else:
+                # No spec registered - pass through parameters unchanged
+                validated_params = operation.parameters
 
             # 3. EXECUTE: Run operation function
             operation_func = session.operations.get(operation.operation_type)
             result = await operation_func(session, branch, validated_params)
 
-            # 4. PARSE: Extract OUT{} block (TODO: LNDL parser)
-            # For now, assume result is dict or already structured
-            if isinstance(result, str):
-                # TODO: Use LNDL parser to extract OUT{} block
-                out_block = {"raw_output": result}
+            # 4. POST-VALIDATE: Check outputs (if spec registered)
+            if operation_spec:
+                # Result should be dict for validation
+                result_dict = result if isinstance(result, dict) else {"output": result}
+
+                # Validate field names
+                operation_spec.validate_output_names(result_dict)
+
+                # Validate types
+                try:
+                    validated_output = await self.validator.validate(
+                        data=result_dict,
+                        operable=operation_spec.output_operable,
+                        auto_fix=True,
+                    )
+                except ValidationError as e:
+                    raise ValidationError(
+                        f"Operation '{operation.operation_type}' output validation failed: {e}"
+                    ) from e
+
+                return validated_output
             else:
-                out_block = result if isinstance(result, dict) else {"output": result}
-
-            # 5. POST-VALIDATE: Check outputs
-            # TODO: Get operation's output Operable spec
-            # For now, validate with basic rules
-            try:
-                validated_output = await self.validator.validate(
-                    data=out_block,
-                    spec=None,  # TODO: Get from operation_specs registry
-                    auto_fix=True,
-                )
-            except ValidationError as e:
-                raise ValidationError(
-                    f"Operation '{operation.operation_type}' output validation failed: {e}"
-                ) from e
-
-            # 6. RETURN: Guaranteed valid data
-            return validated_output
+                # No spec registered - pass through unchanged
+                return result
 
         finally:
             # Clear IPU context
@@ -228,6 +263,7 @@ class IPU(Element):
         """String representation."""
         return (
             f"IPU(sessions={len(self.session_registry)}, "
+            f"operation_specs={len(self.operation_specs)}, "
             f"validator={self.validator}, "
             f"id={str(self.id)[:8]})"
         )

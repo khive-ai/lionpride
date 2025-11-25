@@ -39,7 +39,7 @@ async def act(
         if not request.function:
             raise ValueError(f"Action request missing function name: {request}")
 
-        if not registry.has(request.function):
+        if request.function not in registry:
             raise ValueError(
                 f"Tool '{request.function}' not found in registry. "
                 f"Available tools: {registry.list_names()}"

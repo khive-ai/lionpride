@@ -1,36 +1,33 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Shared fixtures for operations tests."""
+"""Shared fixtures for operations tests.
+
+Operations are now registered per-Session via Session._register_default_operations().
+No global dispatcher needed.
+"""
 
 import pytest
 
-from lionpride.operations.dispatcher import get_dispatcher, register_operation
-from lionpride.operations.operate import generate, operate, react
+
+@pytest.fixture
+def session():
+    """Create a fresh Session with default operations registered."""
+    from lionpride.session import Session
+
+    return Session()
 
 
-def _register_default_operations():
-    """Re-register default operations (generate, operate, react)."""
-    dispatcher = get_dispatcher()
-    if not dispatcher.is_registered("generate"):
-        dispatcher.register("generate", generate)
-    if not dispatcher.is_registered("operate"):
-        dispatcher.register("operate", operate)
-    if not dispatcher.is_registered("react"):
-        dispatcher.register("react", react)
+@pytest.fixture
+def ipu():
+    """Create a fresh IPU."""
+    from lionpride.ipu import IPU
+
+    return IPU()
 
 
-@pytest.fixture(autouse=True)
-def cleanup_dispatcher():
-    """Clear global dispatcher after each test to prevent state pollution.
-
-    This fixture runs automatically for all tests in this directory and subdirectories.
-    It ensures that operation registrations from one test don't affect other tests.
-    The default operations (generate, operate, react) are re-registered before each test.
-    """
-    # Re-register defaults before test
-    _register_default_operations()
-    yield  # Run test
-    # Cleanup after test
-    dispatcher = get_dispatcher()
-    dispatcher.clear()
+@pytest.fixture
+def session_with_ipu(session, ipu):
+    """Create Session registered with IPU."""
+    ipu.register_session(session)
+    return session, ipu

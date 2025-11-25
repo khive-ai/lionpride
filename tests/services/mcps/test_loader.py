@@ -35,6 +35,7 @@ def mock_registry():
     registry = Mock()
     registry.has = Mock(return_value=False)
     registry.register = Mock()
+    registry.__contains__ = Mock(return_value=False)
     return registry
 
 
@@ -150,7 +151,7 @@ class TestLoadMCPToolsSpecificTools:
 
     async def test_load_specific_tools_already_registered(self, mock_registry):
         """Test loading tool that's already registered raises ValueError."""
-        mock_registry.has = Mock(return_value=True)
+        mock_registry.__contains__ = Mock(return_value=True)
         server_config = {"server": "test_server"}
         tool_names = ["tool1"]
 
@@ -417,7 +418,7 @@ class TestLoadMCPToolsAutoDiscovery:
 
     async def test_auto_discovery_already_registered_skips(self, mock_registry):
         """Test auto-discovery skips already registered tools."""
-        mock_registry.has = Mock(return_value=True)
+        mock_registry.__contains__ = Mock(return_value=True)
         server_config = {"server": "test_server"}
 
         mock_tool = Mock()
