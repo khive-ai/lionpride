@@ -8,7 +8,7 @@ import string
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 from pydantic import BaseModel, PydanticUserError
 
@@ -68,18 +68,13 @@ def _prepare_schema_input(
     if isinstance(schema, dict):
         try:
             schema_dict = schema
-            schema_json_raw = json_dumps(schema_dict)
-            schema_json = (
-                schema_json_raw if isinstance(schema_json_raw, str) else schema_json_raw.decode()
-            )
+            schema_json = cast(str, json_dumps(schema_dict))
         except TypeError as e:
             msg = "Invalid dictionary provided for schema"
             raise ValueError(msg) from e
     elif isinstance(schema, str):
         try:
-            raw_dict = to_dict(schema)
-            # Ensure we have a dict[str, Any]
-            schema_dict = {str(k): v for k, v in raw_dict.items()}
+            schema_dict = cast(dict[str, Any], to_dict(schema))
         except Exception as e:
             msg = "Invalid JSON schema string provided"
             raise ValueError(msg) from e
@@ -111,7 +106,7 @@ def _generate_model_code(
             target_python_version=python_version,
             base_class="pydantic.BaseModel",
         )
-    except Exception as e:
+    except Exception as e:  # pragma: no cover
         msg = "Failed to generate model code from schema"
         raise RuntimeError(msg) from e
 

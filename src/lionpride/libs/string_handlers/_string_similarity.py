@@ -231,7 +231,7 @@ def sequence_matcher_similarity(s1: str, s2: str) -> float:
 
 
 # Map of available similarity algorithms
-SIMILARITY_ALGO_MAP = {
+SIMILARITY_ALGO_MAP: dict[str, Callable[[str, str], float]] = {
     "jaro_winkler": jaro_winkler_similarity,
     "levenshtein": levenshtein_similarity,
     "sequence_matcher": sequence_matcher_similarity,
@@ -307,13 +307,13 @@ def string_similarity(
     score_func: Callable[[str, str], float]
     if isinstance(algorithm, SimilarityAlgo):
         algo_name = algorithm.value
-        score_func = SIMILARITY_ALGO_MAP[algo_name]  # type: ignore[assignment]
+        score_func = SIMILARITY_ALGO_MAP[algo_name]
     elif isinstance(algorithm, str):
         algo_name = algorithm
-        _func = SIMILARITY_ALGO_MAP.get(algo_name)
-        if _func is None:
+        maybe_func = SIMILARITY_ALGO_MAP.get(algo_name)
+        if maybe_func is None:
             raise ValueError(f"Unsupported algorithm: {algo_name}")
-        score_func = _func  # type: ignore[assignment]
+        score_func = maybe_func
     elif callable(algorithm):
         score_func = algorithm
     else:

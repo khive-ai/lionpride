@@ -25,7 +25,7 @@ def fuzzy_validate_pydantic(
     model_type: "type[BaseModel]",
     fuzzy_parse: bool = True,
     fuzzy_match: bool = False,
-    fuzzy_match_params: FuzzyMatchKeysParams | dict | None = None,
+    fuzzy_match_params: FuzzyMatchKeysParams | dict[Any, Any] | None = None,
 ):
     """Validate and parse text/dict into Pydantic model with fuzzy parsing.
 
@@ -48,27 +48,27 @@ def fuzzy_validate_pydantic(
         return text
 
     # Handle dict inputs directly (skip JSON extraction)
+    model_data: dict[str, Any]
     if isinstance(text, dict):
         model_data = text
     else:
         # Handle string inputs (JSON strings, markdown, etc.)
         try:
             extracted = extract_json(text, fuzzy_parse=fuzzy_parse)
-            model_data = (
-                extracted if isinstance(extracted, dict) else extracted[0] if extracted else {}
-            )
+            model_data = extracted if isinstance(extracted, dict) else {"data": extracted}
         except Exception as e:
             raise ValidationError(f"Failed to extract valid JSON from model response: {e}") from e
 
     d = model_data
     if fuzzy_match:
-        field_keys = list(model_type.model_fields.keys())
+        # Get field names from model_fields
+        field_names = list(model_type.model_fields.keys())
         if fuzzy_match_params is None:
-            model_data = fuzzy_match_keys(d, field_keys, handle_unmatched="remove")
+            model_data = fuzzy_match_keys(d, field_names, handle_unmatched="remove")
         elif isinstance(fuzzy_match_params, dict):
-            model_data = fuzzy_match_keys(d, field_keys, **fuzzy_match_params)
+            model_data = fuzzy_match_keys(d, field_names, **fuzzy_match_params)
         elif isinstance(fuzzy_match_params, FuzzyMatchKeysParams):
-            model_data = fuzzy_match_params(d, field_keys)
+            model_data = fuzzy_match_params(d, field_names)
         else:
             raise TypeError("fuzzy_keys_params must be a dict or FuzzyMatchKeysParams instance")
 

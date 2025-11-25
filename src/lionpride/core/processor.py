@@ -16,8 +16,6 @@ from .progression import Progression
 if TYPE_CHECKING:
     from uuid import UUID
 
-    from lionpride.operations.streaming import OutputSink
-
 
 __all__ = (
     "Executor",
@@ -48,20 +46,8 @@ class Processor:
         concurrency_limit: int = 100,
         max_queue_size: int = 1000,
         max_denial_tracking: int = 10000,
-        stream_output: OutputSink | None = None,
     ) -> None:
-        """Initialize processor with capacity constraints.
-
-        Args:
-            queue_capacity: Max events per batch
-            capacity_refresh_time: Seconds before capacity reset
-            pile: Reference to executor's Flow.items
-            executor: Reference to executor for progression updates
-            concurrency_limit: Max concurrent executions
-            max_queue_size: Max events in queue
-            max_denial_tracking: Max denial entries to track
-            stream_output: Optional OutputSink for streaming chunk output
-        """
+        """Initialize processor with capacity constraints."""
         # Validate queue_capacity
         if queue_capacity < 1:
             raise ValueError("Queue capacity must be greater than 0.")
@@ -106,9 +92,6 @@ class Processor:
 
         # Concurrency limit with safe default
         self._concurrency_sem = concurrency.Semaphore(concurrency_limit)
-
-        # Optional output sink for streaming chunks
-        self.stream_output = stream_output
 
     @property
     def available_capacity(self) -> int:
@@ -189,7 +172,6 @@ class Processor:
         concurrency_limit: int = 100,
         max_queue_size: int = 1000,
         max_denial_tracking: int = 10000,
-        stream_output: OutputSink | None = None,
     ) -> Self:
         """Async factory for Processor construction."""
         return cls(
@@ -200,7 +182,6 @@ class Processor:
             concurrency_limit=concurrency_limit,
             max_queue_size=max_queue_size,
             max_denial_tracking=max_denial_tracking,
-            stream_output=stream_output,
         )
 
     async def process(self) -> None:
@@ -232,12 +213,11 @@ class Processor:
                         await self.executor._update_progression(next_event, EventStatus.PROCESSING)
 
                     if next_event.streaming:
-                        # Streaming: consume async generator with optional output sink
-                        async def consume_stream(event: Event, output_sink: OutputSink | None):
+                        # Streaming: consume async generator
+                        async def consume_stream(event: Event):
                             try:
-                                async for chunk in event.stream():  # type: ignore[attr-defined]
-                                    if output_sink:
-                                        await output_sink.write(chunk, event.id)
+                                async for _ in event.stream():  # type: ignore[attr-defined]
+                                    pass
                                 # Update progression after completion
                                 if self.executor:
                                     await self.executor._update_progression(event)
@@ -246,9 +226,7 @@ class Processor:
                                 if self.executor:
                                     await self.executor._update_progression(event)
 
-                        tg.start_soon(
-                            self._with_semaphore, consume_stream(next_event, self.stream_output)
-                        )
+                        tg.start_soon(self._with_semaphore, consume_stream(next_event))
                     else:
                         # Non-streaming: just invoke
                         async def invoke_and_update(event):
@@ -395,11 +373,11 @@ class Executor:
         """Initialize and start processor if not created, backfilling pending events."""
         if not self.processor:
             await self._create_processor()
-            # Backfill all pending events into processor queue
-            for event in self.pending_events:
-                if self.processor is not None:
+            # Backfill all pending events into processor queue (only for newly created)
+            if self.processor:  # Narrow type after _create_processor
+                for event in self.pending_events:
                     await self.processor.enqueue(event.id)
-        if self.processor is not None:
+        if self.processor:  # Narrow type for start() call
             await self.processor.start()
 
     async def stop(self) -> None:
@@ -450,7 +428,7 @@ class Executor:
 
     def status_counts(self) -> dict[str, int]:
         """Get event count per status."""
-        return {prog.name: len(prog) for prog in self.states.progressions if prog.name is not None}
+        return {prog.name or "unnamed": len(prog) for prog in self.states.progressions}
 
     async def cleanup_events(self, statuses: list[EventStatus] | None = None) -> int:
         """Remove events with specified statuses (default: COMPLETED, FAILED, ABORTED)."""

@@ -33,10 +33,9 @@ def is_cancelled(exc: BaseException) -> bool:
 
 async def shield(func: Callable[P, Awaitable[T]], *args: P.args, **kwargs: P.kwargs) -> T:
     """Run async function immune to outer cancellation."""
-    result: T
     with anyio.CancelScope(shield=True):
-        result = await func(*args, **kwargs)  # type: ignore[arg-type]
-    return result
+        result = await func(*args, **kwargs)
+    return result  # type: ignore[return-value]
 
 
 # -------- ExceptionGroup helpers (Python 3.11+) --------

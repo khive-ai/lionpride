@@ -522,3 +522,54 @@ class TestTypeScriptSchemaEdgeCases:
         # Should handle enum with null in anyOf
         assert "status?: " in result
         assert "null" in result or "active" in result
+
+    def test_array_without_items_field(self):
+        """Test array type with no items field - line 87."""
+        schema = {
+            "properties": {
+                "data": {
+                    "type": "array",
+                    # No "items" field at all
+                    "description": "Data array without items spec",
+                }
+            },
+            "required": [],
+        }
+        result = typescript_schema(schema)
+
+        # Should fallback to any[]
+        assert "data?: any[]" in result
+
+    def test_array_items_with_type(self):
+        """Test array with items having type field - line 79."""
+        schema = {
+            "properties": {
+                "numbers": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "Integer array",
+                }
+            },
+            "required": ["numbers"],
+        }
+        result = typescript_schema(schema)
+
+        # Should format as int[]
+        assert "numbers: int[]" in result
+
+    def test_boolean_false_default(self):
+        """Test boolean false default value - line 139."""
+        schema = {
+            "properties": {
+                "disabled": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Disabled flag",
+                }
+            },
+            "required": [],
+        }
+        result = typescript_schema(schema)
+
+        # Should format boolean false as lowercase
+        assert "disabled?: bool = false" in result

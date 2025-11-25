@@ -243,3 +243,39 @@ def test_fuzzy_match_keys_fill_mapping():
     assert result["key1"] == "value1"
     assert result["key2"] == "custom_value"
     assert result["key3"] == "default"
+
+
+# ============================================================================
+# Coverage tests for line 72
+# ============================================================================
+
+
+def test_fuzzy_match_keys_with_generator():
+    """Test keys as generator (iterable, not list or dict) - line 72"""
+    d = {"name": "John", "age": 30}
+
+    def key_generator():
+        yield "name"
+        yield "age"
+
+    result = fuzzy_match_keys(d, key_generator())
+    assert result["name"] == "John"
+    assert result["age"] == 30
+
+
+def test_fuzzy_match_keys_with_tuple():
+    """Test keys as tuple (iterable, not list) - line 72"""
+    d = {"name": "John", "age": 30}
+    keys = ("name", "age")
+    result = fuzzy_match_keys(d, keys)
+    assert result["name"] == "John"
+    assert result["age"] == 30
+
+
+def test_fuzzy_match_keys_with_set():
+    """Test keys as set (iterable, not list or dict) - line 72"""
+    d = {"name": "John", "age": 30}
+    keys = {"name", "age"}
+    result = fuzzy_match_keys(d, keys)
+    assert "name" in result
+    assert "age" in result
