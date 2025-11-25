@@ -15,8 +15,7 @@ import asyncio
 import pytest
 from pydantic import BaseModel, Field
 
-from lionpride.operations import Builder, flow
-from lionpride.operations.dispatcher import OperationDispatcher, get_dispatcher
+from lionpride.operations import Builder, OperationRegistry, flow
 from lionpride.operations.flow import DependencyAwareExecutor
 from lionpride.operations.node import create_operation
 from lionpride.operations.operate.factory import operate
@@ -89,40 +88,49 @@ class ExampleOutput(BaseModel):
 
 
 # -------------------------------------------------------------------------
-# OperationDispatcher Tests
+# OperationRegistry Tests
 # -------------------------------------------------------------------------
 
 
-class TestOperationDispatcher:
-    """Test operation dispatcher registration and retrieval."""
+class TestOperationRegistry:
+    """Test per-session operation registry."""
 
-    def test_singleton_pattern(self):
-        """Test dispatcher is singleton."""
-        d1 = get_dispatcher()
-        d2 = get_dispatcher()
-        assert d1 is d2
-
-    def test_factory_registration(self):
-        """Test registering and retrieving factories."""
-        dispatcher = OperationDispatcher()
+    def test_per_session_isolation(self):
+        """Test registries are independent per-session."""
+        registry1 = OperationRegistry(auto_register_defaults=False)
+        registry2 = OperationRegistry(auto_register_defaults=False)
 
         async def test_factory(session, branch, parameters):
             return "test result"
 
-        dispatcher.register("test_op", test_factory)
-        assert "test_op" in dispatcher.list_types()
+        registry1.register("test_op", test_factory)
 
-        retrieved = dispatcher.get_factory("test_op")
+        # registry1 has it, registry2 doesn't
+        assert registry1.has("test_op")
+        assert not registry2.has("test_op")
+
+    def test_factory_registration(self):
+        """Test registering and retrieving factories."""
+        registry = OperationRegistry(auto_register_defaults=False)
+
+        async def test_factory(session, branch, parameters):
+            return "test result"
+
+        registry.register("test_op", test_factory)
+        assert "test_op" in registry.list_names()
+
+        retrieved = registry.get("test_op")
         assert retrieved is test_factory
 
-    def test_factory_not_found(self):
-        """Test retrieving non-existent factory returns None."""
-        dispatcher = OperationDispatcher()
-        assert dispatcher.get_factory("nonexistent") is None
+    def test_factory_not_found_raises(self):
+        """Test retrieving non-existent factory raises KeyError."""
+        registry = OperationRegistry(auto_register_defaults=False)
+        with pytest.raises(KeyError, match=r"not registered"):
+            registry.get("nonexistent")
 
-    def test_list_types(self):
-        """Test listing all registered operation types."""
-        dispatcher = OperationDispatcher()
+    def test_list_names(self):
+        """Test listing all registered operation names."""
+        registry = OperationRegistry(auto_register_defaults=False)
 
         async def factory1(session, branch, parameters):
             pass
@@ -130,12 +138,22 @@ class TestOperationDispatcher:
         async def factory2(session, branch, parameters):
             pass
 
-        dispatcher.register("op1", factory1)
-        dispatcher.register("op2", factory2)
+        registry.register("op1", factory1)
+        registry.register("op2", factory2)
 
-        types = list(dispatcher.list_types())
-        assert "op1" in types
-        assert "op2" in types
+        names = registry.list_names()
+        assert "op1" in names
+        assert "op2" in names
+
+    def test_auto_register_defaults(self):
+        """Test default operations are auto-registered."""
+        registry = OperationRegistry(auto_register_defaults=True)
+
+        # Default operations should be registered
+        assert registry.has("operate")
+        assert registry.has("react")
+        assert registry.has("communicate")
+        assert registry.has("generate")
 
 
 # -------------------------------------------------------------------------
@@ -203,7 +221,7 @@ class TestBuilder:
         # Verify aggregation metadata
         agg_op = builder._nodes["summary"]
         assert agg_op.metadata.get("aggregation") is True
-        assert "aggregation_sources" in agg_op.content.parameters
+        assert "aggregation_sources" in agg_op.parameters
 
     def test_duplicate_name_error(self):
         """Test error on duplicate operation names."""
@@ -266,8 +284,8 @@ class TestDependencyAwareExecutor:
             return f"result_{task_name}"
 
         # Register factories
-        dispatcher = get_dispatcher()
-        dispatcher.register("tracked", factory_with_tracking)
+        # Register to session's per-session registry
+        session.operations.register("tracked", factory_with_tracking)
 
         builder = Builder()
         builder.add("task1", "tracked", {"task_name": "task1"})
@@ -331,8 +349,8 @@ class TestDependencyAwareExecutor:
             context = parameters.get("context", {})
             return {"received_context": context}
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("context_consumer", context_consumer)
+        # Register to session's per-session registry
+        session.operations.register("context_consumer", context_consumer)
 
         builder = Builder()
         builder.add(
@@ -406,8 +424,8 @@ class TestDependencyAwareExecutor:
         async def failing_factory(session, branch, parameters):
             raise RuntimeError("Intentional failure")
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("failing", failing_factory)
+        # Register to session's per-session registry
+        session.operations.register("failing", failing_factory)
 
         builder = Builder()
         builder.add("task1", "failing", {})
@@ -437,8 +455,8 @@ class TestDependencyAwareExecutor:
             concurrent_count -= 1
             return "done"
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("concurrent_tracker", concurrent_tracker)
+        # Register to session's per-session registry
+        session.operations.register("concurrent_tracker", concurrent_tracker)
 
         # Create 10 independent operations
         builder = Builder()

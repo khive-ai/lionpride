@@ -7,13 +7,10 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from lionpride.session.messages import AssistantResponseContent, Message
 
-from ..dispatcher import register_operation
-
 if TYPE_CHECKING:
     from lionpride.session import Branch, Session
 
 
-@register_operation("generate")
 async def generate(
     session: Session,
     branch: Branch | str,

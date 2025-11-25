@@ -38,8 +38,12 @@ class OperationGraphBuilder:
         if name in self._nodes:
             raise ValueError(f"Operation with name '{name}' already exists")
 
-        # Create operation node
-        op = create_operation(operation, parameters, **kwargs)
+        # Create unified Operation node (Node + Event)
+        op = Operation(
+            operation_type=operation,
+            parameters=parameters or {},
+            **kwargs,
+        )
 
         # Store name in metadata for reference
         op.metadata["name"] = name

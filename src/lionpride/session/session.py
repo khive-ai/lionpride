@@ -9,6 +9,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, PrivateAttr
 
 from lionpride.core import Element, Flow, Progression
+from lionpride.operations.registry import OperationRegistry
 from lionpride.services import ServiceRegistry
 
 from .messages import Message, SenderRecipient
@@ -286,17 +287,32 @@ class Branch(Progression):
 
 
 class Session(Element):
-    """Central storage for messages, branches, and services.
+    """Central storage for messages, branches, services, and operations.
 
     Attributes:
         user: User identifier
+        default_imodel: Default iModel for operations (better DX)
         conversations: Flow[Message, Branch] for message storage and branch progressions
         services: ServiceRegistry for models and tools
+        operations: OperationRegistry for operation factories
         messages: Read-only view of conversations.items (Pile[Message])
         branches: Read-only view of conversations.progressions (Pile[Branch])
+
+    Example:
+        # Better DX with default_imodel
+        session = Session(default_imodel=iModel(backend=OpenAI(...)))
+        branch = session.create_branch()
+        result = await session.conduct("operate", branch, instruction="...", ...)
+
+        # Or explicit imodel per-operation
+        result = await session.conduct("operate", branch, imodel=my_model, ...)
     """
 
     user: str | None = Field(default=None, description="User identifier")
+    default_imodel: Any = Field(
+        default=None,
+        description="Default iModel for operations. Improves DX by eliminating repeated imodel= args.",
+    )
     conversations: Flow[Message, Branch] = Field(
         default_factory=lambda: Flow(item_type=Message),
         description="Message flow with branches",
@@ -304,6 +320,10 @@ class Session(Element):
     services: ServiceRegistry = Field(
         default_factory=ServiceRegistry,
         description="Available services (models, tools)",
+    )
+    operations: OperationRegistry = Field(
+        default_factory=OperationRegistry,
+        description="Operation factories (operate, react, communicate, generate)",
     )
 
     @property
@@ -522,6 +542,99 @@ class Session(Element):
             poll_interval=poll_interval,
             **kwargs,
         )
+
+    # =========================================================================
+    # Unified Operation Interface
+    # =========================================================================
+
+    async def conduct(
+        self,
+        operation_type: str,
+        branch: Branch | UUID | str | None = None,
+        *,
+        imodel: Any = None,
+        **parameters,
+    ) -> Any:
+        """Unified operation interface - returns invoked Operation.
+
+        Central entry point for all operations (operate, react, communicate, generate).
+        Creates an Operation node, binds it, invokes it, and returns it.
+
+        Args:
+            operation_type: Operation type ("operate", "react", "communicate", "generate")
+            branch: Target branch (optional, uses default if None)
+            imodel: iModel to use (optional, falls back to default_imodel)
+            **parameters: Operation-specific parameters
+
+        Returns:
+            Operation: Invoked operation with:
+                - op.status: EventStatus (COMPLETED, FAILED, etc.)
+                - op.response: The operation result
+                - op.execution: Full execution details
+
+        Example:
+            # With default_imodel set
+            session = Session(default_imodel=my_model)
+            branch = session.create_branch()
+
+            # Structured output
+            op = await session.conduct("operate", branch,
+                instruction="Analyze this text",
+                response_model=AnalysisResult,
+            )
+            result = op.response  # The AnalysisResult instance
+
+            # ReAct with tools
+            op = await session.conduct("react", branch,
+                instruction="Find the answer",
+                tools=[SearchTool, CalculatorTool],
+            )
+            print(op.status)  # EventStatus.COMPLETED
+
+            # Simple chat
+            op = await session.conduct("communicate", branch,
+                instruction="Hello!",
+            )
+            print(op.response)  # "Hello! How can I help?"
+
+        Raises:
+            KeyError: If operation not registered
+            ValueError: If no imodel provided and no default_imodel set
+        """
+        from lionpride.operations.node import Operation
+
+        # Resolve imodel
+        resolved_imodel = imodel or self.default_imodel
+        if resolved_imodel is None:
+            raise ValueError(
+                f"Operation '{operation_type}' requires imodel. Either pass imodel= "
+                "or set default_imodel on Session."
+            )
+
+        # Resolve branch
+        if branch is None:
+            # Use first branch or create default
+            if len(self.branches) == 0:
+                branch = self.create_branch(name="default")
+            else:
+                branch = next(iter(self.branches.values()))
+        elif isinstance(branch, (UUID, str)):
+            branch = self.conversations.get_progression(branch)
+
+        # Build parameters with resolved imodel
+        params = {"imodel": resolved_imodel, **parameters}
+
+        # Create Operation node
+        op = Operation(
+            operation_type=operation_type,
+            parameters=params,
+        )
+
+        # Bind to session/branch and invoke
+        op.bind(self, branch)
+        await op.invoke()
+
+        return op
 
     def __repr__(self) -> str:
         return (

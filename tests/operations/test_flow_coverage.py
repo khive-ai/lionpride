@@ -18,7 +18,6 @@ from pydantic import BaseModel, Field
 
 from lionpride import Edge, EventStatus, Graph
 from lionpride.operations import Builder, flow
-from lionpride.operations.dispatcher import get_dispatcher
 from lionpride.operations.flow import DependencyAwareExecutor
 from lionpride.operations.node import Operation, create_operation
 from lionpride.session import Session
@@ -221,8 +220,8 @@ class TestFlowStopConditions:
         async def failing_factory(session, branch, parameters):
             raise RuntimeError("Intentional failure")
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("failing_op", failing_factory)
+        # Register to session's per-session registry
+        session.operations.register("failing_op", failing_factory)
 
         builder = Builder()
         builder.add("task1", "failing_op", {})
@@ -244,8 +243,8 @@ class TestFlowStopConditions:
         async def failing_factory(session, branch, parameters):
             raise ValueError("Test error for logging")
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("failing_verbose", failing_factory)
+        # Register to session's per-session registry
+        session.operations.register("failing_verbose", failing_factory)
 
         builder = Builder()
         builder.add("task1", "failing_verbose", {})
@@ -357,8 +356,8 @@ class TestFlowExecutionEvents:
             received_context = parameters.get("context")
             return "done"
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("context_receiver", context_receiver)
+        # Register to session's per-session registry
+        session.operations.register("context_receiver", context_receiver)
 
         builder = Builder()
         builder.add("task1", "context_receiver", {})
@@ -387,9 +386,9 @@ class TestFlowExecutionEvents:
             received_context = parameters.get("context", {})
             return "done"
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("failing_pred", failing_factory)
-        dispatcher.register("context_receiver2", context_receiver)
+        # Register to session's per-session registry
+        session.operations.register("failing_pred", failing_factory)
+        session.operations.register("context_receiver2", context_receiver)
 
         builder = Builder()
         builder.add("failed_task", "failing_pred", {})
@@ -419,9 +418,9 @@ class TestFlowExecutionEvents:
             received_context = parameters.get("context", {})
             return "consumer_result"
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("producer", producer)
-        dispatcher.register("consumer_ctx", consumer_with_context)
+        # Register to session's per-session registry
+        session.operations.register("producer", producer)
+        session.operations.register("consumer_ctx", consumer_with_context)
 
         # Build operations manually to control parameters
         op1 = create_operation(operation="producer", parameters={})
@@ -460,9 +459,9 @@ class TestFlowExecutionEvents:
             received_context = parameters.get("context")
             return "done"
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("prod2", producer)
-        dispatcher.register("cons2", consumer)
+        # Register to session's per-session registry
+        session.operations.register("prod2", producer)
+        session.operations.register("cons2", consumer)
 
         # Create operation with non-dict context
         op1 = create_operation(operation="prod2", parameters={})
@@ -584,8 +583,8 @@ class TestFlowResultProcessing:
         async def execution_fail(session, branch, parameters):
             raise ValueError("Execution failed")
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("exec_fail", execution_fail)
+        # Register to session's per-session registry
+        session.operations.register("exec_fail", execution_fail)
 
         builder = Builder()
         builder.add("task1", "exec_fail", {})
@@ -615,9 +614,9 @@ class TestFlowResultProcessing:
             received_context = parameters.get("context", {})
             return "done"
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("ctx_prod", context_producer)
-        dispatcher.register("ctx_cons", context_consumer)
+        # Register to session's per-session registry
+        session.operations.register("ctx_prod", context_producer)
+        session.operations.register("ctx_cons", context_consumer)
 
         builder = Builder()
         builder.add("prod", "ctx_prod", {})
@@ -665,8 +664,8 @@ class TestFlowResultProcessing:
             # Actually, the factory raises an error which ExecutableOperation catches
             raise RuntimeError("Operation failed with error status")
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("status_fail", status_failed_factory)
+        # Register to session's per-session registry
+        session.operations.register("status_fail", status_failed_factory)
 
         builder = Builder()
         builder.add("task1", "status_fail", {})
@@ -748,8 +747,8 @@ class TestFlowIntegration:
         async def failing_factory(session, branch, parameters):
             raise RuntimeError("Fail")
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("fail_task", failing_factory)
+        # Register to session's per-session registry
+        session.operations.register("fail_task", failing_factory)
 
         builder = Builder()
         builder.add("task1", "fail_task", {})
@@ -786,8 +785,8 @@ class TestFlowIntegration:
             concurrent_count -= 1
             return "done"
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("track", concurrent_tracker)
+        # Register to session's per-session registry
+        session.operations.register("track", concurrent_tracker)
 
         builder = Builder()
         for i in range(5):
@@ -817,8 +816,8 @@ class TestFlowExceptionPaths:
         async def failing_op(session, branch, parameters):
             raise ValueError("Test exception - no verbose, no stop")
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("fail_no_verbose", failing_op)
+        # Register to session's per-session registry
+        session.operations.register("fail_no_verbose", failing_op)
 
         builder = Builder()
         builder.add("task1", "fail_no_verbose", {})
@@ -912,8 +911,8 @@ class TestFlowExceptionPaths:
         async def failing_with_stop(session, branch, parameters):
             raise ValueError("Test exception with stop_on_error")
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("fail_stop", failing_with_stop)
+        # Register to session's per-session registry
+        session.operations.register("fail_stop", failing_with_stop)
 
         builder = Builder()
         builder.add("task1", "fail_stop", {})
@@ -935,8 +934,8 @@ class TestFlowExceptionPaths:
         async def failing_full_path(session, branch, parameters):
             raise RuntimeError("Full exception path test")
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("fail_full", failing_full_path)
+        # Register to session's per-session registry
+        session.operations.register("fail_full", failing_full_path)
 
         builder = Builder()
         builder.add("task1", "fail_full", {})

@@ -12,7 +12,6 @@ from lionpride.core import EventStatus, Graph
 from lionpride.libs import concurrency
 from lionpride.libs.concurrency import CapacityLimiter, CompletionStream
 
-from .executable import ExecutableOperation
 from .node import Operation
 
 if TYPE_CHECKING:
@@ -245,8 +244,8 @@ class DependencyAwareExecutor:
         """Wait for all predecessor operations to complete."""
         # Check for aggregation sources (special handling)
         is_aggregation = operation.metadata.get("aggregation", False)
-        if is_aggregation and isinstance(operation.content.parameters, dict):
-            aggregation_sources = operation.content.parameters.get("aggregation_sources", [])
+        if is_aggregation and isinstance(operation.parameters, dict):
+            aggregation_sources = operation.parameters.get("aggregation_sources", [])
             if aggregation_sources:
                 if self.verbose:
                     print(
@@ -282,8 +281,8 @@ class DependencyAwareExecutor:
 
         if not predecessors:
             # No dependencies - just add shared context if present
-            if self.context and "context" not in operation.content.parameters:
-                operation.content.parameters["context"] = self.context.copy()
+            if self.context and "context" not in operation.parameters:
+                operation.parameters["context"] = self.context.copy()
             return
 
         # Build context from predecessor results
@@ -305,18 +304,18 @@ class DependencyAwareExecutor:
             pred_context.update(self.context)
 
         # Update operation parameters
-        if isinstance(operation.content.parameters, dict):
+        if isinstance(operation.parameters, dict):
             # If parameters is a dict, merge context
-            if "context" not in operation.content.parameters:
-                operation.content.parameters["context"] = pred_context
+            if "context" not in operation.parameters:
+                operation.parameters["context"] = pred_context
             else:
                 # Merge with existing context
-                existing = operation.content.parameters["context"]
+                existing = operation.parameters["context"]
                 if isinstance(existing, dict):
                     existing.update(pred_context)
                 else:
                     # Existing context is not a dict - wrap it
-                    operation.content.parameters["context"] = {
+                    operation.parameters["context"] = {
                         "original_context": existing,
                         **pred_context,
                     }
@@ -327,7 +326,11 @@ class DependencyAwareExecutor:
             )
 
     async def _invoke_operation(self, operation: Operation) -> None:
-        """Invoke operation and store result."""
+        """Invoke operation and store result.
+
+        Operation is both Node (graph) and Event (lifecycle), so it
+        can invoke itself directly after binding to session/branch.
+        """
         if self.verbose:
             print(f"Executing operation: {str(operation.id)[:8]}")
 
@@ -336,25 +339,20 @@ class DependencyAwareExecutor:
         if branch is None:
             raise ValueError(f"No branch allocated for operation {operation.id}")
 
-        # Create executable operation (Event + Operation composition)
-        executable = ExecutableOperation(
-            operation=operation,
-            session=self.session,
-            branch=branch,
-        )
-
-        # Execute via Event.invoke()
-        await executable.invoke()
+        # Bind operation to session/branch and invoke
+        # Operation is both Node and Event, so it handles its own execution
+        operation.bind(self.session, branch)
+        await operation.invoke()
 
         # Check execution status
         if self.verbose:
-            print(f"Operation {str(operation.id)[:8]} status after invoke: {executable.status}")
-            if hasattr(executable.execution, "error"):
-                print(f"  Execution error: {executable.execution.error}")
+            print(f"Operation {str(operation.id)[:8]} status after invoke: {operation.status}")
+            if hasattr(operation.execution, "error"):
+                print(f"  Execution error: {operation.execution.error}")
 
-        if executable.status == EventStatus.COMPLETED:
+        if operation.status == EventStatus.COMPLETED:
             # Event stores result in response property
-            result = executable.response
+            result = operation.response
             self.results[operation.id] = result
 
             # Update shared context if result contains context
@@ -365,9 +363,9 @@ class DependencyAwareExecutor:
                 print(f"Completed operation: {str(operation.id)[:8]}")
         else:
             # Execution failed
-            error_msg = f"Execution status: {executable.status}"
-            if hasattr(executable.execution, "error") and executable.execution.error:
-                error_msg += f" - {executable.execution.error}"
+            error_msg = f"Execution status: {operation.status}"
+            if hasattr(operation.execution, "error") and operation.execution.error:
+                error_msg += f" - {operation.execution.error}"
             error = RuntimeError(error_msg)
             self.errors[operation.id] = error
             if self.verbose:

@@ -9,8 +9,6 @@ from pydantic import BaseModel, Field
 
 from lionpride.rules import ActionRequest, ActionResponse
 
-from ..dispatcher import register_operation
-
 if TYPE_CHECKING:
     from lionpride.services.types import iModel
     from lionpride.session import Branch, Session
@@ -90,7 +88,6 @@ def _create_react_response_model(
     return TypedReactStepResponse
 
 
-@register_operation("react")
 async def react(
     session: Session,
     branch: Branch | str,

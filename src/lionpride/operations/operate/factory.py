@@ -10,7 +10,6 @@ from pydantic import BaseModel
 from lionpride.rules import ActionRequest, ActionResponse, Reason
 from lionpride.types import Operable, Spec
 
-from ..dispatcher import register_operation
 from .message_prep import prepare_tool_schemas
 from .tool_executor import execute_tools, has_action_requests
 
@@ -18,7 +17,6 @@ if TYPE_CHECKING:
     from lionpride.session import Branch, Session
 
 
-@register_operation("operate")
 async def operate(
     session: Session,
     branch: Branch | str,
