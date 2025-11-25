@@ -1104,3 +1104,38 @@ async def test_processor_capacity_not_consumed_when_all_denied():
     # Should process events now (3 up to capacity)
     completed = [e for e in events if e.execution.status == EventStatus.COMPLETED]
     assert len(completed) == 3  # Processed up to capacity
+
+
+# =============================================================================
+# Executor Configuration Error Tests
+# =============================================================================
+
+
+class SimpleExecutor(Executor):
+    """Concrete Executor for testing."""
+
+    processor_type = SimpleProcessor
+
+
+@pytest.mark.asyncio
+async def test_executor_update_progression_missing_progression():
+    """Test ConfigurationError when progression is manually removed.
+
+    This tests the defensive error handling in Executor._update_progression()
+    when a required progression is missing from the Flow.
+    """
+    from lionpride.errors import ConfigurationError
+
+    executor = SimpleExecutor(processor_config={"queue_capacity": 10, "capacity_refresh_time": 0.1})
+
+    # Add an event
+    event = SimpleEvent(return_value="test")
+    await executor.append(event)
+
+    # Manually remove the "pending" progression to trigger the error
+    pending_prog = executor.states.get_progression("pending")
+    executor.states.remove_progression(pending_prog.id)
+
+    # Attempting to update progression should raise ConfigurationError
+    with pytest.raises(ConfigurationError, match="Progression 'pending' not found"):
+        await executor._update_progression(event, EventStatus.PENDING)

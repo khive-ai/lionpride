@@ -9,7 +9,7 @@ import anyio
 import pytest
 from pydantic import BaseModel
 
-from lionpride.ln import AlcallParams, BcallParams, alcall, bcall
+from lionpride.ln import alcall, bcall
 
 # =============================================================================
 # Test fixtures and helper functions
@@ -816,36 +816,3 @@ class TestCancellationHandling:
         except TimeoutError:
             # Alternative - timeout is also acceptable
             pass
-
-
-# =============================================================================
-# Test AlcallParams and BcallParams __call__ methods
-# =============================================================================
-
-
-class TestParamsCallMethods:
-    """Test AlcallParams and BcallParams __call__ methods."""
-
-    @pytest.mark.anyio
-    async def test_alcall_params_call_method(self):
-        """Test AlcallParams callable interface."""
-        # Create AlcallParams instance with minimal params
-        params = AlcallParams(kw={"add": 5})
-
-        # Call the params object (invokes __call__)
-        results = await params([1, 2, 3], async_func)
-        assert results == [6, 7, 8]
-
-    @pytest.mark.anyio
-    async def test_bcall_params_default_kw_integration(self):
-        """Test params object with default keyword integration."""
-        # Note: Direct testing of BcallParams.__call__ has environment issues in pytest
-        # but the functionality is covered by regular bcall tests
-        # This test verifies the params object works as expected
-        params = AlcallParams(output_flatten=True)
-
-        async def list_func(x: int) -> list:
-            return [x, x * 2]
-
-        results = await params([1, 2, 3], list_func)
-        assert results == [1, 2, 2, 4, 3, 6]

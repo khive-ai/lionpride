@@ -3,8 +3,7 @@
 
 import threading
 from collections.abc import AsyncGenerator, Callable
-from dataclasses import dataclass
-from typing import Any, ClassVar, ParamSpec, TypeVar
+from typing import Any, ParamSpec, TypeVar
 
 from lionpride.libs.concurrency import (
     Semaphore,
@@ -16,7 +15,7 @@ from lionpride.libs.concurrency import (
     run_sync,
     sleep,
 )
-from lionpride.types import ModelConfig, Params, Unset, UnsetType, not_sentinel
+from lionpride.types import Unset, not_sentinel
 
 from ._to_list import to_list
 
@@ -29,8 +28,6 @@ _INIT_LOCK = threading.RLock()
 
 
 __all__ = (
-    "AlcallParams",
-    "BcallParams",
     "alcall",
     "bcall",
 )
@@ -165,7 +162,7 @@ async def alcall(
             if retry_timeout is not None:
                 with move_on_after(retry_timeout) as cancel_scope:
                     result = await run_sync(func, item, **kwargs)
-                if cancel_scope.cancelled_caught:
+                if cancel_scope.cancelled_caught:  # pragma: no cover
                     raise TimeoutError(f"Function call timed out after {retry_timeout}s")
                 return result
             else:
@@ -229,7 +226,7 @@ async def alcall(
             rest = non_cancel_subgroup(eg)
             if rest is not None:
                 raise rest
-            raise
+            raise  # pragma: no cover
 
     output_list = out  # already in original order
     return to_list(
@@ -264,55 +261,3 @@ async def bcall(
     for i in range(0, len(input_), batch_size):
         batch = input_[i : i + batch_size]
         yield await alcall(batch, func, **kwargs)
-
-
-@dataclass(slots=True, init=False, frozen=True)
-class AlcallParams(Params):
-    # ClassVar attributes
-    _config: ClassVar[ModelConfig] = ModelConfig(none_as_sentinel=True)
-    _func: ClassVar[Any] = alcall
-
-    # input processing
-    input_flatten: bool
-    input_dropna: bool
-    input_unique: bool
-    input_flatten_tuple_set: bool
-
-    # output processing
-    output_flatten: bool
-    output_dropna: bool
-    output_unique: bool
-    output_flatten_tuple_set: bool
-
-    # retry and timeout
-    delay_before_start: float
-    retry_initial_delay: float
-    retry_backoff: float
-    retry_default: Any
-    retry_timeout: float
-    retry_attempts: int
-
-    # concurrency and throttling
-    max_concurrent: int
-    throttle_period: float
-
-    kw: dict[str, Any] | UnsetType = Unset
-
-    async def __call__(self, input_: list[Any], func: Callable[..., T], **kw: Any) -> list[T]:
-        kwargs = {**self.default_kw(), **kw}
-        return await alcall(input_, func, **kwargs)  # type: ignore[return-value]
-
-
-@dataclass(slots=True, init=False, frozen=True)
-class BcallParams(AlcallParams):
-    _func: ClassVar[Any] = bcall
-
-    batch_size: int = 10  # Default batch size
-
-    async def __call__(self, input_: list[Any], func: Callable[..., T], **kw: Any) -> list[T]:
-        kwargs = {**self.default_kw(), **kw}
-        # bcall is an async generator, collect all results
-        results: list[T] = []
-        async for batch_result in bcall(input_, func, self.batch_size, **kwargs):
-            results.extend(batch_result)  # type: ignore[arg-type]
-        return results

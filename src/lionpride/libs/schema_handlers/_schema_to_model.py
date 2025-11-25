@@ -106,7 +106,7 @@ def _generate_model_code(
             target_python_version=python_version,
             base_class="pydantic.BaseModel",
         )
-    except Exception as e:
+    except Exception as e:  # pragma: no cover
         msg = "Failed to generate model code from schema"
         raise RuntimeError(msg) from e
 

@@ -35,6 +35,6 @@ def run_async(coro: Awaitable[T]) -> T:
 
     if exception_container:
         raise exception_container[0]
-    if not result_container:
+    if not result_container:  # pragma: no cover
         raise RuntimeError("Coroutine did not produce a result")
     return result_container[0]
