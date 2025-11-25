@@ -585,7 +585,7 @@ class Pile(Element, PydapterAdaptable, PydapterAsyncAdaptable, Generic[T]):
         return len(self._items) > 0
 
     @synchronized
-    def __iter__(self) -> Iterator[T]:
+    def __iter__(self) -> Iterator[T]:  # type: ignore[override]
         """Iterate items in insertion order."""
         for uid in self._progression:
             yield self._items[uid]
@@ -731,7 +731,7 @@ class Pile(Element, PydapterAdaptable, PydapterAsyncAdaptable, Generic[T]):
         # Deserialize items (type validation already done above)
         for item_dict in items_data:
             item = Element.from_dict(item_dict, meta_key=item_meta_key)
-            pile.add(item)  # Adds to _items dict + _progression (maintains order)
+            pile.add(item)  # type: ignore[arg-type]  # Adds to _items dict + _progression
 
         return pile
 

@@ -51,7 +51,7 @@ class PriorityQueue(Generic[T]):
             while self.maxsize > 0 and len(self._queue) >= self.maxsize:
                 await self._condition.wait()
 
-            heapq.heappush(self._queue, item)
+            heapq.heappush(self._queue, item)  # type: ignore[type-var]
             self._condition.notify()
 
     async def put_nowait(self, item: T) -> None:
@@ -67,7 +67,7 @@ class PriorityQueue(Generic[T]):
             if self.maxsize > 0 and len(self._queue) >= self.maxsize:
                 raise QueueFull("Queue is full")
 
-            heapq.heappush(self._queue, item)
+            heapq.heappush(self._queue, item)  # type: ignore[type-var]
             # Notify waiting getters that item is available
             self._condition.notify()
 
@@ -82,7 +82,7 @@ class PriorityQueue(Generic[T]):
             while not self._queue:
                 await self._condition.wait()
 
-            item = heapq.heappop(self._queue)
+            item = heapq.heappop(self._queue)  # type: ignore[type-var]
             self._condition.notify()
             return item
 
@@ -99,7 +99,7 @@ class PriorityQueue(Generic[T]):
             if not self._queue:
                 raise QueueEmpty("Queue is empty")
 
-            item = heapq.heappop(self._queue)
+            item = heapq.heappop(self._queue)  # type: ignore[type-var]
             # Notify waiting putters that space is available
             self._condition.notify()
             return item

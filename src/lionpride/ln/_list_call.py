@@ -79,13 +79,13 @@ def lcall(
         )
     else:
         if not isinstance(input_, list):
-            try:
+            if isinstance(input_, Iterable):
                 input_ = list(input_)
-            except TypeError:
-                input_ = [input_]
+            else:
+                input_ = [input_]  # type: ignore[list-item]
 
     # Process elements and collect results
-    out = []
+    out: list[R] = []
     append = out.append
 
     for item in input_:

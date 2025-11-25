@@ -65,7 +65,7 @@ def map_positional_args(arguments: dict[str, Any], param_names: list[str]) -> di
     return mapped
 
 
-def nest_arguments_by_schema(arguments: dict[str, Any], schema_cls) -> dict[str, Any]:
+def nest_arguments_by_schema(arguments: dict[str, Any], schema_cls: type | None) -> dict[str, Any]:
     """Restructure flat arguments into nested format based on schema structure."""
     if not schema_cls or not hasattr(schema_cls, "model_fields"):
         return arguments
@@ -97,8 +97,8 @@ def nest_arguments_by_schema(arguments: dict[str, Any], schema_cls) -> dict[str,
         return arguments
 
     # Separate top-level args from nested args
-    result = {}
-    nested_args = {}
+    result: dict[str, Any] = {}
+    nested_args: dict[str, dict[str, Any]] = {}
 
     for key, value in arguments.items():
         if key in top_level_fields:

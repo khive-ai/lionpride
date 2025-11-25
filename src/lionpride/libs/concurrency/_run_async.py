@@ -35,4 +35,4 @@ def run_async(coro: Awaitable[T]) -> T:
 
     if exception_container:
         raise exception_container[0]
-    return result_container[0] if result_container else None
+    return result_container[0] if result_container else None  # type: ignore[return-value]
