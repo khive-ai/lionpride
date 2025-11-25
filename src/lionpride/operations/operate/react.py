@@ -7,8 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
-from ..dispatcher import register_operation
-from ..models import ActionRequestModel, ActionResponseModel
+from lionpride.rules import ActionRequest, ActionResponse
 
 if TYPE_CHECKING:
     from lionpride.services.types import iModel
@@ -22,10 +21,10 @@ class ReactStep(BaseModel):
 
     step: int = Field(..., description="Step number (1-indexed)")
     reasoning: str | None = Field(default=None, description="LLM reasoning for this step")
-    actions_requested: list[ActionRequestModel] = Field(
+    actions_requested: list[ActionRequest] = Field(
         default_factory=list, description="Actions requested by LLM"
     )
-    actions_executed: list[ActionResponseModel] = Field(
+    actions_executed: list[ActionResponse] = Field(
         default_factory=list, description="Action execution results"
     )
     is_final: bool = Field(default=False, description="Whether this is the final step")
@@ -47,7 +46,7 @@ class ReactStepResponse(BaseModel):
     reasoning: str | None = Field(
         default=None, description="Your reasoning about the current state and next action"
     )
-    action_requests: list[ActionRequestModel] | None = Field(
+    action_requests: list[ActionRequest] | None = Field(
         default=None,
         description=(
             "List of tool calls. Each has 'function' (tool name) and 'arguments' (dict). "
@@ -72,7 +71,7 @@ def _create_react_response_model(
         reasoning: str | None = Field(
             default=None, description="Your reasoning about the current state and next action"
         )
-        action_requests: list[ActionRequestModel] | None = Field(
+        action_requests: list[ActionRequest] | None = Field(
             default=None,
             description=(
                 "List of tool calls. Each has 'function' (tool name) and 'arguments' (dict). "
@@ -89,7 +88,6 @@ def _create_react_response_model(
     return TypedReactStepResponse
 
 
-@register_operation("react")
 async def react(
     session: Session,
     branch: Branch | str,
@@ -99,7 +97,7 @@ async def react(
 
     Args:
         parameters: Must include 'instruction', 'imodel', 'tools', and 'model_name'.
-            Optional: response_model, max_steps, use_lndl, verbose.
+            Optional: response_model, max_steps, verbose.
     """
     from .factory import operate
 
@@ -119,8 +117,6 @@ async def react(
     response_model = parameters.get("response_model")
     context = parameters.get("context", {})
     max_steps = parameters.get("max_steps", 5)
-    use_lndl = parameters.get("use_lndl", False)
-    lndl_threshold = parameters.get("lndl_threshold", 0.85)
     verbose = parameters.get("verbose", False)
 
     # Extract model_kwargs - may be nested dict or flat in parameters
@@ -136,8 +132,6 @@ async def react(
             "response_model",
             "context",
             "max_steps",
-            "use_lndl",
-            "lndl_threshold",
             "verbose",
             "model_kwargs",
             "reason",  # Legacy param
@@ -225,8 +219,6 @@ Final answer: {{"reasoning": "...", "action_requests": [], "is_done": true, "fin
                     "instruction": current_instruction,
                     "imodel": imodel,
                     "response_model": step_model,
-                    "use_lndl": use_lndl,
-                    "lndl_threshold": lndl_threshold,
                     "model": model_name,
                     **model_kwargs,
                 },

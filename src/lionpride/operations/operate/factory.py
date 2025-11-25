@@ -7,10 +7,9 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
+from lionpride.rules import ActionRequest, ActionResponse, Reason
 from lionpride.types import Operable, Spec
 
-from ..dispatcher import register_operation
-from ..models import ActionRequestModel, ActionResponseModel, Reason
 from .message_prep import prepare_tool_schemas
 from .tool_executor import execute_tools, has_action_requests
 
@@ -18,7 +17,6 @@ if TYPE_CHECKING:
     from lionpride.session import Branch, Session
 
 
-@register_operation("operate")
 async def operate(
     session: Session,
     branch: Branch | str,
@@ -28,13 +26,13 @@ async def operate(
 
     Args:
         parameters: Must include 'instruction', 'imodel', and 'response_model' or 'operable'.
-            Optional: actions, reason, tools, use_lndl, max_retries, return_message.
+            Optional: actions, reason, tools, max_retries, return_message.
     """
     # 1. Validate and extract parameters
     params = _validate_parameters(parameters)
 
     # 2. Build Operable from response_model + action/reason specs
-    operable, validation_model = _build_operable(
+    _operable, validation_model = _build_operable(
         response_model=params["response_model"],
         operable=params["operable"],
         actions=params["actions"],
@@ -67,11 +65,9 @@ async def operate(
                 "tool_schemas": tool_schemas,
             }
 
-    # 5. Choose mode: LNDL (operable) vs JSON (response_model)
-    if params["use_lndl"] and operable:
-        communicate_params["operable"] = operable
-        communicate_params["lndl_threshold"] = params["lndl_threshold"]
-    elif validation_model:
+    # 5. Set response_model for JSON validation
+    # Note: LNDL mode removed for this PR, will be reintroduced later
+    if validation_model:
         communicate_params["response_model"] = validation_model
     else:
         raise ValueError("operate requires response_model or operable")
@@ -83,7 +79,7 @@ async def operate(
         communicate_params.pop("operable", None)
 
     # 6. Call communicate
-    from ..communicate import communicate
+    from .communicate import communicate
 
     result = await communicate(session, branch, communicate_params)
 
@@ -143,8 +139,6 @@ def _validate_parameters(params: dict[str, Any]) -> dict[str, Any]:
         "tools": params.get("tools", False),
         "actions": params.get("actions", False),
         "reason": params.get("reason", False),
-        "use_lndl": params.get("use_lndl", False),
-        "lndl_threshold": params.get("lndl_threshold", 0.85),
         "max_retries": params.get("max_retries", 0),
         "skip_validation": params.get("skip_validation", False),
         "return_message": params.get("return_message", False),
@@ -168,8 +162,6 @@ def _extract_model_kwargs(params: dict[str, Any]) -> dict[str, Any]:
         "tools",
         "actions",
         "reason",
-        "use_lndl",
-        "lndl_threshold",
         "max_retries",
         "skip_validation",
         "return_message",
@@ -196,14 +188,7 @@ def _build_operable(
 ) -> tuple[Operable | None, type[BaseModel] | None]:
     """Build Operable from response_model + action/reason specs."""
     # If operable provided, use it directly
-    # Handle both Operable (lionpride) and Operative (lionpride wrapper)
     if operable:
-        from lionpride.operations.operate.operative import Operative
-
-        if isinstance(operable, Operative):
-            # Operative wraps an Operable - return the Operative for validation
-            return operable, operable.create_response_model()
-        # Raw Operable from lionpride
         return operable, operable.create_model() if operable else None
 
     # Validate response_model
@@ -245,14 +230,14 @@ def _build_operable(
     if actions:
         specs.append(
             Spec(
-                base_type=list[ActionRequestModel],
+                base_type=list[ActionRequest],
                 name="action_requests",
                 default=None,
             )
         )
         specs.append(
             Spec(
-                base_type=list[ActionResponseModel],
+                base_type=list[ActionResponse],
                 name="action_responses",
                 default=None,
             )

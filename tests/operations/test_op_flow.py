@@ -18,8 +18,11 @@ from pydantic import BaseModel, Field
 
 from lionpride import Edge, EventStatus, Graph
 from lionpride.operations import Builder, flow
-from lionpride.operations.dispatcher import get_dispatcher
-from lionpride.operations.flow import DependencyAwareExecutor
+from lionpride.operations.flow import (
+    DependencyAwareExecutor,
+    OperationResult,
+    flow_stream,
+)
 from lionpride.operations.node import Operation, create_operation
 from lionpride.session import Session
 
@@ -141,7 +144,9 @@ class TestFlowErrorHandling:
     async def test_none_branch_uses_default(self, session_with_model):
         """Test line 133: None branch fallback when default_branch not set."""
         session, model = session_with_model
-        _branch = session.create_branch(name="test")
+        # Create branch without setting as default to test None fallback
+        _branch = session.create_branch(name="test", set_as_default=False)
+        assert session.default_branch is None  # Verify no default set
 
         builder = Builder()
         builder.add(
@@ -221,8 +226,8 @@ class TestFlowStopConditions:
         async def failing_factory(session, branch, parameters):
             raise RuntimeError("Intentional failure")
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("failing_op", failing_factory)
+        # Register to session's per-session registry
+        session.operations.register("failing_op", failing_factory)
 
         builder = Builder()
         builder.add("task1", "failing_op", {})
@@ -244,8 +249,8 @@ class TestFlowStopConditions:
         async def failing_factory(session, branch, parameters):
             raise ValueError("Test error for logging")
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("failing_verbose", failing_factory)
+        # Register to session's per-session registry
+        session.operations.register("failing_verbose", failing_factory)
 
         builder = Builder()
         builder.add("task1", "failing_verbose", {})
@@ -357,8 +362,8 @@ class TestFlowExecutionEvents:
             received_context = parameters.get("context")
             return "done"
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("context_receiver", context_receiver)
+        # Register to session's per-session registry
+        session.operations.register("context_receiver", context_receiver)
 
         builder = Builder()
         builder.add("task1", "context_receiver", {})
@@ -387,9 +392,9 @@ class TestFlowExecutionEvents:
             received_context = parameters.get("context", {})
             return "done"
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("failing_pred", failing_factory)
-        dispatcher.register("context_receiver2", context_receiver)
+        # Register to session's per-session registry
+        session.operations.register("failing_pred", failing_factory)
+        session.operations.register("context_receiver2", context_receiver)
 
         builder = Builder()
         builder.add("failed_task", "failing_pred", {})
@@ -419,9 +424,9 @@ class TestFlowExecutionEvents:
             received_context = parameters.get("context", {})
             return "consumer_result"
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("producer", producer)
-        dispatcher.register("consumer_ctx", consumer_with_context)
+        # Register to session's per-session registry
+        session.operations.register("producer", producer)
+        session.operations.register("consumer_ctx", consumer_with_context)
 
         # Build operations manually to control parameters
         op1 = create_operation(operation="producer", parameters={})
@@ -460,9 +465,9 @@ class TestFlowExecutionEvents:
             received_context = parameters.get("context")
             return "done"
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("prod2", producer)
-        dispatcher.register("cons2", consumer)
+        # Register to session's per-session registry
+        session.operations.register("prod2", producer)
+        session.operations.register("cons2", consumer)
 
         # Create operation with non-dict context
         op1 = create_operation(operation="prod2", parameters={})
@@ -584,8 +589,8 @@ class TestFlowResultProcessing:
         async def execution_fail(session, branch, parameters):
             raise ValueError("Execution failed")
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("exec_fail", execution_fail)
+        # Register to session's per-session registry
+        session.operations.register("exec_fail", execution_fail)
 
         builder = Builder()
         builder.add("task1", "exec_fail", {})
@@ -615,9 +620,9 @@ class TestFlowResultProcessing:
             received_context = parameters.get("context", {})
             return "done"
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("ctx_prod", context_producer)
-        dispatcher.register("ctx_cons", context_consumer)
+        # Register to session's per-session registry
+        session.operations.register("ctx_prod", context_producer)
+        session.operations.register("ctx_cons", context_consumer)
 
         builder = Builder()
         builder.add("prod", "ctx_prod", {})
@@ -665,8 +670,8 @@ class TestFlowResultProcessing:
             # Actually, the factory raises an error which ExecutableOperation catches
             raise RuntimeError("Operation failed with error status")
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("status_fail", status_failed_factory)
+        # Register to session's per-session registry
+        session.operations.register("status_fail", status_failed_factory)
 
         builder = Builder()
         builder.add("task1", "status_fail", {})
@@ -748,8 +753,8 @@ class TestFlowIntegration:
         async def failing_factory(session, branch, parameters):
             raise RuntimeError("Fail")
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("fail_task", failing_factory)
+        # Register to session's per-session registry
+        session.operations.register("fail_task", failing_factory)
 
         builder = Builder()
         builder.add("task1", "fail_task", {})
@@ -786,8 +791,8 @@ class TestFlowIntegration:
             concurrent_count -= 1
             return "done"
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("track", concurrent_tracker)
+        # Register to session's per-session registry
+        session.operations.register("track", concurrent_tracker)
 
         builder = Builder()
         for i in range(5):
@@ -817,8 +822,8 @@ class TestFlowExceptionPaths:
         async def failing_op(session, branch, parameters):
             raise ValueError("Test exception - no verbose, no stop")
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("fail_no_verbose", failing_op)
+        # Register to session's per-session registry
+        session.operations.register("fail_no_verbose", failing_op)
 
         builder = Builder()
         builder.add("task1", "fail_no_verbose", {})
@@ -912,8 +917,8 @@ class TestFlowExceptionPaths:
         async def failing_with_stop(session, branch, parameters):
             raise ValueError("Test exception with stop_on_error")
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("fail_stop", failing_with_stop)
+        # Register to session's per-session registry
+        session.operations.register("fail_stop", failing_with_stop)
 
         builder = Builder()
         builder.add("task1", "fail_stop", {})
@@ -935,8 +940,8 @@ class TestFlowExceptionPaths:
         async def failing_full_path(session, branch, parameters):
             raise RuntimeError("Full exception path test")
 
-        dispatcher = get_dispatcher()
-        dispatcher.register("fail_full", failing_full_path)
+        # Register to session's per-session registry
+        session.operations.register("fail_full", failing_full_path)
 
         builder = Builder()
         builder.add("task1", "fail_full", {})
@@ -1046,3 +1051,166 @@ class TestFlowExceptionPaths:
 
         # Error should be stored
         assert op.id in executor.errors
+
+
+# -------------------------------------------------------------------------
+# Stream Execute Tests (OperationResult, stream_execute, flow_stream)
+# -------------------------------------------------------------------------
+
+
+class TestFlowStreamExecute:
+    """Test stream_execute and flow_stream for flow.py coverage."""
+
+    def test_operation_result_success_property(self):
+        """Test OperationResult.success property."""
+        # Success case
+        success_result = OperationResult(
+            name="test", result="value", error=None, completed=1, total=1
+        )
+        assert success_result.success is True
+
+        # Failure case
+        failure_result = OperationResult(
+            name="test", result=None, error=Exception("error"), completed=1, total=1
+        )
+        assert failure_result.success is False
+
+    async def test_stream_execute_success(self, session_with_model):
+        """Test stream_execute yields results as operations complete."""
+        session, model = session_with_model
+        branch = session.create_branch(name="test")
+
+        builder = Builder()
+        builder.add(
+            "task1",
+            "generate",
+            {
+                "instruction": "First",
+                "imodel": model,
+                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+            },
+        )
+        builder.add(
+            "task2",
+            "generate",
+            {
+                "instruction": "Second",
+                "imodel": model,
+                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+            },
+        )
+        graph = builder.build()
+
+        executor = DependencyAwareExecutor(
+            session=session,
+            graph=graph,
+            default_branch=branch,
+        )
+
+        results = []
+        async for result in executor.stream_execute():
+            results.append(result)
+
+        assert len(results) == 2
+        assert all(isinstance(r, OperationResult) for r in results)
+        assert results[-1].completed == 2
+        assert results[-1].total == 2
+
+    async def test_stream_execute_with_error(self, session_with_model):
+        """Test stream_execute yields error results for failed operations."""
+        session, _model = session_with_model
+        branch = session.create_branch(name="test")
+
+        async def failing_factory(session, branch, parameters):
+            raise RuntimeError("Test error")
+
+        session.operations.register("fail_stream", failing_factory)
+
+        builder = Builder()
+        builder.add("task1", "fail_stream", {})
+        graph = builder.build()
+
+        executor = DependencyAwareExecutor(
+            session=session,
+            graph=graph,
+            default_branch=branch,
+            stop_on_error=False,
+        )
+
+        results = []
+        async for result in executor.stream_execute():
+            results.append(result)
+
+        assert len(results) == 1
+        assert results[0].error is not None
+        assert results[0].success is False
+
+    async def test_stream_execute_cyclic_graph_raises(self, session_with_model):
+        """Test stream_execute raises for cyclic graph."""
+        session, _model = session_with_model
+        branch = session.create_branch(name="test")
+
+        op1 = create_operation(operation="generate", parameters={})
+        op2 = create_operation(operation="generate", parameters={})
+
+        graph = Graph()
+        graph.add_node(op1)
+        graph.add_node(op2)
+        graph.add_edge(Edge(head=op1.id, tail=op2.id))
+        graph.add_edge(Edge(head=op2.id, tail=op1.id))
+
+        executor = DependencyAwareExecutor(
+            session=session,
+            graph=graph,
+            default_branch=branch,
+        )
+
+        with pytest.raises(ValueError, match=r"cycle.*DAG"):
+            async for _ in executor.stream_execute():
+                pass
+
+    async def test_stream_execute_non_operation_node_raises(self, session_with_model):
+        """Test stream_execute raises for non-Operation nodes."""
+        from lionpride import Node
+
+        session, _model = session_with_model
+        branch = session.create_branch(name="test")
+
+        graph = Graph()
+        invalid_node = Node(content={"invalid": True})
+        graph.add_node(invalid_node)
+
+        executor = DependencyAwareExecutor(
+            session=session,
+            graph=graph,
+            default_branch=branch,
+        )
+
+        with pytest.raises(ValueError, match="non-Operation node"):
+            async for _ in executor.stream_execute():
+                pass
+
+    async def test_flow_stream_function(self, session_with_model):
+        """Test flow_stream() function."""
+        session, model = session_with_model
+        branch = session.create_branch(name="test")
+
+        builder = Builder()
+        builder.add(
+            "task1",
+            "generate",
+            {
+                "instruction": "Test",
+                "imodel": model,
+                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+            },
+        )
+        graph = builder.build()
+
+        results = []
+        async for result in flow_stream(session, branch, graph):
+            results.append(result)
+
+        assert len(results) == 1
+        assert results[0].name == "task1"
+        assert results[0].success is True

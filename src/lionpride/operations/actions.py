@@ -6,8 +6,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from lionpride.libs import concurrency
-
-from .models import ActionRequestModel, ActionResponseModel
+from lionpride.rules import ActionRequest, ActionResponse
 
 if TYPE_CHECKING:
     from lionpride.services import ServiceRegistry
@@ -16,14 +15,14 @@ __all__ = ("act",)
 
 
 async def act(
-    action_requests: list[ActionRequestModel],
+    action_requests: list[ActionRequest],
     registry: ServiceRegistry,
     *,
     concurrent: bool = True,
     timeout: float | None = None,
     poll_timeout: float | None = None,
     poll_interval: float | None = None,
-) -> list[ActionResponseModel]:
+) -> list[ActionResponse]:
     """Execute tool calls from action_requests via iModel.invoke().
 
     Args:
@@ -82,7 +81,7 @@ async def act(
 
 
 async def _execute_single_action(
-    request: ActionRequestModel,
+    request: ActionRequest,
     registry: ServiceRegistry,
     timeout: float | None = None,
     poll_timeout: float | None = None,
@@ -122,26 +121,22 @@ async def _execute_single_action(
 
 
 def _handle_execution_result(
-    request: ActionRequestModel,
+    request: ActionRequest,
     result: Any,
-) -> ActionResponseModel:
-    """Convert execution result to ActionResponseModel."""
-    # Extract function and arguments from request
-    function = request.function or ""
-    arguments = request.arguments or {}
-
+) -> ActionResponse:
+    """Convert execution result to ActionResponse."""
     # Handle exceptions as errors
     if isinstance(result, Exception):
         error_msg = f"{type(result).__name__}: {result!s}"
-        return ActionResponseModel(
-            function=function,
-            arguments=arguments,
+        return ActionResponse(
+            function=request.function,
+            arguments=request.arguments,
             output=error_msg,
         )
 
     # Success case
-    return ActionResponseModel(
-        function=function,
-        arguments=arguments,
+    return ActionResponse(
+        function=request.function,
+        arguments=request.arguments,
         output=result,
     )

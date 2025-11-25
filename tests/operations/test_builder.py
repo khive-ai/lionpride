@@ -465,7 +465,7 @@ class TestBuilderEdgeCases:
 
         agg_op = builder.get("agg")
         # Should store BaseModel as-is (not converted to dict)
-        assert isinstance(agg_op.content.parameters, BaseModel)
+        assert isinstance(agg_op.parameters, BaseModel)
 
     def test_repr_output(self):
         """Test __repr__ provides useful information."""

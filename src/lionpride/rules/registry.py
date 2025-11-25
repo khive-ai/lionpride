@@ -128,6 +128,7 @@ def get_default_registry() -> RuleRegistry:
         bool → BooleanRule
         dict → MappingRule
         ActionRequest → ActionRequestRule
+        Reason → ReasonRule
 
     Returns:
         RuleRegistry with default rules registered
@@ -138,8 +139,9 @@ def get_default_registry() -> RuleRegistry:
         from .action_request import ActionRequestRule
         from .boolean import BooleanRule
         from .mapping import MappingRule
-        from .models import ActionRequest
+        from .models import ActionRequest, Reason
         from .number import NumberRule
+        from .reason import ReasonRule
         from .string import StringRule
 
         _default_registry = RuleRegistry()
@@ -149,6 +151,7 @@ def get_default_registry() -> RuleRegistry:
         _default_registry.register(bool, BooleanRule())
         _default_registry.register(dict, MappingRule())
         _default_registry.register(ActionRequest, ActionRequestRule())
+        _default_registry.register(Reason, ReasonRule())
 
     return _default_registry
 

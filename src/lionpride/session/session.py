@@ -9,6 +9,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, PrivateAttr
 
 from lionpride.core import Element, Flow, Progression
+from lionpride.operations.registry import OperationRegistry
 from lionpride.services import ServiceRegistry
 
 from .messages import Message, SenderRecipient
@@ -133,7 +134,7 @@ class Branch(Progression):
         Returns:
             Based on return_as: text, raw dict, Message, or validated model
         """
-        from lionpride.operations.communicate import communicate as communicate_op
+        from lionpride.operations.operate import communicate as communicate_op
 
         if imodel is None:
             raise ValueError("communicate requires 'imodel' parameter")
@@ -286,17 +287,32 @@ class Branch(Progression):
 
 
 class Session(Element):
-    """Central storage for messages, branches, and services.
+    """Central storage for messages, branches, services, and operations.
 
     Attributes:
         user: User identifier
+        default_imodel: Default iModel for operations (better DX)
         conversations: Flow[Message, Branch] for message storage and branch progressions
         services: ServiceRegistry for models and tools
+        operations: OperationRegistry for operation factories
         messages: Read-only view of conversations.items (Pile[Message])
         branches: Read-only view of conversations.progressions (Pile[Branch])
+
+    Example:
+        # Better DX with default_imodel
+        session = Session(default_imodel=iModel(backend=OpenAI(...)))
+        branch = session.create_branch()
+        result = await session.conduct("operate", branch, instruction="...", ...)
+
+        # Or explicit imodel per-operation
+        result = await session.conduct("operate", branch, imodel=my_model, ...)
     """
 
     user: str | None = Field(default=None, description="User identifier")
+    default_imodel: Any = Field(
+        default=None,
+        description="Default iModel for operations. Improves DX by eliminating repeated imodel= args.",
+    )
     conversations: Flow[Message, Branch] = Field(
         default_factory=lambda: Flow(item_type=Message),
         description="Message flow with branches",
@@ -304,6 +320,14 @@ class Session(Element):
     services: ServiceRegistry = Field(
         default_factory=ServiceRegistry,
         description="Available services (models, tools)",
+    )
+    operations: OperationRegistry = Field(
+        default_factory=OperationRegistry,
+        description="Operation factories (operate, react, communicate, generate)",
+    )
+    default_branch_id: UUID | None = Field(
+        default=None,
+        description="UUID of default branch for operations (auto-set to first created branch)",
     )
 
     @property
@@ -316,18 +340,70 @@ class Session(Element):
         """Read-only view of conversations.progressions (Pile[Branch])."""
         return self.conversations.progressions
 
+    @property
+    def default_branch(self) -> Branch | None:
+        """Get the default branch for operations when none specified."""
+        if self.default_branch_id is None:
+            return None
+        try:
+            return self.conversations.get_progression(self.default_branch_id)
+        except (KeyError, ValueError, Exception):
+            # Branch was removed (NotFoundError, KeyError, ValueError)
+            # Clear stale reference and return None gracefully
+            self.default_branch_id = None
+            return None
+
+    def set_default_branch(self, branch: Branch | UUID | str) -> None:
+        """Set the default branch for operations.
+
+        Args:
+            branch: Branch instance, UUID, or name to set as default
+
+        Raises:
+            ValueError: If branch not found in session
+        """
+        if isinstance(branch, Branch):
+            branch_id = branch.id
+        elif isinstance(branch, UUID):
+            branch_id = branch
+        else:
+            # Lookup by name
+            resolved = self.conversations.get_progression(branch)
+            branch_id = resolved.id
+
+        # Verify branch exists
+        if branch_id not in self.branches:
+            raise ValueError(f"Branch {branch_id} not found in session")
+
+        self.default_branch_id = branch_id
+
     def create_branch(
         self,
         *,
         name: str | None = None,
         system_message: Message | UUID | None = None,
         capabilities: set[str] | None = None,
+        set_as_default: bool | None = None,
     ) -> Branch:
         """Create new branch for isolated conversation threads.
 
         The branch is automatically bound to this session, enabling
         convenience methods like branch.generate(), branch.operate(), etc.
+
+        Args:
+            name: Optional branch name (auto-generated if None)
+            system_message: Optional system message to set
+            capabilities: Optional capabilities set
+            set_as_default: If True, set as default branch. If None (default),
+                           auto-sets as default if this is the first branch.
+
+        Returns:
+            The created Branch
         """
+        # Auto-set first branch as default if not specified
+        is_first_branch = len(self.branches) == 0
+        should_set_default = set_as_default if set_as_default is not None else is_first_branch
+
         branch_name = name or f"branch_{len(self.branches)}"
         branch = Branch(
             session_id=self.id,
@@ -348,6 +424,11 @@ class Session(Element):
                 branch.set_system_message(system_message)
 
         self.conversations.add_progression(branch)
+
+        # Set as default if appropriate
+        if should_set_default:
+            self.default_branch_id = branch.id
+
         return branch
 
     def fork(
@@ -522,6 +603,100 @@ class Session(Element):
             poll_interval=poll_interval,
             **kwargs,
         )
+
+    # =========================================================================
+    # Unified Operation Interface
+    # =========================================================================
+
+    async def conduct(
+        self,
+        operation_type: str,
+        branch: Branch | UUID | str | None = None,
+        *,
+        imodel: Any = None,
+        **parameters,
+    ) -> Any:
+        """Unified operation interface - returns invoked Operation.
+
+        Central entry point for all operations (operate, react, communicate, generate).
+        Creates an Operation node, binds it, invokes it, and returns it.
+
+        Args:
+            operation_type: Operation type ("operate", "react", "communicate", "generate")
+            branch: Target branch (optional, uses default if None)
+            imodel: iModel to use (optional, falls back to default_imodel)
+            **parameters: Operation-specific parameters
+
+        Returns:
+            Operation: Invoked operation with:
+                - op.status: EventStatus (COMPLETED, FAILED, etc.)
+                - op.response: The operation result
+                - op.execution: Full execution details
+
+        Example:
+            # With default_imodel set
+            session = Session(default_imodel=my_model)
+            branch = session.create_branch()
+
+            # Structured output
+            op = await session.conduct("operate", branch,
+                instruction="Analyze this text",
+                response_model=AnalysisResult,
+            )
+            result = op.response  # The AnalysisResult instance
+
+            # ReAct with tools
+            op = await session.conduct("react", branch,
+                instruction="Find the answer",
+                tools=[SearchTool, CalculatorTool],
+            )
+            print(op.status)  # EventStatus.COMPLETED
+
+            # Simple chat
+            op = await session.conduct("communicate", branch,
+                instruction="Hello!",
+            )
+            print(op.response)  # "Hello! How can I help?"
+
+        Raises:
+            KeyError: If operation not registered
+            ValueError: If no imodel provided and no default_imodel set
+        """
+        from lionpride.operations.node import Operation
+
+        # Resolve imodel
+        resolved_imodel = imodel or self.default_imodel
+        if resolved_imodel is None:
+            raise ValueError(
+                f"Operation '{operation_type}' requires imodel. Either pass imodel= "
+                "or set default_imodel on Session."
+            )
+
+        # Resolve branch
+        if branch is None:
+            # Use default_branch or create one
+            if self.default_branch is not None:
+                branch = self.default_branch
+            else:
+                # No default set - create one (which auto-sets as default)
+                branch = self.create_branch(name="default")
+        elif isinstance(branch, (UUID, str)):
+            branch = self.conversations.get_progression(branch)
+
+        # Build parameters with resolved imodel
+        params = {"imodel": resolved_imodel, **parameters}
+
+        # Create Operation node
+        op = Operation(
+            operation_type=operation_type,
+            parameters=params,
+        )
+
+        # Bind to session/branch and invoke
+        op.bind(self, branch)
+        await op.invoke()
+
+        return op
 
     def __repr__(self) -> str:
         return (

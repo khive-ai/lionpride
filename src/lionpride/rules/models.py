@@ -18,6 +18,7 @@ from lionpride.types import HashableModel
 __all__ = (
     "ActionRequest",
     "ActionResponse",
+    "Reason",
 )
 
 
@@ -72,4 +73,36 @@ class ActionResponse(HashableModel):
     output: Any = Field(
         default=None,
         description="Function output (success) or error message (failure)",
+    )
+
+
+class Reason(HashableModel):
+    """Reasoning/explanation for chain-of-thought.
+
+    System spec for structured reasoning output. When 'reason' capability
+    is granted to a branch, operations can inject this spec to require
+    step-by-step reasoning from the LLM.
+
+    Usage:
+        # Grant reason capability to branch
+        branch = session.create_branch(capabilities={"reason"})
+
+        # Operations with reason=True inject this spec
+        result = await session.conduct("operate", branch=branch,
+                                        response_model=MyOutput, reason=True)
+        # → Response includes Reason field with reasoning + confidence
+    """
+
+    reasoning: str = Field(
+        default="",
+        description=(
+            "Explain your reasoning step-by-step before providing your answer. "
+            "What is your thought process? What factors are you considering?"
+        ),
+    )
+    confidence: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Optional confidence score for this reasoning (0.0 to 1.0)",
     )

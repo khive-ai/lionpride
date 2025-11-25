@@ -4,11 +4,13 @@
 """Tests for action execution (tool calling)."""
 
 import asyncio
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from lionpride.operations.actions import act
-from lionpride.operations.models import ActionRequestModel, ActionResponseModel
+from lionpride.core.event import Event, EventStatus
+from lionpride.operations.actions import _execute_single_action, act
+from lionpride.rules import ActionRequest, ActionResponse
 from lionpride.services import ServiceRegistry, iModel
 from lionpride.services.types.backend import NormalizedResponse
 from lionpride.services.types.tool import Tool, ToolConfig
@@ -88,19 +90,18 @@ class TestAct:
         assert len(responses) == 0
         assert isinstance(responses, list)
 
-    async def test_missing_function_name_raises_error(self, registry: ServiceRegistry):
-        """Test that missing function name raises ValueError."""
-        requests = [
-            ActionRequestModel(function=None, arguments={"a": 5, "b": 3}),  # type: ignore[arg-type]
-        ]
+    async def test_missing_function_name_raises_validation_error(self, registry: ServiceRegistry):
+        """Test that missing function name raises ValidationError at model construction."""
+        from pydantic import ValidationError
 
-        with pytest.raises(ValueError, match=r"Action request missing function name"):
-            await act(requests, registry)
+        # ActionRequest requires function: str - None is rejected at model level
+        with pytest.raises(ValidationError, match=r"function"):
+            ActionRequest(function=None, arguments={"a": 5, "b": 3})  # type: ignore[arg-type]
 
     async def test_tool_not_in_registry_raises_error(self, registry: ServiceRegistry):
         """Test that tool not in registry raises ValueError with available tools."""
         requests = [
-            ActionRequestModel(function="nonexistent_tool", arguments={"a": 5}),
+            ActionRequest(function="nonexistent_tool", arguments={"a": 5}),
         ]
 
         with pytest.raises(ValueError, match=r"Tool 'nonexistent_tool' not found in registry"):
@@ -113,15 +114,15 @@ class TestAct:
     async def test_concurrent_execution_success(self, registry: ServiceRegistry):
         """Test concurrent execution of multiple tools."""
         requests = [
-            ActionRequestModel(function="multiply", arguments={"a": 5, "b": 3}),
-            ActionRequestModel(function="add_tool", arguments={"a": 10, "b": 20}),
-            ActionRequestModel(function="multiply", arguments={"a": 7, "b": 2}),
+            ActionRequest(function="multiply", arguments={"a": 5, "b": 3}),
+            ActionRequest(function="add_tool", arguments={"a": 10, "b": 20}),
+            ActionRequest(function="multiply", arguments={"a": 7, "b": 2}),
         ]
 
         responses = await act(requests, registry, concurrent=True)
 
         assert len(responses) == 3
-        assert all(isinstance(r, ActionResponseModel) for r in responses)
+        assert all(isinstance(r, ActionResponse) for r in responses)
 
         # Verify results
         assert responses[0].function == "multiply"
@@ -139,8 +140,8 @@ class TestAct:
     async def test_sequential_execution_success(self, registry: ServiceRegistry):
         """Test sequential execution of multiple tools."""
         requests = [
-            ActionRequestModel(function="multiply", arguments={"a": 5, "b": 3}),
-            ActionRequestModel(function="add_tool", arguments={"a": 10, "b": 20}),
+            ActionRequest(function="multiply", arguments={"a": 5, "b": 3}),
+            ActionRequest(function="add_tool", arguments={"a": 10, "b": 20}),
         ]
 
         responses = await act(requests, registry, concurrent=False)
@@ -152,7 +153,7 @@ class TestAct:
     async def test_single_tool_execution(self, registry: ServiceRegistry):
         """Test execution of single tool."""
         requests = [
-            ActionRequestModel(function="multiply", arguments={"a": 6, "b": 7}),
+            ActionRequest(function="multiply", arguments={"a": 6, "b": 7}),
         ]
 
         responses = await act(requests, registry)
@@ -162,8 +163,8 @@ class TestAct:
         assert responses[0].function == "multiply"
         assert responses[0].arguments == {"a": 6, "b": 7}
 
-    async def test_none_arguments_defaults_to_empty_dict(self, registry: ServiceRegistry):
-        """Test that None arguments are converted to empty dict."""
+    async def test_omitted_arguments_defaults_to_empty_dict(self, registry: ServiceRegistry):
+        """Test that omitted arguments default to empty dict."""
 
         async def no_arg_tool() -> str:
             return "no args needed"
@@ -175,19 +176,21 @@ class TestAct:
         )
         registry.register(iModel(backend=tool))
 
+        # ActionRequest.arguments defaults to {} when omitted
         requests = [
-            ActionRequestModel(function="no_arg_tool", arguments=None),
+            ActionRequest(function="no_arg_tool"),
         ]
 
         responses = await act(requests, registry)
 
         assert len(responses) == 1
         assert responses[0].output == "no args needed"
+        assert responses[0].arguments == {}  # Default empty dict
 
     async def test_error_handling_returns_error_response(self, registry: ServiceRegistry):
         """Test that tool errors are caught and returned as error responses."""
         requests = [
-            ActionRequestModel(function="error_tool", arguments={"message": "test error"}),
+            ActionRequest(function="error_tool", arguments={"message": "test error"}),
         ]
 
         responses = await act(requests, registry)
@@ -199,9 +202,9 @@ class TestAct:
     async def test_mixed_success_and_error_concurrent(self, registry: ServiceRegistry):
         """Test concurrent execution with mix of success and error."""
         requests = [
-            ActionRequestModel(function="multiply", arguments={"a": 5, "b": 3}),
-            ActionRequestModel(function="error_tool", arguments={"message": "fail"}),
-            ActionRequestModel(function="add_tool", arguments={"a": 10, "b": 20}),
+            ActionRequest(function="multiply", arguments={"a": 5, "b": 3}),
+            ActionRequest(function="error_tool", arguments={"message": "fail"}),
+            ActionRequest(function="add_tool", arguments={"a": 10, "b": 20}),
         ]
 
         responses = await act(requests, registry, concurrent=True)
@@ -220,9 +223,9 @@ class TestAct:
     async def test_mixed_success_and_error_sequential(self, registry: ServiceRegistry):
         """Test sequential execution with mix of success and error."""
         requests = [
-            ActionRequestModel(function="multiply", arguments={"a": 5, "b": 3}),
-            ActionRequestModel(function="error_tool", arguments={"message": "fail"}),
-            ActionRequestModel(function="add_tool", arguments={"a": 10, "b": 20}),
+            ActionRequest(function="multiply", arguments={"a": 5, "b": 3}),
+            ActionRequest(function="error_tool", arguments={"message": "fail"}),
+            ActionRequest(function="add_tool", arguments={"a": 10, "b": 20}),
         ]
 
         responses = await act(requests, registry, concurrent=False)
@@ -241,7 +244,7 @@ class TestAct:
     async def test_timeout_handling(self, registry: ServiceRegistry):
         """Test timeout handling for slow tools."""
         requests = [
-            ActionRequestModel(function="slow_tool", arguments={"delay": 2.0}),
+            ActionRequest(function="slow_tool", arguments={"delay": 2.0}),
         ]
 
         # Set very short timeout
@@ -254,7 +257,7 @@ class TestAct:
     async def test_timeout_not_triggered_for_fast_tool(self, registry: ServiceRegistry):
         """Test that timeout doesn't affect fast tools."""
         requests = [
-            ActionRequestModel(function="multiply", arguments={"a": 5, "b": 3}),
+            ActionRequest(function="multiply", arguments={"a": 5, "b": 3}),
         ]
 
         # Set generous timeout
@@ -266,7 +269,7 @@ class TestAct:
     async def test_sync_tool_execution(self, registry: ServiceRegistry):
         """Test execution of synchronous tool."""
         requests = [
-            ActionRequestModel(function="sync_tool", arguments={"value": "test"}),
+            ActionRequest(function="sync_tool", arguments={"value": "test"}),
         ]
 
         responses = await act(requests, registry)
@@ -292,7 +295,7 @@ class TestAct:
         registry.register(iModel(backend=tool))
 
         requests = [
-            ActionRequestModel(function="response_tool", arguments={"value": "test"}),
+            ActionRequest(function="response_tool", arguments={"value": "test"}),
         ]
 
         responses = await act(requests, registry)
@@ -304,9 +307,9 @@ class TestAct:
     async def test_multiple_errors_all_returned(self, registry: ServiceRegistry):
         """Test that all errors are captured and returned."""
         requests = [
-            ActionRequestModel(function="error_tool", arguments={"message": "error1"}),
-            ActionRequestModel(function="error_tool", arguments={"message": "error2"}),
-            ActionRequestModel(function="error_tool", arguments={"message": "error3"}),
+            ActionRequest(function="error_tool", arguments={"message": "error1"}),
+            ActionRequest(function="error_tool", arguments={"message": "error2"}),
+            ActionRequest(function="error_tool", arguments={"message": "error3"}),
         ]
 
         responses = await act(requests, registry, concurrent=True)
@@ -318,15 +321,15 @@ class TestAct:
         assert "error3" in responses[2].output
 
     async def test_action_response_model_structure(self, registry: ServiceRegistry):
-        """Test that ActionResponseModel is properly constructed."""
+        """Test that ActionResponse is properly constructed."""
         requests = [
-            ActionRequestModel(function="multiply", arguments={"a": 5, "b": 3}),
+            ActionRequest(function="multiply", arguments={"a": 5, "b": 3}),
         ]
 
         responses = await act(requests, registry)
 
         response = responses[0]
-        assert isinstance(response, ActionResponseModel)
+        assert isinstance(response, ActionResponse)
         assert response.function == "multiply"
         assert response.arguments == {"a": 5, "b": 3}
         assert response.output == 15
@@ -342,9 +345,9 @@ class TestAct:
         """Test that concurrent execution doesn't depend on request order."""
         # Create requests with varying execution times (but all fast enough)
         requests = [
-            ActionRequestModel(function="multiply", arguments={"a": 1, "b": 1}),
-            ActionRequestModel(function="add_tool", arguments={"a": 2, "b": 2}),
-            ActionRequestModel(function="multiply", arguments={"a": 3, "b": 3}),
+            ActionRequest(function="multiply", arguments={"a": 1, "b": 1}),
+            ActionRequest(function="add_tool", arguments={"a": 2, "b": 2}),
+            ActionRequest(function="multiply", arguments={"a": 3, "b": 3}),
         ]
 
         responses = await act(requests, registry, concurrent=True)
@@ -354,3 +357,74 @@ class TestAct:
         assert responses[0].output == 1  # 1 * 1
         assert responses[1].output == 4  # 2 + 2
         assert responses[2].output == 9  # 3 * 3
+
+
+class TestActionsCoverage:
+    """Test actions.py uncovered lines."""
+
+    async def test_action_request_with_empty_function_string(self):
+        """Test line 39: Empty function string raises ValueError."""
+        registry = ServiceRegistry()
+
+        # ActionRequest with empty string function (passes validation but triggers line 39)
+        requests = [ActionRequest(function="", arguments={})]
+
+        with pytest.raises(ValueError, match="Action request missing function name"):
+            await act(requests, registry)
+
+    async def test_execution_status_not_completed_without_error(self):
+        """Test line 113: Non-completed status without error returns Exception."""
+
+        async def test_func():
+            return "result"
+
+        tool = Tool(func_callable=test_func, config=ToolConfig(name="test_tool", provider="tool"))
+        model = iModel(backend=tool)
+
+        # Mock invoke to return non-completed status without error
+        async def mock_invoke_pending(**kwargs):
+            class PendingCalling(Event):
+                def __init__(self):
+                    super().__init__()
+                    self.status = EventStatus.PROCESSING
+                    self.execution.error = None
+                    self.execution.response = MagicMock(data="no data")
+
+            return PendingCalling()
+
+        object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_invoke_pending))
+
+        registry = ServiceRegistry()
+        registry.register(model)
+
+        request = ActionRequest(function="test_tool", arguments={})
+        result = await _execute_single_action(request, registry)
+
+        # Should return Exception with status message (line 113)
+        assert isinstance(result, Exception)
+        assert "processing" in str(result).lower()
+
+    async def test_execute_single_action_exception_path(self):
+        """Test lines 118-120: Exception during execution returns exception."""
+
+        async def test_func():
+            return "result"
+
+        tool = Tool(func_callable=test_func, config=ToolConfig(name="exc_tool", provider="tool"))
+        model = iModel(backend=tool)
+
+        # Mock invoke to raise exception
+        async def mock_invoke_exception(**kwargs):
+            raise RuntimeError("Test execution error")
+
+        object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_invoke_exception))
+
+        registry = ServiceRegistry()
+        registry.register(model)
+
+        request = ActionRequest(function="exc_tool", arguments={})
+        result = await _execute_single_action(request, registry)
+
+        # Should return the exception (lines 118-120)
+        assert isinstance(result, RuntimeError)
+        assert "Test execution error" in str(result)
