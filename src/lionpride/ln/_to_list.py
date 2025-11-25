@@ -130,7 +130,8 @@ def to_list(
 
     initial_list = _to_list_type(input_, use_values=use_values)
     # Decide skip set once (micro-optimization)
-    skip_types = _SKIP_TYPE if flatten_tuple_set else _SKIP_TUPLE_SET
+    assert _SKIP_TYPE is not None and _SKIP_TUPLE_SET is not None
+    skip_types: tuple[type, ...] = _SKIP_TYPE if flatten_tuple_set else _SKIP_TUPLE_SET
     processed = _process_list(initial_list, flatten=flatten, dropna=dropna, skip_types=skip_types)
 
     if unique:
@@ -154,7 +155,7 @@ def to_list(
                         try:
                             hash_value = hash(j)
                         except TypeError:
-                            if isinstance(j, _MAP_LIKE):
+                            if _MAP_LIKE is not None and isinstance(j, _MAP_LIKE):
                                 hash_value = hash_dict(j)
                             else:
                                 raise ValueError(

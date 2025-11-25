@@ -225,3 +225,24 @@ def test_string_similarity_enum_backward_compatible():
     )
 
     assert result_str == result_enum
+
+
+# ============================================================================
+# Coverage tests for lines 320, 327
+# ============================================================================
+
+
+def test_string_similarity_invalid_algorithm_type():
+    """Test algorithm must be string or callable - line 320"""
+    with pytest.raises(ValueError, match="algorithm must be a string"):
+        string_similarity("hello", ["world"], algorithm=12345)
+
+
+def test_string_similarity_hamming_different_lengths_skip():
+    """Test hamming skips different length strings - line 327"""
+    # When using hamming, strings of different lengths should be skipped
+    # "hi" (len=2) vs "hello" (len=5) - should skip, but "hello" vs "hello" should match
+    result = string_similarity("hello", ["hi", "hello", "hey"], algorithm="hamming", threshold=0.5)
+    # "hi" and "hey" have different lengths than "hello", so they should be skipped
+    # Only "hello" should match
+    assert result == ["hello"]

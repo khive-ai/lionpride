@@ -109,6 +109,14 @@ Sorted alphabetically within each group. Use `isort` defaults.
 uv run pytest tests/ -v
 ```
 
+### Coverage
+
+```bash
+uv run pytest tests/ --cov=lionpride --cov-report=term-missing
+```
+
+**Note**: Coverage must be run against the full test suite. Running coverage on individual test files (e.g., `pytest tests/ln/test_alcall.py --cov=...`) will show incorrect results due to module import ordering. Always use `pytest tests/` for accurate coverage reports.
+
 ### Linting
 
 ```bash
