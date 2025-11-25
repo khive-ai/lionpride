@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from lionpride.operations.models import ActionResponseModel
+from lionpride.rules import ActionResponse
 
 if TYPE_CHECKING:
     from lionpride.session import Branch, Session
@@ -17,7 +17,7 @@ async def execute_tools(
     branch: Branch,
     *,
     concurrent: bool = True,
-) -> tuple[Any, list[ActionResponseModel]]:
+) -> tuple[Any, list[ActionResponse]]:
     """Execute tool calls from action_requests."""
     if not hasattr(parsed_response, "action_requests"):
         return parsed_response, []
@@ -46,7 +46,7 @@ async def execute_tools(
 
 def _update_response_with_actions(
     parsed_response: Any,
-    action_responses: list[ActionResponseModel],
+    action_responses: list[ActionResponse],
 ) -> Any:
     """Update response with action results."""
     if hasattr(parsed_response, "model_copy"):

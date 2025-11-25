@@ -7,8 +7,9 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
+from lionpride.rules import ActionRequest, ActionResponse
+
 from ..dispatcher import register_operation
-from ..models import ActionRequestModel, ActionResponseModel
 
 if TYPE_CHECKING:
     from lionpride.services.types import iModel
@@ -22,10 +23,10 @@ class ReactStep(BaseModel):
 
     step: int = Field(..., description="Step number (1-indexed)")
     reasoning: str | None = Field(default=None, description="LLM reasoning for this step")
-    actions_requested: list[ActionRequestModel] = Field(
+    actions_requested: list[ActionRequest] = Field(
         default_factory=list, description="Actions requested by LLM"
     )
-    actions_executed: list[ActionResponseModel] = Field(
+    actions_executed: list[ActionResponse] = Field(
         default_factory=list, description="Action execution results"
     )
     is_final: bool = Field(default=False, description="Whether this is the final step")
@@ -47,7 +48,7 @@ class ReactStepResponse(BaseModel):
     reasoning: str | None = Field(
         default=None, description="Your reasoning about the current state and next action"
     )
-    action_requests: list[ActionRequestModel] | None = Field(
+    action_requests: list[ActionRequest] | None = Field(
         default=None,
         description=(
             "List of tool calls. Each has 'function' (tool name) and 'arguments' (dict). "
@@ -72,7 +73,7 @@ def _create_react_response_model(
         reasoning: str | None = Field(
             default=None, description="Your reasoning about the current state and next action"
         )
-        action_requests: list[ActionRequestModel] | None = Field(
+        action_requests: list[ActionRequest] | None = Field(
             default=None,
             description=(
                 "List of tool calls. Each has 'function' (tool name) and 'arguments' (dict). "

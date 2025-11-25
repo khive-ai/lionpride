@@ -40,8 +40,9 @@ from .base import Rule, RuleParams, RuleQualifier, ValidationError
 from .boolean import BooleanRule
 from .choice import ChoiceRule
 from .mapping import MappingRule
-from .models import ActionRequest, ActionResponse
+from .models import ActionRequest, ActionResponse, Reason
 from .number import NumberRule
+from .reason import ReasonRule
 from .registry import RuleRegistry, get_default_registry
 from .string import StringRule
 from .validator import Validator
@@ -54,6 +55,8 @@ __all__ = (
     "ChoiceRule",
     "MappingRule",
     "NumberRule",
+    "Reason",
+    "ReasonRule",
     "Rule",
     "RuleParams",
     "RuleQualifier",

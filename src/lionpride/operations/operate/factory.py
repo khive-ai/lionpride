@@ -7,10 +7,10 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
+from lionpride.rules import ActionRequest, ActionResponse, Reason
 from lionpride.types import Operable, Spec
 
 from ..dispatcher import register_operation
-from ..models import ActionRequestModel, ActionResponseModel, Reason
 from .message_prep import prepare_tool_schemas
 from .tool_executor import execute_tools, has_action_requests
 
@@ -238,14 +238,14 @@ def _build_operable(
     if actions:
         specs.append(
             Spec(
-                base_type=list[ActionRequestModel],
+                base_type=list[ActionRequest],
                 name="action_requests",
                 default=None,
             )
         )
         specs.append(
             Spec(
-                base_type=list[ActionResponseModel],
+                base_type=list[ActionResponse],
                 name="action_responses",
                 default=None,
             )
