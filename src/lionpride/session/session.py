@@ -325,9 +325,10 @@ class Session(Element):
         default_factory=OperationRegistry,
         description="Operation factories (operate, react, communicate, generate)",
     )
-
-    # Private: Reference to default branch (stored by UUID to avoid serialization issues)
-    _default_branch_id: UUID | None = PrivateAttr(default=None)
+    default_branch_id: UUID | None = Field(
+        default=None,
+        description="UUID of default branch for operations (auto-set to first created branch)",
+    )
 
     @property
     def messages(self):
@@ -342,13 +343,14 @@ class Session(Element):
     @property
     def default_branch(self) -> Branch | None:
         """Get the default branch for operations when none specified."""
-        if self._default_branch_id is None:
+        if self.default_branch_id is None:
             return None
         try:
-            return self.conversations.get_progression(self._default_branch_id)
-        except (KeyError, ValueError):
-            # Branch was removed, clear reference
-            self._default_branch_id = None
+            return self.conversations.get_progression(self.default_branch_id)
+        except (KeyError, ValueError, Exception):
+            # Branch was removed (NotFoundError, KeyError, ValueError)
+            # Clear stale reference and return None gracefully
+            self.default_branch_id = None
             return None
 
     def set_default_branch(self, branch: Branch | UUID | str) -> None:
@@ -373,7 +375,7 @@ class Session(Element):
         if branch_id not in self.branches:
             raise ValueError(f"Branch {branch_id} not found in session")
 
-        self._default_branch_id = branch_id
+        self.default_branch_id = branch_id
 
     def create_branch(
         self,
@@ -425,7 +427,7 @@ class Session(Element):
 
         # Set as default if appropriate
         if should_set_default:
-            self._default_branch_id = branch.id
+            self.default_branch_id = branch.id
 
         return branch
 

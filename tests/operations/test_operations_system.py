@@ -1024,6 +1024,135 @@ class TestOperationLifecycle:
 
 
 # -------------------------------------------------------------------------
+# Session.default_branch Tests
+# -------------------------------------------------------------------------
+
+
+class TestSessionDefaultBranch:
+    """Test Session.default_branch property and set_default_branch() method."""
+
+    def test_set_default_branch_by_instance(self):
+        """Test set_default_branch() with Branch instance."""
+        session = Session()
+        _branch1 = session.create_branch(name="first", set_as_default=False)
+        branch2 = session.create_branch(name="second", set_as_default=False)
+
+        assert session.default_branch is None
+
+        session.set_default_branch(branch2)
+        assert session.default_branch is branch2
+
+    def test_set_default_branch_by_uuid(self):
+        """Test set_default_branch() with UUID."""
+        session = Session()
+        _branch1 = session.create_branch(name="first", set_as_default=False)
+        branch2 = session.create_branch(name="second", set_as_default=False)
+
+        session.set_default_branch(branch2.id)
+        assert session.default_branch is branch2
+
+    def test_set_default_branch_by_name(self):
+        """Test set_default_branch() with branch name."""
+        session = Session()
+        _branch1 = session.create_branch(name="first", set_as_default=False)
+        branch2 = session.create_branch(name="second", set_as_default=False)
+
+        session.set_default_branch("second")
+        assert session.default_branch is branch2
+
+    def test_set_default_branch_not_found_raises(self):
+        """Test set_default_branch() raises ValueError for non-existent branch."""
+        from uuid import uuid4
+
+        session = Session()
+        _branch = session.create_branch(name="test")
+
+        fake_uuid = uuid4()
+        with pytest.raises(ValueError, match="not found"):
+            session.set_default_branch(fake_uuid)
+
+    def test_set_default_branch_switches_between_branches(self):
+        """Test switching default branch multiple times."""
+        session = Session()
+        branch1 = session.create_branch(name="first")  # Auto-set as default
+        branch2 = session.create_branch(name="second")
+
+        assert session.default_branch is branch1
+
+        session.set_default_branch(branch2)
+        assert session.default_branch is branch2
+
+        session.set_default_branch(branch1)
+        assert session.default_branch is branch1
+
+    def test_default_branch_returns_none_after_deletion(self):
+        """Test default_branch returns None if deleted."""
+        session = Session()
+        branch = session.create_branch(name="test")
+
+        assert session.default_branch is branch
+
+        # Remove branch from conversations
+        session.conversations.remove_progression(branch.id)
+
+        # Should return None gracefully
+        assert session.default_branch is None
+        # And clear the stale reference
+        assert session.default_branch_id is None
+
+    async def test_conduct_auto_creates_after_default_deleted(self, mock_model):
+        """Test conduct() auto-creates branch after default deleted."""
+        session = Session(default_imodel=mock_model)
+        session.services.register(mock_model, update=True)
+        branch = session.create_branch(name="test")
+
+        assert session.default_branch is branch
+
+        # Delete the branch
+        session.conversations.remove_progression(branch.id)
+
+        # conduct() should auto-create new default
+        op = await session.conduct(
+            "generate",
+            None,
+            messages=[{"role": "user", "content": "Hello"}],
+        )
+
+        from lionpride.core import EventStatus
+
+        assert op.status == EventStatus.COMPLETED
+        assert session.default_branch is not None
+        assert session.default_branch.name == "default"
+
+    def test_default_branch_serialization(self):
+        """Test default_branch_id is serialized and restored (critical for save/load)."""
+        session = Session()
+        branch = session.create_branch(name="test")
+
+        assert session.default_branch is branch
+        original_branch_id = branch.id
+
+        # Serialize to dict
+        data = session.model_dump()
+
+        # CRITICAL: Verify default_branch_id is in serialized data
+        # (This was the BLOCKING bug - PrivateAttr excluded it from serialization)
+        assert "default_branch_id" in data
+        assert data["default_branch_id"] == original_branch_id
+
+        # Deserialize from dict
+        restored = Session.model_validate(data)
+
+        # Verify default_branch_id was restored (UUID preserved)
+        assert restored.default_branch_id == original_branch_id
+
+        # Note: restored.default_branch will be None because the branch
+        # itself was serialized in conversations, and the full conversation
+        # structure would need to be restored for default_branch to resolve.
+        # The critical test is that default_branch_id is serialized/deserialized.
+
+
+# -------------------------------------------------------------------------
 # OperationRegistry Edge Cases
 # -------------------------------------------------------------------------
 
