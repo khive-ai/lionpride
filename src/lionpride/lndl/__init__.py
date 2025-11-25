@@ -24,6 +24,14 @@ from .ast import (
     # v2 nodes - Continuation
     YieldStmt,
 )
+from .cognitive import (
+    CognitiveOutput,
+    CognitiveSend,
+    CognitiveState,
+    CognitiveYield,
+    execute_cognitive,
+    parse_cognitive,
+)
 from .errors import (
     AmbiguousMatchError,
     InvalidConstructorError,
@@ -35,6 +43,14 @@ from .errors import (
 )
 from .fuzzy import parse_lndl_fuzzy
 from .lexer import Lexer, Token, TokenType
+from .operations import (
+    CognitivePermission,
+    CognitiveReactResult,
+    cognitive_react,
+    compress_messages,
+    stream_cognitive,
+    transform_observation,
+)
 from .parser import ParseError, Parser
 from .prompt import LNDL_SYSTEM_PROMPT, get_lndl_system_prompt
 from .resolver import parse_lndl, resolve_references_prefixed
@@ -55,6 +71,13 @@ __all__ = (
     "LNDL_SYSTEM_PROMPT",
     "ActionCall",
     "AmbiguousMatchError",
+    # v2: Cognitive Runtime
+    "CognitiveOutput",
+    "CognitivePermission",
+    "CognitiveReactResult",
+    "CognitiveSend",
+    "CognitiveState",
+    "CognitiveYield",
     # v2: Context Management
     "CompressDirective",
     "ContextBlock",
@@ -92,11 +115,18 @@ __all__ = (
     "TypeMismatchError",
     # v2: Continuation
     "YieldStmt",
+    # v2: Cognitive Operations
+    "cognitive_react",
+    "compress_messages",
     "ensure_no_action_calls",
+    "execute_cognitive",
     "get_lndl_system_prompt",
     "has_action_calls",
+    "parse_cognitive",
     "parse_lndl",
     "parse_lndl_fuzzy",
     "resolve_references_prefixed",
     "revalidate_with_action_results",
+    "stream_cognitive",
+    "transform_observation",
 )
