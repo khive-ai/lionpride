@@ -12,16 +12,10 @@ from dataclasses import dataclass, field
 from enum import IntEnum, auto
 from typing import Any
 
-from lionpride.errors import LionprideError
+from lionpride.errors import ValidationError
 from lionpride.types import Params
 
-__all__ = ("Rule", "RuleParams", "RuleQualifier")
-
-
-class ValidationError(LionprideError):
-    """Raised when validation fails."""
-
-    pass
+__all__ = ("Rule", "RuleParams", "RuleQualifier", "ValidationError")
 
 
 class RuleQualifier(IntEnum):
@@ -282,13 +276,16 @@ class Rule:
             f"{self.__class__.__name__} must implement perform_fix() to use auto_fix=True"
         )
 
-    async def invoke(self, k: str, v: Any, t: type | None = None) -> Any:
+    async def invoke(
+        self, k: str, v: Any, t: type | None = None, *, auto_fix: bool | None = None
+    ) -> Any:
         """Execute validation with optional auto-fixing.
 
         Args:
             k: Field name (for error messages)
             v: Value to validate
             t: Field type (optional)
+            auto_fix: Override self.auto_fix for this invocation (thread-safe)
 
         Returns:
             Validated (and possibly fixed) value
@@ -297,11 +294,13 @@ class Rule:
             ValidationError: If validation fails and auto_fix disabled
         """
         effective_type = t or type(v)
+        # Use override if provided, otherwise fall back to self.auto_fix
+        should_auto_fix = auto_fix if auto_fix is not None else self.auto_fix
         try:
             await self.validate(v, effective_type, **self.validation_kwargs)
             return v
         except Exception as e:
-            if self.auto_fix:
+            if should_auto_fix:
                 try:
                     return await self.perform_fix(v, effective_type)
                 except Exception as e1:

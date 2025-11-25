@@ -87,13 +87,13 @@ class NumberRule(Rule):
             raise ValueError(f"Number too large: {v} >= {self.lt}")
 
     async def perform_fix(self, v: Any, t: type) -> Any:
-        """Attempt to convert value to number.
+        """Attempt to convert value to number and re-validate.
 
         Returns:
-            Numeric value (int or float)
+            Numeric value (int or float), validated against constraints
 
         Raises:
-            ValueError: If conversion fails
+            ValueError: If conversion or re-validation fails
         """
         try:
             # Try int first if target type is int
@@ -101,11 +101,15 @@ class NumberRule(Rule):
                 # Handle string representations
                 if isinstance(v, str):
                     v = v.strip()
-                return int(v)
+                fixed = int(v)
             else:
                 # Try float
                 if isinstance(v, str):
                     v = v.strip()
-                return float(v)
+                fixed = float(v)
         except (ValueError, TypeError) as e:
             raise ValueError(f"Failed to convert {v} to number") from e
+
+        # Re-validate the fixed value against constraints
+        await self.validate(fixed, t)
+        return fixed

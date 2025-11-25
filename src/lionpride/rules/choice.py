@@ -64,16 +64,15 @@ class ChoiceRule(Rule):
             self._lower_map = {str(c).lower(): c for c in self.choices if isinstance(c, str)}
 
     async def validate(self, v: Any, t: type, **kw) -> None:
-        """Validate that value is in allowed choices.
+        """Validate that value is in allowed choices (exact match only).
+
+        For case-insensitive matching, validation will fail for non-canonical
+        values, triggering perform_fix() to normalize.
 
         Raises:
-            ValueError: If value not in choices
+            ValueError: If value not in choices (exact match)
         """
         if v in self.choices:
-            return
-
-        # Try case-insensitive match for strings
-        if not self.case_sensitive and isinstance(v, str) and v.lower() in self._lower_map:
             return
 
         raise ValueError(f"Invalid choice: {v} not in {sorted(str(c) for c in self.choices)}")

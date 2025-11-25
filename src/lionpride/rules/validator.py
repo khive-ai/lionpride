@@ -3,22 +3,26 @@
 
 """Validator engine - applies rules to validate and fix data structures.
 
-Enhancements from lionagi v0.2.2:
-- validation_log: Track validation attempts and errors
-- rule_order: Control rule precedence (deterministic iteration)
-- log_validation_error(): Log errors with timestamp
-- strict mode: Fail or return value if no rule applies
-- get_validation_summary(): Summary of validation history
+Core of the IPU validation pipeline:
+    Spec.base_type → auto Rule assignment → validate spec-by-spec → Operable.create_model()
+
+Features:
+- Auto Rule assignment from Spec.base_type via RuleRegistry
+- Spec metadata override for custom rules
+- validation_log for error tracking
+- strict mode control
 """
 
+from __future__ import annotations
+
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .base import Rule, ValidationError
-from .boolean import BooleanRule
-from .choice import ChoiceRule
-from .number import NumberRule
-from .string import StringRule
+from .registry import RuleRegistry, get_default_registry
+
+if TYPE_CHECKING:
+    from lionpride.types import Operable, Spec
 
 __all__ = ("Validator",)
 
@@ -26,55 +30,48 @@ __all__ = ("Validator",)
 class Validator:
     """Validation engine using rule system.
 
-    Applies rules to data based on Operable specs.
+    Validates data spec-by-spec using auto-assigned Rules based on Spec.base_type.
     This is the core of IPU's validation → structure → usefulness pipeline.
 
-    Enhancements:
-    - validation_log: List of validation attempts and errors (for auditing)
-    - rule_order: Control order of rule application (deterministic)
-    - strict mode: Raise if no rule applies or return value as-is
-    - Logging: Track all validation errors with timestamps
+    Flow:
+        1. Operable.create_model(request_specs) → RequestModel for LLM
+        2. LLM returns raw response
+        3. Validator.validate_operable(raw_data, operable) → validated dict
+           - For each Spec: get Rule from base_type → validate → fix
+        4. Operable.create_model(output_specs) → OutputModel
+        5. OutputModel.model_validate(validated) → final structured output
 
     Usage:
-        validator = Validator(rule_order=["string", "number"])
-        validated = await validator.validate(
+        validator = Validator()
+
+        # Validate raw LLM response against operable specs
+        validated = await validator.validate_operable(
             data={"confidence": "0.95", "output": 42},
-            spec=operable,
-            auto_fix=True,
-            strict=True
+            operable=my_operable,
+            auto_fix=True
         )
+
+        # Create output model and validate
+        OutputModel = operable.create_model()
+        result = OutputModel.model_validate(validated)
     """
 
     def __init__(
         self,
+        registry: RuleRegistry | None = None,
         rules: dict[str, Rule] | None = None,
-        rule_order: list[str] | None = None,
     ):
-        """Initialize validator with rules and rule order.
+        """Initialize validator with rule registry.
 
         Args:
-            rules: Custom rules dict (uses defaults if None)
-            rule_order: List of rule names defining application order
-                       (if None, uses dict key order)
+            registry: RuleRegistry for type→Rule lookup (uses default if None)
+            rules: Legacy dict-based rules (for backwards compatibility)
         """
-        self.rules = rules or self._get_default_rules()
-        # Set rule order - if not provided, use rule keys in order
-        self.rule_order = rule_order or list(self.rules.keys())
+        self.registry = registry or get_default_registry()
+        # Legacy support: dict-based rules
+        self._legacy_rules = rules
         # Validation log for tracking attempts and errors
         self.validation_log: list[dict[str, Any]] = []
-
-    def _get_default_rules(self) -> dict[str, Rule]:
-        """Get default validation rules.
-
-        Returns:
-            Dict of rule name → Rule instance
-        """
-        return {
-            "string": StringRule(),
-            "number": NumberRule(),
-            "boolean": BooleanRule(),
-            "choice": ChoiceRule(choices=[]),  # Empty choices, subclass for specific
-        }
 
     def log_validation_error(self, field: str, value: Any, error: str) -> None:
         """Log a validation error with timestamp.
@@ -96,7 +93,7 @@ class Validator:
         """Get summary of validation log.
 
         Returns:
-            Dict with total_errors, fields_with_errors, and error_details
+            Dict with total_errors, fields_with_errors, and error_entries
         """
         fields_with_errors = set()
         for entry in self.validation_log:
@@ -109,39 +106,189 @@ class Validator:
             "error_entries": self.validation_log,
         }
 
-    def add_rule(self, name: str, rule: Rule, replace: bool = False) -> None:
-        """Add custom rule to validator.
+    def get_rule_for_spec(self, spec: Spec) -> Rule | None:
+        """Get Rule for a Spec based on base_type or metadata override.
+
+        Priority:
+        1. Spec metadata "rule" override (explicit Rule instance)
+        2. Registry lookup by field name
+        3. Registry lookup by base_type
 
         Args:
-            name: Rule name
-            rule: Rule instance
-            replace: Allow replacing existing rule
-
-        Raises:
-            ValueError: If rule exists and replace=False
-        """
-        if name in self.rules and not replace:
-            raise ValueError(f"Rule '{name}' already exists (use replace=True)")
-        self.rules[name] = rule
-        # Add to rule_order if not already there
-        if name not in self.rule_order:
-            self.rule_order.append(name)
-
-    def remove_rule(self, name: str) -> Rule:
-        """Remove rule from validator.
-
-        Args:
-            name: Rule name
+            spec: Spec to get rule for
 
         Returns:
-            Removed rule
+            Rule instance or None if not found
+        """
+        # Priority 1: Explicit rule override in metadata
+        override = spec.get("rule")
+        if override is not None and isinstance(override, Rule):
+            return override
+
+        # Priority 2 & 3: Registry lookup (name then type)
+        return self.registry.get_rule(
+            base_type=spec.base_type,
+            field_name=spec.name if spec.name else None,
+        )
+
+    async def validate_spec(
+        self,
+        spec: Spec,
+        value: Any,
+        auto_fix: bool = True,
+        strict: bool = True,
+    ) -> Any:
+        """Validate a single value against a Spec.
+
+        Handles:
+        - nullable: Returns None if value is None and spec is nullable
+        - default: Uses sync/async default factory if value is None
+        - listable: Validates each item in list against base_type
+        - validator: Applies Spec's custom validators after rule validation
+
+        Args:
+            spec: Spec defining the field
+            value: Value to validate
+            auto_fix: Enable auto-correction
+            strict: Raise if no rule applies
+
+        Returns:
+            Validated (and possibly fixed) value
 
         Raises:
-            KeyError: If rule doesn't exist
+            ValidationError: If validation fails
         """
-        if name not in self.rules:
-            raise KeyError(f"Rule '{name}' not found")
-        return self.rules.pop(name)
+        field_name = spec.name or "<unnamed>"
+
+        # Handle nullable/default
+        if value is None:
+            if spec.is_nullable:
+                return None
+            # Try default (supports async default factories)
+            try:
+                value = await spec.acreate_default_value()
+            except ValueError:
+                if strict:
+                    error_msg = f"Field '{field_name}' is None but not nullable and has no default"
+                    self.log_validation_error(field_name, value, error_msg)
+                    raise ValidationError(error_msg)
+                return value
+
+        # Get rule for this spec (priority: metadata override > name > base_type)
+        rule = self.get_rule_for_spec(spec)
+
+        # Handle listable specs - validate each item
+        if spec.is_listable:
+            if not isinstance(value, list):
+                if auto_fix:
+                    value = [value]  # Wrap single value in list
+                else:
+                    error_msg = f"Field '{field_name}' expected list, got {type(value).__name__}"
+                    self.log_validation_error(field_name, value, error_msg)
+                    raise ValidationError(error_msg)
+
+            validated_items = []
+            for i, item in enumerate(value):
+                item_name = f"{field_name}[{i}]"
+                if rule is not None:
+                    try:
+                        validated_item = await rule.invoke(
+                            item_name, item, spec.base_type, auto_fix=auto_fix
+                        )
+                    except Exception as e:
+                        self.log_validation_error(item_name, item, str(e))
+                        raise
+                else:
+                    validated_item = item
+                validated_items.append(validated_item)
+
+            value = validated_items
+        else:
+            # Single value validation
+            if rule is None:
+                if strict:
+                    error_msg = (
+                        f"No rule found for field '{field_name}' with type {spec.base_type}. "
+                        f"Register a rule or set strict=False."
+                    )
+                    self.log_validation_error(field_name, value, error_msg)
+                    raise ValidationError(error_msg)
+            else:
+                try:
+                    value = await rule.invoke(field_name, value, spec.base_type, auto_fix=auto_fix)
+                except Exception as e:
+                    self.log_validation_error(field_name, value, str(e))
+                    raise
+
+        # Apply Spec's custom validators (after rule validation)
+        custom_validators = spec.get("validator")
+        # Check for sentinel values (Undefined, Unset) - they're not callable
+        if custom_validators is not None and callable(custom_validators):
+            validators = [custom_validators]
+        elif isinstance(custom_validators, list):
+            validators = custom_validators
+        else:
+            validators = []
+
+        for validator_fn in validators:
+            if not callable(validator_fn):
+                continue
+            try:
+                # Support both sync and async validators
+                from lionpride.libs.concurrency import is_coro_func
+
+                if is_coro_func(validator_fn):
+                    value = await validator_fn(value)
+                else:
+                    value = validator_fn(value)
+            except Exception as e:
+                error_msg = f"Custom validator failed for '{field_name}': {e}"
+                self.log_validation_error(field_name, value, error_msg)
+                raise ValidationError(error_msg) from e
+
+        return value
+
+    async def validate_operable(
+        self,
+        data: dict[str, Any],
+        operable: Operable,
+        auto_fix: bool = True,
+        strict: bool = True,
+    ) -> dict[str, Any]:
+        """Validate data spec-by-spec against an Operable.
+
+        This is the main validation method for the IPU pipeline.
+
+        Args:
+            data: Raw data dict (e.g., from LLM response)
+            operable: Operable defining expected structure
+            auto_fix: Enable auto-correction for each field
+            strict: Raise if validation fails
+
+        Returns:
+            Dict of validated field values
+
+        Raises:
+            ValidationError: If any field validation fails
+        """
+        validated: dict[str, Any] = {}
+
+        for spec in operable.get_specs():
+            field_name = spec.name
+            if field_name is None:
+                continue
+
+            # Get value from data
+            value = data.get(field_name)
+
+            # Validate against spec
+            validated[field_name] = await self.validate_spec(
+                spec, value, auto_fix=auto_fix, strict=strict
+            )
+
+        return validated
+
+    # === Legacy API (backwards compatibility) ===
 
     async def validate_field(
         self,
@@ -151,141 +298,84 @@ class Validator:
         auto_fix: bool = True,
         strict: bool = True,
     ) -> Any:
-        """Validate single field using applicable rules (in rule_order).
+        """Validate single field using registry lookup.
+
+        Legacy method for backwards compatibility.
+        Prefer validate_spec() for new code.
 
         Args:
             field_name: Field name
             field_value: Field value
             field_type: Expected type (optional)
             auto_fix: Enable auto-correction
-            strict: If True, raise ValidationError if no rule applies
-                   If False, return value as-is
+            strict: Raise if no rule applies
 
         Returns:
             Validated (and possibly fixed) value
-
-        Raises:
-            ValidationError: If validation fails or (strict=True and no rule applies)
         """
-        # Try rules in order specified by rule_order (deterministic)
-        rule_applied = False
-        last_error = None
+        # Get rule from registry
+        rule = self.registry.get_rule(base_type=field_type, field_name=field_name)
 
-        for rule_name in self.rule_order:
-            if rule_name not in self.rules:
-                continue  # Skip rules not in current rules dict
+        # Fallback to legacy rules if available
+        if rule is None and self._legacy_rules:
+            for legacy_rule in self._legacy_rules.values():
+                try:
+                    if await legacy_rule.apply(field_name, field_value, field_type):
+                        rule = legacy_rule
+                        break
+                except Exception:
+                    continue
 
-            rule = self.rules[rule_name]
-
-            try:
-                if await rule.apply(field_name, field_value, field_type):
-                    rule_applied = True
-                    # Apply rule with auto-fix setting
-                    if not auto_fix:
-                        # Disable auto_fix temporarily
-                        original_auto_fix = rule.auto_fix
-                        rule.params = rule.params.with_updates(auto_fix=False)
-                        try:
-                            result = await rule.invoke(field_name, field_value, field_type)
-                        finally:
-                            # Restore original setting
-                            rule.params = rule.params.with_updates(auto_fix=original_auto_fix)
-                        return result
-                    else:
-                        return await rule.invoke(field_name, field_value, field_type)
-            except Exception as e:
-                # Log rule application error
-                last_error = str(e)
-                self.log_validation_error(field_name, field_value, str(e))
-                # Continue to next rule
-                continue
-
-        # No rule applied
-        if not rule_applied:
+        if rule is None:
             if strict:
                 error_msg = (
-                    f"Failed to validate {field_name} because no rule applied. "
-                    f"To return the original value directly when no rule applies, "
-                    f"set strict=False."
+                    f"No rule found for field '{field_name}' with type {field_type}. "
+                    f"Register a rule or set strict=False."
                 )
                 self.log_validation_error(field_name, field_value, error_msg)
                 raise ValidationError(error_msg)
-            else:
-                # Return value as-is
-                return field_value
+            return field_value
 
-        # If we get here, all rules failed (no successful validation)
-        if last_error and strict:
-            raise ValidationError(f"Failed to validate {field_name}: {last_error}")
-
-        return field_value
+        try:
+            return await rule.invoke(field_name, field_value, field_type, auto_fix=auto_fix)
+        except Exception as e:
+            self.log_validation_error(field_name, field_value, str(e))
+            raise
 
     async def validate(
         self,
         data: dict[str, Any],
-        operable: Any = None,  # Operable type
+        operable: Operable | None = None,
         auto_fix: bool = True,
         strict: bool = True,
     ) -> dict[str, Any]:
-        """Validate data structure using rules against Operable spec.
+        """Validate data structure.
+
+        If operable provided, validates spec-by-spec.
+        Otherwise, validates each field using registry lookup.
 
         Args:
             data: Field → value dict to validate
-            operable: Operable spec defining expected structure (optional)
+            operable: Operable spec (optional)
             auto_fix: Enable auto-correction
-            strict: If True, raise ValidationError if no rule applies to a field
-                   If False, return field values as-is
+            strict: Raise if validation fails
 
         Returns:
-            Validated (and possibly fixed) data
-
-        Raises:
-            ValidationError: If validation fails and (auto_fix disabled or strict=True)
+            Validated data dict
         """
+        if operable is not None:
+            return await self.validate_operable(data, operable, auto_fix, strict)
 
+        # No operable - validate each field by inferred type
         validated: dict[str, Any] = {}
-
-        # If Operable provided, validate against its __op_fields__
-        if operable is not None and hasattr(operable, "__op_fields__"):
-            for field_spec in operable.__op_fields__:
-                # Get field name from spec metadata
-                field_name = field_spec["name"] if "name" in field_spec.metadata else None
-                if field_name is None:
-                    continue
-
-                # Get value from data
-                value = data.get(field_name)
-
-                # Handle nullable
-                nullable = field_spec.get("nullable", False)
-                if value is None and nullable:
-                    validated[field_name] = None
-                    continue
-
-                # Handle default
-                if value is None:
-                    if "default" in field_spec.metadata:
-                        value = field_spec["default"]
-                    elif "default_factory" in field_spec.metadata:
-                        factory = field_spec["default_factory"]
-                        value = factory() if callable(factory) else value
-
-                # Get expected type
-                field_type = field_spec.base_type
-
-                # Validate field
-                validated[field_name] = await self.validate_field(
-                    field_name, value, field_type, auto_fix, strict
-                )
-        else:
-            # No spec - validate all fields without type info
-            for field_name, value in data.items():
-                validated[field_name] = await self.validate_field(
-                    field_name, value, None, auto_fix, strict
-                )
-
+        for field_name, value in data.items():
+            field_type = type(value) if value is not None else None
+            validated[field_name] = await self.validate_field(
+                field_name, value, field_type, auto_fix, strict
+            )
         return validated
 
     def __repr__(self) -> str:
         """String representation."""
-        return f"Validator(rules={list(self.rules.keys())})"
+        types = self.registry.list_types()
+        return f"Validator(registry_types={[t.__name__ for t in types]})"

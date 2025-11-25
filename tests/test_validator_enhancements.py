@@ -1,12 +1,14 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for Validator enhancements from lionagi v0.2.2."""
+"""Tests for Validator enhancements from lionagi v0.2.2.
+
+Updated to use the new RuleRegistry-based API.
+"""
 
 import pytest
 
-from lionpride.rules import ValidationError, Validator
-from lionpride.rules.base import RuleParams
+from lionpride.rules import RuleRegistry, ValidationError, Validator
 from lionpride.rules.number import NumberRule
 from lionpride.rules.string import StringRule
 
@@ -45,56 +47,41 @@ class TestValidationLog:
         assert len(validator.validation_log) == 2
 
 
-class TestRuleOrder:
-    """Test rule_order parameter for rule precedence."""
+class TestRuleRegistry:
+    """Test RuleRegistry for type→Rule mapping."""
 
     @pytest.mark.asyncio
-    async def test_rule_order_initialized(self):
-        """Test that rule_order is stored in validator."""
-        order = ["number", "string"]
-        validator = Validator(rule_order=order)
-        assert hasattr(validator, "rule_order")
-        assert validator.rule_order == order
+    async def test_registry_type_registration(self):
+        """Test that rules are registered for types."""
+        registry = RuleRegistry()
+        registry.register(str, StringRule())
+        registry.register(int, NumberRule())
+
+        assert registry.has_rule(str)
+        assert registry.has_rule(int)
 
     @pytest.mark.asyncio
-    async def test_rule_order_default(self):
-        """Test default rule_order when not specified."""
-        validator = Validator()
-        assert hasattr(validator, "rule_order")
-        assert isinstance(validator.rule_order, list)
-        # Default order should be list of rule names
-        assert len(validator.rule_order) > 0
+    async def test_registry_get_rule(self):
+        """Test getting rule for type."""
+        registry = RuleRegistry()
+        string_rule = StringRule()
+        registry.register(str, string_rule)
+
+        assert registry.get_rule(base_type=str) is string_rule
 
     @pytest.mark.asyncio
-    async def test_rules_applied_in_order(self):
-        """Test that rules are applied in specified order."""
-        # Create a custom rule that tracks calls
-        call_order = []
+    async def test_registry_field_name_priority(self):
+        """Test field name takes priority over type."""
+        registry = RuleRegistry()
+        type_rule = StringRule()
+        name_rule = StringRule(min_length=5)
 
-        class TrackingStringRule(StringRule):
-            async def validate(self, v, t, **kw):
-                call_order.append("string")
-                await super().validate(v, t, **kw)
+        registry.register(str, type_rule)
+        registry.register("special", name_rule)
 
-        class TrackingNumberRule(NumberRule):
-            async def validate(self, v, t, **kw):
-                call_order.append("number")
-                await super().validate(v, t, **kw)
-
-        # Create validator with specific order
-        validator = Validator(
-            rule_order=["number", "string"],
-            rules={
-                "number": TrackingNumberRule(params=RuleParams(apply_types={int, float})),
-                "string": TrackingStringRule(params=RuleParams(apply_types={str})),
-            },
-        )
-
-        # Clear and validate a string - should check in order: number, string
-        call_order.clear()
-        await validator.validate_field("test", "hello", str)
-        # String rule applies, so only string should be in order
-        assert "string" in call_order
+        # Field name should take priority
+        rule = registry.get_rule(base_type=str, field_name="special")
+        assert rule is name_rule
 
 
 class TestStrictMode:
@@ -109,7 +96,7 @@ class TestStrictMode:
         with pytest.raises(ValidationError) as exc_info:
             await validator.validate_field("unknown", [], list, strict=True)
 
-        assert "no rule applied" in str(exc_info.value).lower()
+        assert "no rule found" in str(exc_info.value).lower()
         assert len(validator.validation_log) == 1
 
     @pytest.mark.asyncio
@@ -146,12 +133,12 @@ class TestStrictMode:
     @pytest.mark.asyncio
     async def test_strict_mode_with_validation_failure(self):
         """Test that strict mode still raises on validation failure."""
-        # Configure StringRule with min_length=1 to reject empty strings
-        # Even with auto_fix=True (default), re-validation after fix catches the error
-        validator = Validator(rules={"string": StringRule(min_length=1)})
+        # Configure custom registry with StringRule with min_length=1
+        registry = RuleRegistry()
+        registry.register(str, StringRule(min_length=1))
+        validator = Validator(registry=registry)
 
         # String rule should apply but validation should fail due to min_length
-        # (empty string -> fixed to empty string -> re-validation fails)
         with pytest.raises(ValidationError):
             await validator.validate_field(
                 "name",
@@ -167,9 +154,10 @@ class TestLogDuringValidation:
     @pytest.mark.asyncio
     async def test_error_logged_on_validation_failure(self):
         """Test that validation errors are logged automatically."""
-        # Configure StringRule with min_length=1 to reject empty strings
-        # Re-validation after auto-fix catches the error and logs it
-        validator = Validator(rules={"string": StringRule(min_length=1)})
+        # Configure custom registry with StringRule with min_length=1
+        registry = RuleRegistry()
+        registry.register(str, StringRule(min_length=1))
+        validator = Validator(registry=registry)
 
         try:
             await validator.validate_field(
@@ -190,7 +178,7 @@ class TestLogDuringValidation:
         validator = Validator()
 
         try:
-            await validator.validate_field("unknown", {}, dict, strict=True)
+            await validator.validate_field("unknown", [], list, strict=True)
         except ValidationError:
             pass
 
@@ -198,7 +186,7 @@ class TestLogDuringValidation:
         assert len(validator.validation_log) == 1
         log_entry = validator.validation_log[0]
         assert log_entry["field"] == "unknown"
-        assert "no rule applied" in log_entry["error"].lower()
+        assert "no rule found" in log_entry["error"].lower()
 
 
 class TestValidatorIntegration:
@@ -206,9 +194,8 @@ class TestValidatorIntegration:
 
     @pytest.mark.asyncio
     async def test_enhanced_validator_with_all_features(self):
-        """Test validator with rule_order, strict mode, and logging."""
-        order = ["string", "number"]
-        validator = Validator(rule_order=order)
+        """Test validator with registry, strict mode, and logging."""
+        validator = Validator()
 
         # Valid string should pass
         result = await validator.validate_field("name", "Ocean", str, strict=True)
@@ -218,9 +205,9 @@ class TestValidatorIntegration:
         result = await validator.validate_field("data", [], list, strict=False)
         assert result == []
 
-        # Invalid type with strict=True should raise
+        # list type has no rule - strict=True should raise
         with pytest.raises(ValidationError):
-            await validator.validate_field("data", {}, dict, strict=True)
+            await validator.validate_field("data", [], list, strict=True)
 
         # Check that errors were logged
         assert len(validator.validation_log) >= 1
