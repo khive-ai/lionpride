@@ -64,6 +64,17 @@ async def operate(
     """
     # Convert dict to OperateParams if needed
     if isinstance(params, dict):
+        # Handle nested dict conversion for communicate and act
+        if "communicate" in params and isinstance(params["communicate"], dict):
+            comm = params["communicate"]
+            # Handle nested generate/parse in communicate
+            if "generate" in comm and isinstance(comm["generate"], dict):
+                comm["generate"] = GenerateParams(**comm["generate"])
+            params["communicate"] = CommunicateParams(**comm)
+        if "act" in params and isinstance(params["act"], dict):
+            from .types import ActParams
+
+            params["act"] = ActParams(**params["act"])
         params = OperateParams(**params)
 
     # Validate composed params

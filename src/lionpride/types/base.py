@@ -4,7 +4,11 @@
 from __future__ import annotations
 
 from collections.abc import MutableMapping, MutableSequence, MutableSet, Sequence
-from dataclasses import dataclass, fields
+from dataclasses import (
+    MISSING as DATACLASS_MISSING,
+    dataclass,
+    fields,
+)
 from enum import (
     Enum as _Enum,
     StrEnum,
@@ -69,6 +73,17 @@ class Params:
 
     def __init__(self, **kwargs: Any):
         """Init from kwargs. Validates and sets attributes."""
+        # First, apply defaults from dataclass fields
+        for f in fields(self):
+            if f.name.startswith("_"):
+                continue
+            if f.name not in kwargs:
+                # Apply default or default_factory
+                if f.default is not DATACLASS_MISSING:
+                    object.__setattr__(self, f.name, f.default)
+                elif f.default_factory is not DATACLASS_MISSING:
+                    object.__setattr__(self, f.name, f.default_factory())
+
         # Set all attributes from kwargs, allowing for sentinel values
         for k, v in kwargs.items():
             if k in self.allowed():

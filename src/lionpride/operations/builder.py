@@ -34,15 +34,29 @@ class OperationGraphBuilder:
         inherit_context: bool = False,
         **kwargs,
     ) -> OperationGraphBuilder:
-        """Add operation to graph. Returns self for chaining."""
+        """Add operation to graph. Returns self for chaining.
+
+        Args:
+            name: Operation name for reference
+            operation: Operation type (communicate, operate, react, generate)
+            parameters: Operation parameters dict or model
+            depends_on: List of operation names this depends on
+            inherit_context: Whether to inherit context from dependencies
+            **kwargs: Additional params merged into parameters (e.g., generate={...})
+        """
         if name in self._nodes:
             raise ValueError(f"Operation with name '{name}' already exists")
+
+        # Merge kwargs into parameters (allows builder.add(..., generate={...}))
+        params = parameters if isinstance(parameters, dict) else {}
+        if parameters and isinstance(parameters, BaseModel):
+            params = parameters.model_dump()
+        params.update(kwargs)
 
         # Create unified Operation node (Node + Event)
         op = Operation(
             operation_type=operation,
-            parameters=parameters or {},
-            **kwargs,
+            parameters=params,
         )
 
         # Store name in metadata for reference

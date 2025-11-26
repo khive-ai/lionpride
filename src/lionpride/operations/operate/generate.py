@@ -51,8 +51,9 @@ async def generate(session: Session, branch: Branch, params: GenerateParams | di
     # Get instruction as Message (handles string → Message conversion)
     instruction_msg = params.instruction_message
 
-    # Add instruction to branch if provided
-    if instruction_msg is not None:
+    # Add instruction to branch if not already in session
+    # This prevents duplicate adds when generate is called from communicate
+    if instruction_msg is not None and instruction_msg.id not in session.messages:
         session.add_message(instruction_msg, branches=b)
 
     # Prepare messages for chat API

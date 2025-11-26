@@ -65,6 +65,22 @@ async def communicate(
     """
     # Convert dict to CommunicateParams if needed
     if isinstance(params, dict):
+        # Handle top-level context from flow execution (merge into generate.context)
+        flow_context = params.pop("context", None)
+
+        # Handle nested dict conversion for generate and parse
+        if "generate" in params and isinstance(params["generate"], dict):
+            # Merge flow context into generate.context if present
+            if flow_context:
+                gen_dict = params["generate"]
+                existing_ctx = gen_dict.get("context") or {}
+                if isinstance(existing_ctx, dict):
+                    gen_dict["context"] = {**existing_ctx, **flow_context}
+                else:
+                    gen_dict["context"] = {"original": existing_ctx, **flow_context}
+            params["generate"] = GenerateParams(**params["generate"])
+        if "parse" in params and isinstance(params["parse"], dict):
+            params["parse"] = ParseParams(**params["parse"])
         params = CommunicateParams(**params)
 
     # Validate required generate params
@@ -134,7 +150,9 @@ async def communicate(
         )
 
         # 3. Add messages to session/branch (stateful)
-        session.add_message(ins_msg, branches=branch)
+        # Check if message already added (generate may have added it)
+        if ins_msg.id not in session.messages:
+            session.add_message(ins_msg, branches=branch)
         session.add_message(assistant_msg, branches=branch)
 
         # 4. Validate if structured output requested

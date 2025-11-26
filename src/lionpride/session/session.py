@@ -108,12 +108,12 @@ class Session(Element):
         user: str | UUID | None = None,
         conversations: Flow[Message, Branch] | None = None,
         services: ServiceRegistry | None = None,
+        *,  # keyword-only from here
         default_branch: Branch | UUID | str | None = None,
         default_generate_model: iModel | str | None = None,
         default_parse_model: iModel | str | None = None,
         default_capabilities: set[str] | None = None,
         default_system: Message | None = None,
-        /,
         **data,
     ):
         d_ = {

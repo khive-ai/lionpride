@@ -18,10 +18,6 @@ from pydantic import BaseModel, Field
 from lionpride.rules import ActionRequest, ActionResponse
 
 from .types import (
-    ActParams,
-    CommunicateParams,
-    GenerateParams,
-    OperateParams,
     ReactParams,
 )
 
@@ -128,6 +124,26 @@ async def react(
 
     # Convert dict to ReactParams if needed
     if isinstance(params, dict):
+        # Handle nested dict conversion for operate
+        if "operate" in params and isinstance(params["operate"], dict):
+            op = params["operate"]
+            # Handle nested communicate in operate
+            if "communicate" in op and isinstance(op["communicate"], dict):
+                comm = op["communicate"]
+                if "generate" in comm and isinstance(comm["generate"], dict):
+                    from .types import GenerateParams
+
+                    comm["generate"] = GenerateParams(**comm["generate"])
+                from .types import CommunicateParams
+
+                op["communicate"] = CommunicateParams(**comm)
+            if "act" in op and isinstance(op["act"], dict):
+                from .types import ActParams
+
+                op["act"] = ActParams(**op["act"])
+            from .types import OperateParams
+
+            params["operate"] = OperateParams(**op)
         params = ReactParams(**params)
 
     # Validate params
@@ -321,6 +337,26 @@ async def react_stream(
 
     # Convert dict to ReactParams if needed
     if isinstance(params, dict):
+        # Handle nested dict conversion for operate
+        if "operate" in params and isinstance(params["operate"], dict):
+            op = params["operate"]
+            # Handle nested communicate in operate
+            if "communicate" in op and isinstance(op["communicate"], dict):
+                comm = op["communicate"]
+                if "generate" in comm and isinstance(comm["generate"], dict):
+                    from .types import GenerateParams
+
+                    comm["generate"] = GenerateParams(**comm["generate"])
+                from .types import CommunicateParams
+
+                op["communicate"] = CommunicateParams(**comm)
+            if "act" in op and isinstance(op["act"], dict):
+                from .types import ActParams
+
+                op["act"] = ActParams(**op["act"])
+            from .types import OperateParams
+
+            params["operate"] = OperateParams(**op)
         params = ReactParams(**params)
 
     # Validate params (same as react)
