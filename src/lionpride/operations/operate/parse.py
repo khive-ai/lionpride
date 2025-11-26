@@ -1,202 +1,212 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Parse operation - fuzzy JSON parsing with LLM fallback.
+"""Parse operation - JSON extraction with LLM fallback.
 
-Tries direct extraction first, falls back to LLM reformatting on failure.
-Essential for robust pipelines where LLM output may be malformed.
+Extracts JSON from raw LLM response text. Falls back to LLM reformatting
+if direct extraction fails. Returns dict - validation happens in Validator.
+
+Flow:
+    raw_text → parse() → dict → Validator.validate() → typed model
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal, cast
-
-from pydantic import BaseModel
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Literal
 
 from lionpride.libs.string_handlers import extract_json
 from lionpride.ln import fuzzy_validate_mapping
+from lionpride.services.types import iModel
+from lionpride.types.base import ModelConfig, Params
 
 if TYPE_CHECKING:
     from lionpride.session import Branch, Session
 
+__all__ = ("ParseParams", "parse")
+
 # Type alias for handle_unmatched parameter
 HandleUnmatched = Literal["ignore", "raise", "remove", "fill", "force"]
-HandleValidation = Literal["raise", "return_none", "return_value"]
+
+
+@dataclass(init=False, frozen=True, slots=True)
+class ParseParams(Params):
+    """Parameters for parse operation.
+
+    Parse extracts JSON from raw text. If extraction fails and imodel
+    is provided, uses LLM to reformat the text into valid JSON.
+    """
+
+    _config = ModelConfig(none_as_sentinel=True, empty_as_sentinel=True)
+
+    text: str = None
+    """Raw text to parse (e.g., LLM response)"""
+
+    target_keys: list[str] = field(default_factory=list)
+    """Expected keys for fuzzy matching (optional)"""
+
+    imodel: iModel | str = None
+    """Model for LLM reparse fallback (optional)"""
+
+    similarity_threshold: float = 0.85
+    """Fuzzy match threshold for key mapping"""
+
+    handle_unmatched: HandleUnmatched = "force"
+    """How to handle unmatched keys during fuzzy matching"""
+
+    max_retries: int = 3
+    """Retry attempts for LLM reparse"""
+
+    imodel_kwargs: dict[str, Any] = field(default_factory=dict)
+    """Additional kwargs for imodel"""
 
 
 async def parse(
     session: Session,
-    branch: Branch | str,
-    parameters: dict[str, Any],
-) -> Any:
-    """Parse text into structured output with fuzzy matching and LLM fallback.
+    branch: Branch,
+    params: ParseParams,
+) -> dict[str, Any] | None:
+    """Parse raw text into JSON dict.
+
+    Tries direct JSON extraction first. Falls back to LLM reformatting
+    if direct extraction fails and imodel is provided.
+
+    Security: Branch must have access to imodel if using LLM reparse.
 
     Args:
-        parameters: Must include:
-            - text: str - Text to parse
-            - response_model: type[BaseModel] - Target Pydantic model
-            Optional:
-            - imodel: Model to use for LLM fallback
-            - max_retries: int - Retry attempts for LLM fallback (default: 3)
-            - similarity_threshold: float - Fuzzy match threshold (default: 0.85)
-            - handle_unmatched: str - How to handle unmatched keys (default: "force")
-            - handle_validation: str - "raise", "return_none", "return_value" (default: "return_value")
+        session: Session for service access
+        branch: Branch for resource access control
+        params: Parse parameters
 
     Returns:
-        Validated Pydantic model instance, or fallback based on handle_validation
+        Extracted dict, or None if extraction fails
+
+    Raises:
+        PermissionError: If branch doesn't have access to imodel
     """
-    # Extract parameters
-    text = parameters.get("text")
+    text = params.text
     if not text:
-        raise ValueError("parse requires 'text' parameter")
+        return None
 
-    response_model = parameters.get("response_model")
-    if not response_model:
-        raise ValueError("parse requires 'response_model' parameter")
+    # 1. Try direct JSON extraction
+    extracted = _try_direct_extract(
+        text=text,
+        target_keys=params.target_keys,
+        similarity_threshold=params.similarity_threshold,
+        handle_unmatched=params.handle_unmatched,
+    )
+    if extracted is not None:
+        return extracted
 
-    imodel = parameters.get("imodel")
-    max_retries = parameters.get("max_retries", 3)
-    similarity_threshold = parameters.get("similarity_threshold", 0.85)
-    handle_unmatched = cast(HandleUnmatched, parameters.get("handle_unmatched", "force"))
-    handle_validation = cast(HandleValidation, parameters.get("handle_validation", "return_value"))
+    # 2. LLM fallback - check resource access first
+    if params.imodel is None:
+        return None  # No fallback available
 
-    # Try direct extraction first (no LLM call needed)
-    try:
-        result = _try_direct_parse(
-            text=text,
-            response_model=response_model,
-            similarity_threshold=similarity_threshold,
-            handle_unmatched=handle_unmatched,
+    model_name = params.imodel.name if isinstance(params.imodel, iModel) else params.imodel
+    if model_name not in branch.resources:
+        raise PermissionError(
+            f"Branch '{branch.name}' cannot access model '{model_name}' for reparse. "
+            f"Allowed: {branch.resources or 'none'}"
         )
-        if result is not None:
-            return result
-    except Exception:
-        pass  # Fall through to LLM fallback
 
-    # LLM fallback - use communicate to reformat
-    if not imodel:
-        # No model for fallback
-        return _handle_failure(text, handle_validation, "No imodel provided for LLM fallback")
-
-    # Resolve branch
-    if isinstance(branch, str):
-        branch = session.conversations.get_progression(branch)
-
-    # Try LLM reformatting with retries
-    last_error = None
-    for _attempt in range(max_retries):
+    # 3. Try LLM reparse with retries
+    for _attempt in range(params.max_retries):
         try:
-            result = await _llm_reformat(
+            result = await _llm_reparse(
                 session=session,
                 branch=branch,
                 text=text,
-                response_model=response_model,
-                imodel=imodel,
-                similarity_threshold=similarity_threshold,
-                handle_unmatched=handle_unmatched,
+                target_keys=params.target_keys,
+                model_name=model_name,
+                similarity_threshold=params.similarity_threshold,
+                handle_unmatched=params.handle_unmatched,
+                imodel_kwargs=params.imodel_kwargs,
             )
             if result is not None:
                 return result
-        except Exception as e:
-            last_error = e
+        except Exception:
             continue
 
-    # All retries failed
-    return _handle_failure(text, handle_validation, str(last_error))
+    return None
 
 
-def _try_direct_parse(
+def _try_direct_extract(
     text: str,
-    response_model: type[BaseModel],
+    target_keys: list[str],
     similarity_threshold: float,
     handle_unmatched: HandleUnmatched,
-) -> BaseModel | None:
-    """Try to parse text directly without LLM."""
-    # Extract JSON from text
+) -> dict[str, Any] | None:
+    """Try to extract JSON directly from text."""
     extracted = extract_json(text)
     if not extracted:
         return None
 
-    # Handle list results
+    # Handle list results - take first dict
     if isinstance(extracted, list):
         extracted = extracted[0] if extracted else None
     if not extracted or not isinstance(extracted, dict):
         return None
 
-    # Fuzzy validate keys against model fields
-    target_keys = list(response_model.model_fields.keys())
-    validated = fuzzy_validate_mapping(
-        extracted,
-        target_keys,
-        similarity_threshold=similarity_threshold,
-        handle_unmatched=handle_unmatched,
-    )
+    # Fuzzy validate keys if target_keys provided
+    if target_keys:
+        extracted = fuzzy_validate_mapping(
+            extracted,
+            target_keys,
+            similarity_threshold=similarity_threshold,
+            handle_unmatched=handle_unmatched,
+        )
 
-    # Try to create model instance
-    return response_model.model_validate(validated)
+    return extracted
 
 
-async def _llm_reformat(
+async def _llm_reparse(
     session: Session,
     branch: Branch,
     text: str,
-    response_model: type[BaseModel],
-    imodel: Any,
+    target_keys: list[str],
+    model_name: str,
     similarity_threshold: float,
     handle_unmatched: HandleUnmatched,
-) -> BaseModel | None:
-    """Use LLM to reformat text into the target structure."""
-    from .communicate import communicate
+    imodel_kwargs: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Use LLM to reformat text into valid JSON."""
+    from lionpride.session.messages import InstructionContent, Message
+
+    from .generate import GenerateParams, generate
 
     # Build instruction for reformatting
-    schema_str = response_model.model_json_schema()
-    instruction = (
-        "Reformat the following text into the specified JSON structure. "
-        "Extract relevant information and map it to the correct fields. "
-        "Return ONLY valid JSON matching the schema, no other text."
+    instruction_text = (
+        "Extract and reformat the following text into valid JSON. "
+        "Return ONLY the JSON object, no other text or markdown formatting."
+    )
+    if target_keys:
+        instruction_text += f"\n\nExpected fields: {', '.join(target_keys)}"
+
+    instruction_text += f"\n\nText to parse:\n{text}"
+
+    instruction = Message(
+        content=InstructionContent(instruction=instruction_text),
+        sender=branch.user,
+        recipient=session.id,
     )
 
-    context = {
-        "text_to_parse": text,
-        "target_schema": schema_str,
-    }
+    # Generate reformatted response
+    gen_params = GenerateParams(
+        imodel=model_name,
+        instruction=instruction,
+        return_as="text",
+        imodel_kwargs=imodel_kwargs,
+    )
 
-    # Use communicate to get reformatted response
-    params = {
-        "instruction": instruction,
-        "context": context,
-        "imodel": imodel,
-        "response_model": response_model,
-        "max_retries": 0,  # We handle retries at the outer level
-    }
+    result = await generate(session, branch, gen_params)
 
-    result = await communicate(session, branch, params)
-
-    # If we got a model instance, return it
-    if isinstance(result, BaseModel):
-        return result
-
-    # If we got text, try to parse it
+    # Try to extract JSON from LLM response
     if isinstance(result, str):
-        return _try_direct_parse(
+        return _try_direct_extract(
             text=result,
-            response_model=response_model,
+            target_keys=target_keys,
             similarity_threshold=similarity_threshold,
             handle_unmatched=handle_unmatched,
         )
 
     return None
-
-
-def _handle_failure(
-    original_text: str,
-    handle_validation: HandleValidation,
-    error_msg: str,
-) -> Any:
-    """Handle parsing failure based on handle_validation setting."""
-    if handle_validation == "raise":
-        raise ValueError(f"Failed to parse text: {error_msg}")
-    elif handle_validation == "return_none":
-        return None
-    else:  # return_value
-        return original_text
