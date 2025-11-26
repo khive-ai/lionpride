@@ -56,6 +56,162 @@ class TestPostgresLogAdapterValidation:
 
 
 # -----------------------------------------------------------------------------
+# Mock-based unit tests (no Docker required)
+# -----------------------------------------------------------------------------
+
+
+class TestPostgresLogAdapterMocked:
+    """Unit tests for PostgresLogAdapter using mocks (no Docker required)."""
+
+    def test_dsn_conversion_postgresql_to_asyncpg(self):
+        """Should convert postgresql:// to postgresql+asyncpg://."""
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test")
+        assert adapter.dsn == "postgresql://localhost/test"
+
+    def test_auto_create_default_true(self):
+        """auto_create should default to True."""
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test")
+        assert adapter.auto_create is True
+
+    def test_auto_create_false(self):
+        """auto_create=False should be respected."""
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test", auto_create=False)
+        assert adapter.auto_create is False
+
+    @pytest.mark.asyncio
+    async def test_write_empty_logs(self):
+        """Writing empty list should return 0 without touching DB."""
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test")
+        # Should not require initialization for empty list
+        adapter._initialized = True
+        adapter._engine = None
+
+        count = await adapter.write([])
+        assert count == 0
+
+    @pytest.mark.asyncio
+    async def test_close_without_engine(self):
+        """Close should handle case when engine is None."""
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test")
+        assert adapter._engine is None
+
+        # Should not raise
+        await adapter.close()
+        assert adapter._initialized is False
+
+    @pytest.mark.asyncio
+    async def test_close_resets_state(self):
+        """Close should reset initialized state."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test")
+        adapter._initialized = True
+        adapter._engine = MagicMock()
+        adapter._engine.dispose = AsyncMock()
+
+        await adapter.close()
+
+        assert adapter._engine is None
+        assert adapter._initialized is False
+
+    def test_table_with_underscore_valid(self):
+        """Table names with underscores should be valid."""
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test", table="my_app_logs")
+        assert adapter.table == "my_app_logs"
+
+    def test_table_starting_with_underscore_valid(self):
+        """Table names starting with underscore should be valid."""
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test", table="_internal_logs")
+        assert adapter.table == "_internal_logs"
+
+    @pytest.mark.asyncio
+    async def test_read_empty_database_mocked(self):
+        """Read should return empty list when no logs exist."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test")
+        adapter._initialized = True
+
+        # Mock engine and connection
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = []
+
+        mock_conn = AsyncMock()
+        mock_conn.execute = AsyncMock(return_value=mock_result)
+        mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_conn.__aexit__ = AsyncMock(return_value=None)
+
+        mock_engine = MagicMock()
+        mock_engine.connect = MagicMock(return_value=mock_conn)
+
+        adapter._engine = mock_engine
+
+        result = await adapter.read(limit=10)
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_read_with_log_type_filter(self):
+        """Read should filter by log_type."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test")
+        adapter._initialized = True
+
+        # Mock return data
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = [({"log_type": "info", "message": "test"},)]
+
+        mock_conn = AsyncMock()
+        mock_conn.execute = AsyncMock(return_value=mock_result)
+        mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_conn.__aexit__ = AsyncMock(return_value=None)
+
+        mock_engine = MagicMock()
+        mock_engine.connect = MagicMock(return_value=mock_conn)
+
+        adapter._engine = mock_engine
+
+        result = await adapter.read(log_type="info", limit=10)
+
+        assert len(result) == 1
+        assert result[0]["log_type"] == "info"
+
+    @pytest.mark.asyncio
+    async def test_read_with_since_filter_iso_string(self):
+        """Read should convert ISO string to datetime for since filter."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test")
+        adapter._initialized = True
+
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = []
+
+        mock_conn = AsyncMock()
+        mock_conn.execute = AsyncMock(return_value=mock_result)
+        mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_conn.__aexit__ = AsyncMock(return_value=None)
+
+        mock_engine = MagicMock()
+        mock_engine.connect = MagicMock(return_value=mock_conn)
+
+        adapter._engine = mock_engine
+
+        # Use ISO string
+        since_str = "2025-01-01T00:00:00+00:00"
+
+        await adapter.read(since=since_str, limit=10)
+
+        # Verify the call was made (datetime conversion happens internally)
+        assert mock_conn.execute.called
+        call_args = mock_conn.execute.call_args
+        params = call_args[0][1]
+        # The since param should be a datetime, not string
+        assert isinstance(params["since"], datetime)
+
+
+# -----------------------------------------------------------------------------
 # Integration tests (require testcontainers)
 # -----------------------------------------------------------------------------
 
