@@ -74,40 +74,44 @@ class TestGenerateValidation:
         """Test that missing imodel parameter raises ValueError."""
         session, _ = session_with_model
         branch = session.create_branch(name="test")
+        branch.resources.add("mock_model")
 
-        parameters = {"messages": [{"role": "user", "content": "test"}]}
+        parameters = {"instruction": "test"}
 
-        with pytest.raises(ValueError, match="generate requires 'imodel' parameter"):
+        with pytest.raises(ValueError, match="No imodel specified"):
             await generate(session, branch, parameters)
 
 
 class TestReturnAsVariants:
     """Test return_as parameter behavior."""
 
-    async def test_return_as_text_default(self, session_with_model):
-        """Test default return_as='text' returns response string."""
+    async def test_return_as_calling_default(self, session_with_model):
+        """Test default return_as='calling' returns Event object."""
         session, _ = session_with_model
         branch = session.create_branch(name="test")
+        branch.resources.add("mock_model")
 
         parameters = {
             "imodel": "mock_model",
-            "messages": [{"role": "user", "content": "test"}],
+            "instruction": "test",
         }
 
         result = await generate(session, branch, parameters)
 
-        assert isinstance(result, str)
-        assert result == "mock response text"
+        # Default return_as is "calling" which returns the Event
+        assert isinstance(result, Event)
+        assert result.status == EventStatus.COMPLETED
 
     async def test_return_as_text_explicit(self, session_with_model):
         """Test explicit return_as='text'."""
         session, _ = session_with_model
         branch = session.create_branch(name="test")
+        branch.resources.add("mock_model")
 
         parameters = {
             "imodel": "mock_model",
             "return_as": "text",
-            "messages": [{"role": "user", "content": "test"}],
+            "instruction": "test",
         }
 
         result = await generate(session, branch, parameters)
@@ -119,11 +123,12 @@ class TestReturnAsVariants:
         """Test return_as='raw' returns full raw API response."""
         session, _ = session_with_model
         branch = session.create_branch(name="test")
+        branch.resources.add("mock_model")
 
         parameters = {
             "imodel": "mock_model",
             "return_as": "raw",
-            "messages": [{"role": "user", "content": "test"}],
+            "instruction": "test",
         }
 
         result = await generate(session, branch, parameters)
@@ -136,11 +141,12 @@ class TestReturnAsVariants:
         """Test return_as='message' returns Message with metadata."""
         session, _ = session_with_model
         branch = session.create_branch(name="test")
+        branch.resources.add("mock_model")
 
         parameters = {
             "imodel": "mock_model",
             "return_as": "message",
-            "messages": [{"role": "user", "content": "test"}],
+            "instruction": "test",
         }
 
         result = await generate(session, branch, parameters)
@@ -157,47 +163,51 @@ class TestReturnAsVariants:
         """Test invalid return_as raises ValueError."""
         session, _ = session_with_model
         branch = session.create_branch(name="test")
+        branch.resources.add("mock_model")
 
         parameters = {
             "imodel": "mock_model",
             "return_as": "invalid",
-            "messages": [{"role": "user", "content": "test"}],
+            "instruction": "test",
         }
 
         with pytest.raises(ValueError, match="Unsupported return_as"):
             await generate(session, branch, parameters)
 
 
-class TestStatelessBehavior:
-    """Test that generate is stateless."""
+class TestMessageBehavior:
+    """Test message handling behavior."""
 
-    async def test_no_messages_added_to_branch(self, session_with_model):
-        """Test that generate does not add messages to session/branch."""
+    async def test_instruction_added_to_branch(self, session_with_model):
+        """Test that generate adds instruction message to branch."""
         session, _ = session_with_model
         branch = session.create_branch(name="test")
+        branch.resources.add("mock_model")
 
         # Verify branch starts empty
         initial_count = len(session.messages[branch])
+        assert initial_count == 0
 
         parameters = {
             "imodel": "mock_model",
-            "messages": [{"role": "user", "content": "test"}],
+            "instruction": "test",
         }
 
         await generate(session, branch, parameters)
 
-        # Verify no messages were added
+        # Verify instruction message was added
         final_count = len(session.messages[branch])
-        assert final_count == initial_count
+        assert final_count == 1
 
 
 class TestErrorHandling:
     """Test error handling for various failure modes."""
 
-    async def test_failed_invocation_raises_runtime_error(self, session_with_model):
-        """Test RuntimeError raised when model invocation fails."""
+    async def test_failed_invocation_returns_failed_calling(self, session_with_model):
+        """Test failed invocation returns Calling with FAILED status."""
         session, model = session_with_model
         branch = session.create_branch(name="test")
+        branch.resources.add("mock_model")
 
         async def mock_invoke_failed(**kwargs):
             class FailedCalling(Event):
@@ -212,23 +222,34 @@ class TestErrorHandling:
 
         parameters = {
             "imodel": "mock_model",
-            "messages": [{"role": "user", "content": "test"}],
+            "instruction": "test",
+            "return_as": "calling",
         }
 
-        with pytest.raises(RuntimeError, match="Generation failed"):
-            await generate(session, branch, parameters)
+        # With return_as="calling", failed invocation returns the Calling object
+        result = await generate(session, branch, parameters)
+        assert isinstance(result, Event)
+        assert result.status == EventStatus.FAILED
+        assert result.execution.error == "API error occurred"
 
-    async def test_failed_invocation_without_error_message(self, session_with_model):
-        """Test RuntimeError includes status when no error message."""
+    async def test_failed_invocation_text_access_raises_attribute_error(self, session_with_model):
+        """Test accessing text from failed invocation raises AttributeError."""
         session, model = session_with_model
         branch = session.create_branch(name="test")
+        branch.resources.add("mock_model")
 
         async def mock_invoke_failed(**kwargs):
             class FailedCalling(Event):
                 def __init__(self):
                     super().__init__()
                     self.status = EventStatus.FAILED
-                    self.execution.error = None
+                    self.execution.error = "API error occurred"
+
+                @property
+                def response(self):
+                    from lionpride.types import Unset
+
+                    return Unset
 
             return FailedCalling()
 
@@ -236,10 +257,12 @@ class TestErrorHandling:
 
         parameters = {
             "imodel": "mock_model",
-            "messages": [{"role": "user", "content": "test"}],
+            "instruction": "test",
+            "return_as": "text",
         }
 
-        with pytest.raises(RuntimeError, match=r"Generation failed.*status"):
+        # When invocation fails, response is Unset, accessing .data raises AttributeError
+        with pytest.raises(AttributeError):
             await generate(session, branch, parameters)
 
 
@@ -250,13 +273,16 @@ class TestParameterPassthrough:
         """Test that extra parameters are forwarded to imodel.invoke()."""
         session, model = session_with_model
         branch = session.create_branch(name="test")
+        branch.resources.add("mock_model")
 
         parameters = {
             "imodel": "mock_model",
-            "messages": [{"role": "user", "content": "test"}],
-            "model": "gpt-4",
-            "temperature": 0.7,
-            "max_tokens": 100,
+            "instruction": "test",
+            "imodel_kwargs": {
+                "model": "gpt-4",
+                "temperature": 0.7,
+                "max_tokens": 100,
+            },
         }
 
         await generate(session, branch, parameters)
@@ -264,7 +290,8 @@ class TestParameterPassthrough:
         # Verify invoke was called with forwarded parameters
         model.invoke.assert_called_once()
         call_kwargs = model.invoke.call_args.kwargs
-        assert call_kwargs["messages"] == [{"role": "user", "content": "test"}]
+        # messages are constructed internally from instruction
+        assert "messages" in call_kwargs
         assert call_kwargs["model"] == "gpt-4"
         assert call_kwargs["temperature"] == 0.7
         assert call_kwargs["max_tokens"] == 100
@@ -277,11 +304,12 @@ class TestGenerateCoverage:
         """Test line 59: return_as='calling' returns the Calling object."""
         session, _ = session_with_model
         branch = session.create_branch(name="test")
+        branch.resources.add("mock_model")
 
         parameters = {
             "imodel": "mock_model",
             "return_as": "calling",
-            "messages": [{"role": "user", "content": "test"}],
+            "instruction": "test",
         }
 
         result = await generate(session, branch, parameters)

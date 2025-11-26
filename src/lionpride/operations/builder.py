@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from lionpride.core import Edge, Graph
 
-from .node import Operation, OperationType, create_operation
+from .node import Operation, OperationType
 
 __all__ = ("Builder", "OperationGraphBuilder")
 
@@ -170,19 +170,34 @@ class OperationGraphBuilder:
         if not sources:
             raise ValueError("No source operations for aggregation")
 
-        # Add aggregation metadata to parameters
-        params = parameters or {}
+        # Validate all sources exist before proceeding
+        for source_name in sources:
+            if source_name not in self._nodes:
+                raise ValueError(f"Source operation '{source_name}' not found")
+
+        # Handle parameters - keep as BaseModel if passed that way
+        if parameters is None:
+            params = {}
+        elif isinstance(parameters, BaseModel):
+            params = parameters  # Keep as BaseModel
+        else:
+            params = dict(parameters)  # Copy dict
+
+        # Merge kwargs into params if it's a dict
         if isinstance(params, dict):
-            params = {
-                "aggregation_sources": [str(self._nodes[s].id) for s in sources],
-                "aggregation_count": len(sources),
-                **params,
-            }
+            params.update(kwargs)
 
         # Create operation node
-        op = create_operation(operation, params, **kwargs)
+        op = Operation(
+            operation_type=operation,
+            parameters=params,
+            metadata={},
+        )
         op.metadata["name"] = name
         op.metadata["aggregation"] = True
+        # Store aggregation sources in metadata, not parameters
+        op.metadata["aggregation_sources"] = [str(self._nodes[s].id) for s in sources]
+        op.metadata["aggregation_count"] = len(sources)
 
         # Store context inheritance for aggregations
         if inherit_context and sources:
@@ -195,10 +210,8 @@ class OperationGraphBuilder:
         self.graph.add_node(op)
         self._nodes[name] = op
 
-        # Connect all sources
+        # Connect all sources (already validated above)
         for source_name in sources:
-            if source_name not in self._nodes:
-                raise ValueError(f"Source operation '{source_name}' not found")
             source_node = self._nodes[source_name]
             edge = Edge(head=source_node.id, tail=op.id, label=["aggregate"])
             self.graph.add_edge(edge)

@@ -85,6 +85,7 @@ class TestCommunicateCoverage:
 
         session, model = session_with_model
         branch = session.create_branch(name="test")
+        branch.resources.add("mock_model")
 
         params = CommunicateParams(
             generate=GenerateParams(
@@ -104,6 +105,7 @@ class TestCommunicateCoverage:
 
         session, model = session_with_model
         branch = session.create_branch(name="test")
+        branch.resources.add("mock_model")
 
         params = CommunicateParams(
             generate=GenerateParams(
@@ -123,6 +125,7 @@ class TestCommunicateCoverage:
 
         session, model = session_with_model
         branch = session.create_branch(name="test")
+        branch.resources.add("mock_model")
 
         params = CommunicateParams(
             generate=GenerateParams(
@@ -193,6 +196,7 @@ class TestCommunicateCoverage:
 
         session, _model = session_with_model
         branch = session.create_branch(name="test")
+        branch.resources.add("mock_model")
 
         # Pass imodel as string name
         params = CommunicateParams(

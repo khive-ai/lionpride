@@ -85,7 +85,7 @@ class TestFlowErrorHandling:
     async def test_cyclic_graph_raises_error(self, session_with_model):
         """Test line 94: Graph with cycles raises ValueError."""
         session, _model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         # Create cyclic graph manually
         op1 = create_operation(operation="generate", parameters={"instruction": "First"})
@@ -108,7 +108,7 @@ class TestFlowErrorHandling:
         from lionpride import Node
 
         session, _model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         # Create graph with non-Operation node
         graph = Graph()
@@ -122,7 +122,7 @@ class TestFlowErrorHandling:
         """Test line 131: String branch name resolution."""
         session, model = session_with_model
         branch_name = "test_branch"
-        session.create_branch(name=branch_name)
+        session.create_branch(name=branch_name, resources={"mock"})
 
         builder = Builder()
         builder.add(
@@ -131,7 +131,7 @@ class TestFlowErrorHandling:
             {
                 "instruction": "Test",
                 "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
             },
         )
         graph = builder.build()
@@ -145,7 +145,7 @@ class TestFlowErrorHandling:
         """Test line 133: None branch fallback when default_branch not set."""
         session, model = session_with_model
         # Create branch without setting as default to test None fallback
-        _branch = session.create_branch(name="test", set_as_default=False)
+        _branch = session.create_branch(name="test", resources={"mock"})
         assert session.default_branch is None  # Verify no default set
 
         builder = Builder()
@@ -155,7 +155,7 @@ class TestFlowErrorHandling:
             {
                 "instruction": "Test",
                 "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
             },
         )
         graph = builder.build()
@@ -180,7 +180,7 @@ class TestFlowErrorHandling:
     async def test_verbose_branch_preallocation(self, session_with_model, capsys):
         """Test line 142: Verbose logging for branch pre-allocation."""
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         builder = Builder()
         builder.add(
@@ -189,7 +189,7 @@ class TestFlowErrorHandling:
             {
                 "instruction": "Test",
                 "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
             },
         )
         builder.add(
@@ -198,7 +198,7 @@ class TestFlowErrorHandling:
             {
                 "instruction": "Test2",
                 "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
             },
         )
         graph = builder.build()
@@ -220,7 +220,7 @@ class TestFlowStopConditions:
     async def test_error_with_stop_on_error_true_reraises(self, session_with_model):
         """Test lines 169-182: Error handling with stop_on_error=True."""
         session, _model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         # Create failing factory
         async def failing_factory(session, branch, parameters):
@@ -243,7 +243,7 @@ class TestFlowStopConditions:
     async def test_error_verbose_logging(self, session_with_model, capsys):
         """Test lines 169-182: Verbose error logging with stop_on_error=True."""
         session, _model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         # Create failing factory
         async def failing_factory(session, branch, parameters):
@@ -268,7 +268,7 @@ class TestFlowStopConditions:
     async def test_aggregation_verbose_logging(self, session_with_model, capsys):
         """Test line 200: Verbose logging for aggregation sources."""
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         builder = Builder()
         builder.add(
@@ -277,7 +277,7 @@ class TestFlowStopConditions:
             {
                 "instruction": "First",
                 "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
             },
         )
         builder.add(
@@ -286,7 +286,7 @@ class TestFlowStopConditions:
             {
                 "instruction": "Second",
                 "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
             },
         )
         builder.add_aggregation(
@@ -295,7 +295,7 @@ class TestFlowStopConditions:
             {
                 "instruction": "Aggregate",
                 "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
             },
             source_names=["source1", "source2"],
         )
@@ -311,7 +311,7 @@ class TestFlowStopConditions:
     async def test_graph_dependencies_verbose_logging(self, session_with_model, capsys):
         """Test line 217: Verbose logging for graph dependencies."""
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         builder = Builder()
         builder.add(
@@ -320,7 +320,7 @@ class TestFlowStopConditions:
             {
                 "instruction": "First",
                 "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
             },
         )
         builder.add(
@@ -329,7 +329,7 @@ class TestFlowStopConditions:
             {
                 "instruction": "Second",
                 "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
             },
             depends_on=["task1"],
         )
@@ -353,7 +353,7 @@ class TestFlowExecutionEvents:
     async def test_no_dependencies_with_shared_context(self, session_with_model):
         """Test line 242: Operation with no dependencies receives shared context."""
         session, _model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         received_context = None
 
@@ -378,7 +378,7 @@ class TestFlowExecutionEvents:
     async def test_skipped_predecessor_not_in_context(self, session_with_model):
         """Test line 250: Skipped or failed predecessors excluded from context."""
         session, _model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         received_context = None
 
@@ -410,7 +410,7 @@ class TestFlowExecutionEvents:
     async def test_context_merge_with_existing_dict(self, session_with_model):
         """Test lines 261, 270-272: Merging predecessor context with existing dict context."""
         session, _model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         # First task produces result
         async def producer(session, branch, parameters):
@@ -451,7 +451,7 @@ class TestFlowExecutionEvents:
     async def test_context_wrap_non_dict_existing(self, session_with_model):
         """Test lines 270-275: Non-dict existing context gets wrapped."""
         session, _model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         # Producer
         async def producer(session, branch, parameters):
@@ -499,7 +499,7 @@ class TestFlowResultProcessing:
     async def test_verbose_context_preparation(self, session_with_model, capsys):
         """Test line 281: Verbose logging for context preparation."""
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         builder = Builder()
         builder.add(
@@ -508,7 +508,7 @@ class TestFlowResultProcessing:
             {
                 "instruction": "First",
                 "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
             },
         )
         builder.add(
@@ -517,7 +517,7 @@ class TestFlowResultProcessing:
             {
                 "instruction": "Second",
                 "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
             },
             depends_on=["task1"],
         )
@@ -532,7 +532,7 @@ class TestFlowResultProcessing:
     async def test_verbose_operation_execution(self, session_with_model, capsys):
         """Test line 292: Verbose logging for operation execution."""
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         builder = Builder()
         builder.add(
@@ -541,7 +541,7 @@ class TestFlowResultProcessing:
             {
                 "instruction": "Test",
                 "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
             },
         )
         graph = builder.build()
@@ -561,7 +561,7 @@ class TestFlowResultProcessing:
             parameters={
                 "instruction": "Test",
                 "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
             },
         )
         op.metadata["name"] = "test"
@@ -583,7 +583,7 @@ class TestFlowResultProcessing:
     async def test_verbose_execution_status_and_error(self, session_with_model, capsys):
         """Test lines 311-313: Verbose logging for execution status and errors."""
         session, _model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         # Create factory that fails during execution
         async def execution_fail(session, branch, parameters):
@@ -606,7 +606,7 @@ class TestFlowResultProcessing:
     async def test_context_update_from_result(self, session_with_model):
         """Test line 320: Shared context updated when result contains 'context'."""
         session, _model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         # First task returns result with context
         async def context_producer(session, branch, parameters):
@@ -638,7 +638,7 @@ class TestFlowResultProcessing:
     async def test_verbose_operation_completion(self, session_with_model, capsys):
         """Test line 323: Verbose logging for operation completion."""
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         builder = Builder()
         builder.add(
@@ -647,7 +647,7 @@ class TestFlowResultProcessing:
             {
                 "instruction": "Test",
                 "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
             },
         )
         graph = builder.build()
@@ -660,7 +660,7 @@ class TestFlowResultProcessing:
     async def test_verbose_operation_failure(self, session_with_model, capsys):
         """Test line 332: Verbose logging for operation failure."""
         session, _model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         # Create factory that simulates EventStatus.FAILED
         from lionpride import Event
@@ -695,7 +695,7 @@ class TestFlowIntegration:
     async def test_complex_dag_with_multiple_paths(self, session_with_model):
         """Test complex DAG execution with multiple dependency paths."""
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         builder = Builder()
         # Diamond dependency: task1 → task2, task3 → task4
@@ -705,7 +705,7 @@ class TestFlowIntegration:
             {
                 "instruction": "Root",
                 "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
             },
         )
         builder.add(
@@ -714,7 +714,7 @@ class TestFlowIntegration:
             {
                 "instruction": "Left",
                 "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
             },
             depends_on=["task1"],
         )
@@ -724,7 +724,7 @@ class TestFlowIntegration:
             {
                 "instruction": "Right",
                 "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
             },
             depends_on=["task1"],
         )
@@ -734,7 +734,7 @@ class TestFlowIntegration:
             {
                 "instruction": "Merge",
                 "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
             },
             depends_on=["task2", "task3"],
         )
@@ -748,7 +748,7 @@ class TestFlowIntegration:
     async def test_stop_on_error_false_continues_execution(self, session_with_model):
         """Test that stop_on_error=False allows remaining tasks to execute."""
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         async def failing_factory(session, branch, parameters):
             raise RuntimeError("Fail")
@@ -764,7 +764,7 @@ class TestFlowIntegration:
             {
                 "instruction": "Independent",
                 "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
             },
         )  # Independent
 
@@ -778,7 +778,7 @@ class TestFlowIntegration:
     async def test_max_concurrent_limits_parallelism(self, session_with_model):
         """Test max_concurrent limits parallel execution."""
         session, _model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         concurrent_count = 0
         max_seen = 0
@@ -816,7 +816,7 @@ class TestFlowExceptionPaths:
     async def test_exception_in_execute_operation_no_verbose_no_stop(self, session_with_model):
         """Test lines 169, 171: Exception caught, stored, execution continues."""
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         # Create operation that will fail
         async def failing_op(session, branch, parameters):
@@ -833,7 +833,7 @@ class TestFlowExceptionPaths:
             {
                 "instruction": "Should run",
                 "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
             },
         )
         graph = builder.build()
@@ -850,7 +850,7 @@ class TestFlowExceptionPaths:
         from unittest.mock import patch
 
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         builder = Builder()
         builder.add(
@@ -859,7 +859,7 @@ class TestFlowExceptionPaths:
             {
                 "instruction": "Test",
                 "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
             },
         )
         builder.add(
@@ -868,7 +868,7 @@ class TestFlowExceptionPaths:
             {
                 "instruction": "Should run",
                 "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
             },
         )
         graph = builder.build()
@@ -912,7 +912,7 @@ class TestFlowExceptionPaths:
     async def test_exception_with_stop_on_error(self, session_with_model):
         """Test lines 169, 171, 179, 181, 182: stop_on_error=True re-raises."""
         session, _model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         async def failing_with_stop(session, branch, parameters):
             raise ValueError("Test exception with stop_on_error")
@@ -935,7 +935,7 @@ class TestFlowExceptionPaths:
     async def test_exception_with_verbose_and_stop(self, session_with_model, capsys):
         """Test lines 169-182: All exception paths with verbose + stop_on_error."""
         session, _model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         async def failing_full_path(session, branch, parameters):
             raise RuntimeError("Full exception path test")
@@ -963,7 +963,7 @@ class TestFlowExceptionPaths:
         from unittest.mock import patch
 
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         builder = Builder()
         builder.add(
@@ -972,7 +972,7 @@ class TestFlowExceptionPaths:
             {
                 "instruction": "Test",
                 "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
             },
         )
         graph = builder.build()
@@ -1021,7 +1021,7 @@ class TestFlowExceptionPaths:
         from unittest.mock import patch
 
         session, _model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         op = create_operation(operation="generate", parameters={"instruction": "Test"})
         op.metadata["name"] = "test_op"
@@ -1078,7 +1078,7 @@ class TestFlowStreamExecute:
     async def test_stream_execute_success(self, session_with_model):
         """Test stream_execute yields results as operations complete."""
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         builder = Builder()
         builder.add(
@@ -1087,7 +1087,7 @@ class TestFlowStreamExecute:
             {
                 "instruction": "First",
                 "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
             },
         )
         builder.add(
@@ -1096,7 +1096,7 @@ class TestFlowStreamExecute:
             {
                 "instruction": "Second",
                 "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
             },
         )
         graph = builder.build()
@@ -1119,7 +1119,7 @@ class TestFlowStreamExecute:
     async def test_stream_execute_with_error(self, session_with_model):
         """Test stream_execute yields error results for failed operations."""
         session, _model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         async def failing_factory(session, branch, parameters):
             raise RuntimeError("Test error")
@@ -1148,7 +1148,7 @@ class TestFlowStreamExecute:
     async def test_stream_execute_cyclic_graph_raises(self, session_with_model):
         """Test stream_execute raises for cyclic graph."""
         session, _model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         op1 = create_operation(operation="generate", parameters={})
         op2 = create_operation(operation="generate", parameters={})
@@ -1174,7 +1174,7 @@ class TestFlowStreamExecute:
         from lionpride import Node
 
         session, _model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         graph = Graph()
         invalid_node = Node(content={"invalid": True})
@@ -1193,7 +1193,7 @@ class TestFlowStreamExecute:
     async def test_flow_stream_function(self, session_with_model):
         """Test flow_stream() function."""
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock"})
 
         builder = Builder()
         builder.add(
@@ -1202,7 +1202,7 @@ class TestFlowStreamExecute:
             {
                 "instruction": "Test",
                 "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
             },
         )
         graph = builder.build()
