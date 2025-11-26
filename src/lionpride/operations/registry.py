@@ -71,12 +71,14 @@ class OperationRegistry:
 
         Imports are deferred to avoid circular imports.
         """
-        from .operate import communicate, generate, operate, react
+        from .operate import communicate, generate, interpret, operate, parse, react
 
         self._factories["operate"] = operate
         self._factories["react"] = react
         self._factories["communicate"] = communicate
         self._factories["generate"] = generate
+        self._factories["parse"] = parse
+        self._factories["interpret"] = interpret
 
     def register(
         self,

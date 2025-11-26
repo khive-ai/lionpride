@@ -1,6 +1,7 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
+from .logs import Log, LogStore, LogType
 from .messages import (
     ActionRequestContent,
     ActionResponseContent,
@@ -21,6 +22,9 @@ __all__ = (
     "AssistantResponseContent",
     "Branch",
     "InstructionContent",
+    "Log",
+    "LogStore",
+    "LogType",
     "Message",
     "MessageContent",
     "MessageRole",

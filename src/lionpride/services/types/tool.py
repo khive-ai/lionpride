@@ -9,7 +9,7 @@ from typing import Any, Self, get_origin, get_type_hints
 
 from pydantic import Field, field_validator, model_validator
 
-from lionpride import concurrency, schema_handlers
+from lionpride import concurrency
 
 from .backend import Calling, NormalizedResponse, ServiceBackend, ServiceConfig
 
@@ -199,39 +199,6 @@ class Tool(ServiceBackend):
     def function_name(self) -> str:
         """Get function name."""
         return self.func_callable.__name__
-
-    @property
-    def rendered(self) -> str:
-        """Render tool schema as TypeScript for LLM consumption.
-
-        Uses request_options as canonical source if available, otherwise tool_schema.
-
-        Format:
-            # Tool description (if present)
-            TypeScript parameter definitions
-
-        Returns:
-            TypeScript-formatted schema string
-        """
-        # Priority 1: Use request_options (canonical source)
-        if self.request_options is not None:
-            schema = self.request_options.model_json_schema()
-            desc = schema.get("description", "")
-            params_ts = schema_handlers.typescript_schema(schema)
-            return f"# {desc}\n{params_ts}" if desc else params_ts
-
-        # Priority 2: Use tool_schema (fallback)
-        if self.tool_schema:
-            params = self.tool_schema.get("parameters", {})
-            desc = self.tool_schema.get("description", "")
-
-            if params and params.get("properties"):
-                params_ts = schema_handlers.typescript_schema(params)
-                return f"# {desc}\n{params_ts}" if desc else params_ts
-
-            return f"# {desc}" if desc else ""
-
-        return ""
 
     @property
     def event_type(self) -> type[ToolCalling]:

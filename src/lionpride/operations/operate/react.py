@@ -10,10 +10,9 @@ from pydantic import BaseModel, Field
 from lionpride.rules import ActionRequest, ActionResponse
 
 if TYPE_CHECKING:
-    from lionpride.services.types import iModel
     from lionpride.session import Branch, Session
 
-__all__ = ("ReactResult", "ReactStep", "react")
+__all__ = ("ReactResult", "ReactStep", "react", "react_stream")
 
 
 class ReactStep(BaseModel):
@@ -106,7 +105,7 @@ async def react(
     if not instruction:
         raise ValueError("react requires 'instruction' parameter")
 
-    imodel: iModel = parameters.get("imodel")
+    imodel = parameters.get("imodel")
     if not imodel:
         raise ValueError("react requires 'imodel' parameter")
 
@@ -149,33 +148,29 @@ async def react(
     if isinstance(branch, str):
         branch = session.conversations.get_progression(branch)
 
-    # Register tools with session
+    # Register tools with session and collect schemas for InstructionContent
     from lionpride.services.types.imodel import iModel as iModelClass
     from lionpride.services.types.tool import Tool
 
     tool_names = []
     for tool in tools:
         if isinstance(tool, type) and issubclass(tool, Tool):
-            tool_instance = tool()
+            tool_instance = tool()  # type: ignore[call-arg]  # Subclasses override __init__
         elif isinstance(tool, Tool):
             tool_instance = tool
         else:
             raise ValueError(f"Invalid tool type: {type(tool)}")
 
-        tool_names.append(tool_instance.name)
+        # Register with session services for execution
         if not session.services.has(tool_instance.name):
             session.services.register(iModelClass(backend=tool_instance))
+        tool_names.append(tool_instance.name)
 
-    # Build tool descriptions for prompt
-    tool_descriptions = []
-    for tool in tools:
-        tool_instance = tool if isinstance(tool, Tool) else tool()
-        schema = tool_instance.tool_schema or {}
-        props = schema.get("properties", {})
-        params_str = ", ".join(f"{k}: {v.get('type', 'any')}" for k, v in props.items())
-        tool_descriptions.append(f"- {tool_instance.name}({params_str})")
-
-    tool_schemas_str = "\n".join(tool_descriptions)
+    # Collect schemas from registered tools - InstructionContent handles formatting
+    tool_schemas = []
+    for name in tool_names:
+        backend = session.services.get(name).backend
+        tool_schemas.append(backend.request_options or backend.tool_schema)
 
     # Create step response model
     step_model = _create_react_response_model(response_model)
@@ -183,26 +178,8 @@ async def react(
     # Initialize result
     result = ReactResult()
 
-    # Build initial instruction with tool info
-    react_instruction = f"""{instruction}
-
-You have access to these tools:
-{tool_schemas_str}
-
-Respond with JSON containing:
-- "reasoning": explain your thinking
-- "action_requests": list of tool calls, each with "function" and "arguments"
-- "is_done": true when you have the final answer
-- "final_answer": your answer (only when is_done=true)
-
-To call a tool: {{"reasoning": "...", "action_requests": [{{"function": "tool_name", "arguments": {{...}}}}], "is_done": false, "final_answer": null}}
-Final answer: {{"reasoning": "...", "action_requests": [], "is_done": true, "final_answer": "..."}}"""
-
-    if context:
-        react_instruction += f"\n\nContext:\n{context}"
-
-    # ReAct loop
-    current_instruction = react_instruction
+    # ReAct loop - instruction and tools passed to operate, which uses InstructionContent
+    current_instruction = instruction
 
     for step_num in range(1, max_steps + 1):
         if verbose:
@@ -212,6 +189,7 @@ Final answer: {{"reasoning": "...", "action_requests": [], "is_done": true, "fin
 
         try:
             # Call operate for this step (no actions=True - we handle actions ourselves)
+            # tool_schemas and response_model are formatted by InstructionContent
             operate_result = await operate(
                 session,
                 branch,
@@ -219,6 +197,8 @@ Final answer: {{"reasoning": "...", "action_requests": [], "is_done": true, "fin
                     "instruction": current_instruction,
                     "imodel": imodel,
                     "response_model": step_model,
+                    "tool_schemas": tool_schemas,
+                    "context": context if step_num == 1 else None,  # Context only on first step
                     "model": model_name,
                     **model_kwargs,
                 },
@@ -309,3 +289,213 @@ Final answer: {{"reasoning": "...", "action_requests": [], "is_done": true, "fin
             result.reason_stopped = f"Max steps ({max_steps}) reached"
 
     return result
+
+
+async def react_stream(
+    session: Session,
+    branch: Branch | str,
+    parameters: dict[str, Any],
+):
+    """Streaming ReAct operation - yields ReactStep as each step completes.
+
+    Same parameters as react(), but yields intermediate results.
+
+    Yields:
+        ReactStep for each completed step
+        ReactResult as final yield when done
+    """
+
+    from .factory import operate
+
+    # Extract and validate parameters
+    instruction = parameters.get("instruction")
+    if not instruction:
+        raise ValueError("react_stream requires 'instruction' parameter")
+
+    imodel = parameters.get("imodel")
+    if not imodel:
+        raise ValueError("react_stream requires 'imodel' parameter")
+
+    tools = parameters.get("tools", [])
+    if not tools:
+        raise ValueError("react_stream requires 'tools' parameter with at least one tool")
+
+    response_model = parameters.get("response_model")
+    context = parameters.get("context", {})
+    max_steps = parameters.get("max_steps", 5)
+    verbose = parameters.get("verbose", False)
+
+    # Extract model_kwargs
+    nested_model_kwargs = parameters.get("model_kwargs", {})
+    flat_model_kwargs = {
+        k: v
+        for k, v in parameters.items()
+        if k
+        not in {
+            "instruction",
+            "imodel",
+            "tools",
+            "response_model",
+            "context",
+            "max_steps",
+            "verbose",
+            "model_kwargs",
+            "reason",
+        }
+    }
+    model_kwargs = {**nested_model_kwargs, **flat_model_kwargs}
+
+    model_name = model_kwargs.pop("model_name", None)
+    if not model_name:
+        raise ValueError("react_stream requires 'model_name' in model_kwargs")
+
+    # Resolve branch
+    if isinstance(branch, str):
+        branch = session.conversations.get_progression(branch)
+
+    # Register tools with session and collect schemas for InstructionContent
+    from lionpride.services.types.imodel import iModel as iModelClass
+    from lionpride.services.types.tool import Tool
+
+    tool_names = []
+    for tool in tools:
+        if isinstance(tool, type) and issubclass(tool, Tool):
+            tool_instance = tool()  # type: ignore[call-arg]  # Subclasses override __init__
+        elif isinstance(tool, Tool):
+            tool_instance = tool
+        else:
+            raise ValueError(f"Invalid tool type: {type(tool)}")
+
+        # Register with session services for execution
+        if not session.services.has(tool_instance.name):
+            session.services.register(iModelClass(backend=tool_instance))
+        tool_names.append(tool_instance.name)
+
+    # Collect schemas from registered tools - InstructionContent handles formatting
+    tool_schemas = []
+    for name in tool_names:
+        backend = session.services.get(name).backend
+        tool_schemas.append(backend.request_options or backend.tool_schema)
+
+    # Create step response model
+    step_model = _create_react_response_model(response_model)
+
+    # Initialize result
+    result = ReactResult()
+
+    # ReAct loop - instruction and tools passed to operate, which uses InstructionContent
+    current_instruction = instruction
+
+    for step_num in range(1, max_steps + 1):
+        if verbose:
+            print(f"\n--- ReAct Step {step_num}/{max_steps} ---")
+
+        step = ReactStep(step=step_num)
+
+        try:
+            # Call operate for this step (no actions=True - we handle actions ourselves)
+            # tool_schemas and response_model are formatted by InstructionContent
+            operate_result = await operate(
+                session,
+                branch,
+                {
+                    "instruction": current_instruction,
+                    "imodel": imodel,
+                    "response_model": step_model,
+                    "tool_schemas": tool_schemas,
+                    "context": context if step_num == 1 else None,  # Context only on first step
+                    "model": model_name,
+                    **model_kwargs,
+                },
+            )
+
+            if verbose:
+                print(f"Operate result: {operate_result}")
+
+            # Handle validation failure
+            if isinstance(operate_result, dict) and operate_result.get("validation_failed"):
+                result.reason_stopped = f"Validation failed: {operate_result.get('error')}"
+                result.steps.append(step)
+                yield step  # Yield the failed step
+                break
+
+            # Extract step data
+            if hasattr(operate_result, "reasoning"):
+                step.reasoning = operate_result.reasoning
+                if verbose and step.reasoning:
+                    print(f"Reasoning: {step.reasoning[:200]}...")
+
+            if hasattr(operate_result, "action_requests") and operate_result.action_requests:
+                step.actions_requested = operate_result.action_requests
+
+                if verbose:
+                    print(f"Executing {len(step.actions_requested)} action(s)...")
+
+                from ..actions import act
+
+                action_responses = await act(
+                    step.actions_requested,
+                    session.services,
+                    concurrent=True,
+                )
+                step.actions_executed = action_responses
+
+                # Add action results to conversation
+                from lionpride.session.messages import ActionResponseContent, Message
+
+                for action_resp in action_responses:
+                    action_content = ActionResponseContent(
+                        request_id=action_resp.function,
+                        result=action_resp.output,
+                    )
+                    action_msg = Message(
+                        content=action_content,
+                        sender="system",
+                        recipient=session.id,
+                    )
+                    session.add_message(action_msg, branches=branch)
+
+                if verbose:
+                    for resp in step.actions_executed:
+                        print(f"  Tool {resp.function}: {str(resp.output)[:100]}...")
+
+            # Check if done
+            is_done = getattr(operate_result, "is_done", False)
+            if is_done:
+                step.is_final = True
+                result.final_response = getattr(operate_result, "final_answer", None)
+                result.steps.append(step)
+                result.completed = True
+                result.reason_stopped = "Task completed"
+                result.total_steps = step_num
+
+                if verbose:
+                    print(f"Task completed at step {step_num}")
+                    print(f"Final answer: {result.final_response}")
+
+                yield step  # Yield final step
+                break
+
+            current_instruction = "Continue based on the tool results. What is the final answer?"
+
+        except Exception as e:
+            if verbose:
+                import traceback
+
+                traceback.print_exc()
+            result.reason_stopped = f"Error at step {step_num}: {e}"
+            result.steps.append(step)
+            yield step  # Yield error step
+            break
+
+        result.steps.append(step)
+        yield step  # Yield completed step
+
+    # If we exhausted max_steps without completing
+    if not result.completed:
+        result.total_steps = len(result.steps)
+        if not result.reason_stopped:
+            result.reason_stopped = f"Max steps ({max_steps}) reached"
+
+    # Yield final result
+    yield result

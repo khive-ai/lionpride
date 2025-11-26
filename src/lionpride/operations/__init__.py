@@ -11,8 +11,11 @@ from .operate import (
     ReactStep,
     communicate,
     generate,
+    interpret,
     operate,
+    parse,
     react,
+    react_stream,
 )
 from .registry import OperationRegistry
 
@@ -33,6 +36,9 @@ __all__ = (
     "flow",
     "flow_stream",
     "generate",
+    "interpret",
     "operate",
+    "parse",
     "react",
+    "react_stream",
 )

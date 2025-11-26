@@ -345,56 +345,6 @@ def test_tool_function_name_property():
     assert tool.function_name == "sync_function"
 
 
-def test_tool_rendered_property_when_no_description():
-    """Test Tool.rendered without description."""
-    tool = Tool(
-        func_callable=sync_function,
-        config={"provider": "tool", "name": "test"},
-    )
-
-    rendered = tool.rendered
-    # Should contain TypeScript-formatted schema
-    assert isinstance(rendered, str)
-
-
-def test_tool_rendered_property_when_with_description():
-    """Test Tool.rendered with description in schema."""
-    schema_with_desc = {
-        "type": "object",
-        "description": "Test tool description",
-        "parameters": {
-            "properties": {"arg": {"type": "string"}},
-            "required": ["arg"],
-        },
-    }
-
-    tool = Tool(
-        func_callable=sync_function,
-        config={"provider": "tool", "name": "test"},
-        tool_schema=schema_with_desc,
-    )
-
-    rendered = tool.rendered
-    assert "Test tool description" in rendered
-
-
-def test_tool_rendered_property_when_no_parameters():
-    """Test Tool.rendered when schema has no parameters."""
-    schema_no_params = {
-        "type": "object",
-        "description": "No params tool",
-    }
-
-    tool = Tool(
-        func_callable=lambda: None,
-        config={"provider": "tool", "name": "test"},
-        tool_schema=schema_no_params,
-    )
-
-    rendered = tool.rendered
-    assert "No params tool" in rendered
-
-
 def test_tool_required_fields_when_from_schema():
     """Test Tool.required_fields from tool_schema."""
     schema = {
@@ -752,22 +702,6 @@ def test_tool_schema_validation_error():
     # Now call _generate_schema to trigger the validation at line 194
     with pytest.raises(ValueError, match="tool_schema must be a dict"):
         tool._generate_schema()
-
-
-def test_tool_rendered_when_empty_schema():
-    """Test Tool.rendered returns empty string when no schema (line 236)."""
-
-    def my_func() -> str:
-        return "test"
-
-    # Create tool and then use object.__setattr__ to bypass Pydantic validation
-    tool = Tool(func_callable=my_func, config={"provider": "tool", "name": "test"})
-
-    # Use object.__setattr__ to set tool_schema to None (bypass Pydantic)
-    object.__setattr__(tool, "tool_schema", None)
-
-    rendered = tool.rendered
-    assert rendered == ""
 
 
 def test_tool_event_type_property():

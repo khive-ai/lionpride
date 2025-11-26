@@ -12,6 +12,7 @@ from lionpride.core import Element, Flow, Progression
 from lionpride.operations.registry import OperationRegistry
 from lionpride.services import ServiceRegistry
 
+from .logs import LogStore
 from .messages import Message, SenderRecipient
 
 if TYPE_CHECKING:
@@ -295,6 +296,7 @@ class Session(Element):
         conversations: Flow[Message, Branch] for message storage and branch progressions
         services: ServiceRegistry for models and tools
         operations: OperationRegistry for operation factories
+        logs: LogStore for API calls, operations, and errors
         messages: Read-only view of conversations.items (Pile[Message])
         branches: Read-only view of conversations.progressions (Pile[Branch])
 
@@ -306,6 +308,11 @@ class Session(Element):
 
         # Or explicit imodel per-operation
         result = await session.conduct("operate", branch, imodel=my_model, ...)
+
+        # Logging - access API call history
+        session.logs.summary()  # Get usage statistics
+        session.logs.get_api_calls()  # All API calls
+        session.logs.dump("logs.json")  # Export to file
     """
 
     user: str | None = Field(default=None, description="User identifier")
@@ -324,6 +331,10 @@ class Session(Element):
     operations: OperationRegistry = Field(
         default_factory=OperationRegistry,
         description="Operation factories (operate, react, communicate, generate)",
+    )
+    logs: LogStore = Field(
+        default_factory=LogStore,
+        description="Log storage for API calls, operations, and errors",
     )
     default_branch_id: UUID | None = Field(
         default=None,
