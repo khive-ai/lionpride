@@ -20,7 +20,9 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from abc import ABC, abstractmethod
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -35,6 +37,64 @@ __all__ = (
     "PostgresLogAdapter",
     "SQLiteWALLogAdapter",
 )
+
+
+# SQL identifier validation pattern
+# Valid: alphanumeric, underscore, must start with letter or underscore
+# Max 63 chars (PostgreSQL limit)
+_SQL_IDENTIFIER_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]{0,62}$")
+
+
+def _validate_sql_identifier(name: str, param_name: str = "identifier") -> str:
+    """Validate SQL identifier to prevent SQL injection.
+
+    Args:
+        name: The identifier to validate (table name, column name, etc.)
+        param_name: Name of the parameter for error messages
+
+    Returns:
+        The validated identifier
+
+    Raises:
+        ValueError: If identifier is invalid or potentially dangerous
+    """
+    if not name:
+        raise ValueError(f"{param_name} cannot be empty")
+
+    if not _SQL_IDENTIFIER_PATTERN.match(name):
+        raise ValueError(
+            f"Invalid {param_name} '{name}': must start with letter or underscore, "
+            "contain only alphanumeric/underscore characters, max 63 chars"
+        )
+
+    # Additional safety: reject SQL keywords (common ones)
+    sql_keywords = {
+        "select",
+        "insert",
+        "update",
+        "delete",
+        "drop",
+        "create",
+        "alter",
+        "truncate",
+        "grant",
+        "revoke",
+        "union",
+        "where",
+        "from",
+        "join",
+        "table",
+        "index",
+        "database",
+        "schema",
+        "exec",
+        "execute",
+    }
+    if name.lower() in sql_keywords:
+        raise ValueError(f"Invalid {param_name} '{name}': cannot use SQL keyword")
+
+    return name
+
 
 logger = logging.getLogger(__name__)
 
@@ -265,7 +325,8 @@ class PostgresLogAdapter(LogAdapter):
         auto_create: bool = True,
     ):
         self.dsn = dsn
-        self.table = table
+        # Validate table name to prevent SQL injection
+        self.table = _validate_sql_identifier(table, "table name")
         self.auto_create = auto_create
         self._initialized = False
         self._engine = None
@@ -349,14 +410,14 @@ class PostgresLogAdapter(LogAdapter):
                     await conn.execute(
                         text(f"""
                             INSERT INTO {self.table} (id, created_at, log_type, source, content, metadata)
-                            VALUES (:id, :created_at, :log_type, :source, :content::jsonb, :metadata::jsonb)
+                            VALUES (:id, :created_at, :log_type, :source, CAST(:content AS jsonb), CAST(:metadata AS jsonb))
                             ON CONFLICT (id) DO UPDATE SET
                                 content = EXCLUDED.content,
                                 metadata = EXCLUDED.metadata
                         """),
                         {
                             "id": str(log.id),
-                            "created_at": log_dict.get("created_at"),
+                            "created_at": log.created_at,  # Use actual datetime, not string
                             "log_type": log.log_type.value
                             if hasattr(log.log_type, "value")
                             else log.log_type,
@@ -397,7 +458,11 @@ class PostgresLogAdapter(LogAdapter):
 
             if since:
                 conditions.append("created_at >= :since")
-                params["since"] = since
+                # asyncpg requires datetime objects, not ISO strings
+                if isinstance(since, str):
+                    params["since"] = datetime.fromisoformat(since)
+                else:
+                    params["since"] = since
 
             where_clause = " AND ".join(conditions)
             query = text(f"""
