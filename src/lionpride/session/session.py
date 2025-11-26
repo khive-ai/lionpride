@@ -8,11 +8,13 @@ from collections.abc import Iterable
 from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, PrivateAttr
 
 from lionpride.core import Element, Flow, Pile, Progression
 from lionpride.errors import NotFoundError
 from lionpride.services import ServiceRegistry
+from lionpride.services.types import iModel
+from lionpride.types import Unset, not_sentinel
 
 from .messages import Message, SystemContent
 
@@ -88,11 +90,134 @@ class Session(Element):
         default_factory=lambda: Flow(item_type=Message, progressions=Pile(item_type=Branch))
     )
     """Message flow with branch progressions"""
-
     services: ServiceRegistry = Field(
         default_factory=ServiceRegistry,
         description="Available services (models, tools)",
     )
+    _default_branch_id: UUID | None = PrivateAttr(None)
+    _default_backends: dict[str, str] = PrivateAttr(default_factory=dict)
+
+    def __init__(
+        self,
+        user: str | UUID | None = None,
+        conversations: Flow[Message, Branch] | None = None,
+        services: ServiceRegistry | None = None,
+        default_branch: Branch | UUID | str | None = None,
+        default_generate_model: iModel | str | None = None,
+        default_parse_model: iModel | str | None = None,
+        default_capabilities: set[str] | None = None,
+        default_system: Message | None = None,
+        /,
+        **data,
+    ):
+        d_ = {
+            **data,
+            "user": user,
+            "conversations": conversations,
+            "services": services,
+        }
+
+        super().__init__(**{k: v for k, v in d_.items() if not_sentinel(v, True, True)})
+
+        # Collect default model names for branch resources
+        default_resources: set[str] = set()
+
+        # Set default backends (store name strings, resolve to iModel on access)
+        if default_generate_model is not None:
+            name = (
+                default_generate_model.name
+                if isinstance(default_generate_model, iModel)
+                else default_generate_model
+            )
+            self._default_backends["generate"] = name
+            default_resources.add(name)
+            # Auto-register if iModel instance provided
+            if isinstance(default_generate_model, iModel) and not self.services.has(name):
+                self.services.register(default_generate_model)
+
+        if default_parse_model is not None:
+            name = (
+                default_parse_model.name
+                if isinstance(default_parse_model, iModel)
+                else default_parse_model
+            )
+            self._default_backends["parse"] = name
+            default_resources.add(name)
+            if isinstance(default_parse_model, iModel) and not self.services.has(name):
+                self.services.register(default_parse_model)
+
+        # Set default branch (add to session, grant default model resources)
+        if default_branch is not None:
+            if isinstance(default_branch, Branch):
+                # Add branch to session and grant default resources/capabilities
+                default_branch.resources.update(default_resources)
+                if default_capabilities:
+                    default_branch.capabilities.update(default_capabilities)
+                self.conversations.add_progression(default_branch)
+                self._default_branch_id = default_branch.id
+            else:
+                # Create new branch with name, grant default resources/capabilities
+                branch_obj = self.create_branch(
+                    name=str(default_branch),
+                    resources=default_resources,
+                    capabilities=default_capabilities or set(),
+                    system=default_system,
+                )
+                self._default_branch_id = branch_obj.id
+
+    @property
+    def default_branch(self) -> Branch | None:
+        """Get default branch, or None if not set."""
+        if self._default_branch_id is None:
+            return None
+        with contextlib.suppress(KeyError):
+            return self.conversations.get_progression(self._default_branch_id)
+        return None
+
+    @property
+    def default_generate_model(self) -> iModel | None:
+        """Get default generate model from services."""
+        name = self._default_backends.get("generate")
+        if name is None:
+            return None
+        return self.services.get(name) if self.services.has(name) else None
+
+    @property
+    def default_parse_model(self) -> iModel | None:
+        """Get default parse model from services."""
+        name = self._default_backends.get("parse")
+        if name is None:
+            return None
+        return self.services.get(name) if self.services.has(name) else None
+
+    def set_default_branch(self, branch: Branch | UUID | str) -> None:
+        """Set the default branch for operations.
+
+        Args:
+            branch: Branch instance, UUID, or name (must exist in session)
+
+        Raises:
+            NotFoundError: If branch not found in session
+        """
+        resolved = self.get_branch(branch)  # Raises NotFoundError if not in session
+        self._default_branch_id = resolved.id
+
+    def set_default_model(
+        self,
+        model: iModel | str,
+        operation: Literal["generate", "parse"] = "generate",
+    ) -> None:
+        """Set default model for an operation type.
+
+        Also grants the model as a resource to the default branch if one exists.
+        """
+        name = model.name if isinstance(model, iModel) else model
+        self._default_backends[operation] = name
+        if isinstance(model, iModel) and not self.services.has(name):
+            self.services.register(model)
+        # Grant to default branch if exists
+        if self.default_branch is not None:
+            self.default_branch.resources.add(name)
 
     @property
     def messages(self):
@@ -149,7 +274,7 @@ class Session(Element):
         self.conversations.add_progression(branch)
         return branch
 
-    def get_branch(self, branch: UUID | str | Branch) -> Branch:
+    def get_branch(self, branch: UUID | str | Branch, default=Unset, /) -> Branch:
         """Get branch by UUID, name, or instance.
 
         Args:
@@ -165,6 +290,8 @@ class Session(Element):
             return branch
         with contextlib.suppress(KeyError):
             return self.conversations.get_progression(branch)
+        if default is not Unset:
+            return default
         raise NotFoundError("Branch not found in session branches")
 
     def get_branch_system(self, branch: Branch | UUID | str) -> Message | None:
