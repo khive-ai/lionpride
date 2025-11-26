@@ -244,8 +244,9 @@ class DependencyAwareExecutor:
         """Wait for all predecessor operations to complete."""
         # Check for aggregation sources (special handling)
         is_aggregation = operation.metadata.get("aggregation", False)
-        if is_aggregation and isinstance(operation.parameters, dict):
-            aggregation_sources = operation.parameters.get("aggregation_sources", [])
+        if is_aggregation:
+            # aggregation_sources stored in metadata (not parameters)
+            aggregation_sources = operation.metadata.get("aggregation_sources", [])
             if aggregation_sources:
                 if self.verbose:
                     print(

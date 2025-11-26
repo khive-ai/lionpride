@@ -8,7 +8,8 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from lionpride.core import Edge, Graph, to_uuid
+from lionpride.core import Edge, Graph
+from lionpride.core._utils import to_uuid
 
 from .node import Operation, OperationType
 
