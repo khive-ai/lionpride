@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import functools
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
@@ -12,16 +13,58 @@ from ._sentinel import MaybeUnset, Unset
 
 if TYPE_CHECKING:
     from .spec import Spec
+    from .spec_adapters._protocol import SpecAdapter
 
-__all__ = ("Operable",)
+__all__ = ("Operable", "get_adapter")
+
+# Supported adapter types
+AdapterType = Literal["pydantic"]  # "rust" coming soon
+
+
+@functools.cache
+def get_adapter(adapter_name: str) -> type[SpecAdapter]:
+    """Get adapter class by name (cached).
+
+    Factory method for adapter classes. Caches to avoid repeated imports.
+    When Rust adapter is ready, add case here.
+
+    Args:
+        adapter_name: Adapter identifier ("pydantic", future: "rust")
+
+    Returns:
+        Adapter class (not instance)
+
+    Raises:
+        ValueError: If adapter not supported
+    """
+    match adapter_name:
+        case "pydantic":
+            from .spec_adapters.pydantic_field import PydanticSpecAdapter
+
+            return PydanticSpecAdapter
+        # case "rust":
+        #     from .spec_adapters.rust_field import RustSpecAdapter
+        #     return RustSpecAdapter
+        case _:
+            raise ValueError(f"Unsupported adapter: {adapter_name}")
 
 
 @implements(Hashable, Allowable)
 @dataclass(frozen=True, slots=True, init=False)
 class Operable:
-    """Ordered Spec collection for model generation. Validates uniqueness, no duplicates."""
+    """Ordered Spec collection for model generation.
+
+    Validates uniqueness, no duplicates. Provides adapter interface
+    for framework-agnostic model creation and validation.
+
+    Usage:
+        op = Operable(specs, adapter="pydantic")
+        Model = op.adapter.create_model(op)
+        instance = op.adapter.validate_model(Model, data)
+    """
 
     __op_fields__: tuple[Spec, ...]
+    __adapter_name__: str
     name: str | None
 
     def __init__(
@@ -29,9 +72,19 @@ class Operable:
         specs: tuple[Spec, ...] | list[Spec] = (),
         *,
         name: str | None = None,
+        adapter: AdapterType = "pydantic",
     ):
-        """Init with specs. Raises: TypeError (non-Spec), ValueError (duplicate names)."""
-        # Import here to avoid circular import
+        """Init with specs and adapter.
+
+        Args:
+            specs: Tuple or list of Spec objects
+            name: Optional operable name (used as model name default)
+            adapter: Adapter type for model generation ("pydantic", future: "rust")
+
+        Raises:
+            TypeError: If non-Spec in specs
+            ValueError: If duplicate field names
+        """
         from .spec import Spec
 
         # Convert to tuple if list
@@ -56,7 +109,20 @@ class Operable:
             )
 
         object.__setattr__(self, "__op_fields__", specs)
+        object.__setattr__(self, "__adapter_name__", adapter)
         object.__setattr__(self, "name", name)
+
+    @property
+    def adapter(self) -> type[SpecAdapter]:
+        """Get adapter class (cached).
+
+        Returns the adapter class for this operable. All adapter operations
+        should go through this interface: op.adapter.create_model(), etc.
+
+        Returns:
+            Adapter class (PydanticSpecAdapter, future: RustSpecAdapter)
+        """
+        return get_adapter(self.__adapter_name__)
 
     def allowed(self) -> set[str]:
         """Get set of allowed field names from specs."""
@@ -106,28 +172,27 @@ class Operable:
 
     def create_model(
         self,
-        adapter: Literal["pydantic"] = "pydantic",
+        *,
         model_name: str | None = None,
         include: set[str] | None = None,
         exclude: set[str] | None = None,
         **kw,
     ):
-        """Create framework model from specs. Args: adapter, model_name, include/exclude. Raises: ImportError, ValueError."""
-        match adapter:
-            case "pydantic":
-                try:
-                    from .spec_adapters.pydantic_field import PydanticSpecAdapter
-                except ImportError as e:
-                    raise ImportError(
-                        "PydanticSpecAdapter requires Pydantic. Install with: pip install pydantic"
-                    ) from e
+        """Create framework model from specs via adapter.
 
-                kws = {
-                    "model_name": model_name or self.name or "DynamicModel",
-                    "include": include,
-                    "exclude": exclude,
-                    **kw,
-                }
-                return PydanticSpecAdapter.create_model(self, **kws)
-            case _:
-                raise ValueError(f"Unsupported adapter: {adapter}")
+        Args:
+            model_name: Override model name (default: self.name or "DynamicModel")
+            include: Only include these field names
+            exclude: Exclude these field names
+            **kw: Additional adapter-specific kwargs
+
+        Returns:
+            Framework model class (e.g., Pydantic BaseModel subclass)
+        """
+        return self.adapter.create_model(
+            self,
+            model_name=model_name or self.name or "DynamicModel",
+            include=include,
+            exclude=exclude,
+            **kw,
+        )

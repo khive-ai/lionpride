@@ -295,11 +295,13 @@ class Validator:
         data: dict[str, Any],
         operable: Operable,
         capabilities: set[str],
-        adapter: str = "pydantic",
         auto_fix: bool = True,
         strict: bool = True,
     ) -> Any:
         """Validate data and return a model instance.
+
+        This is the security microkernel - all capability-based access control
+        flows through these few lines.
 
         Flow:
         1. Validate data field-by-field with rules (respects capabilities)
@@ -308,7 +310,7 @@ class Validator:
 
         Args:
             data: Raw data dict (e.g., from LLM response)
-            operable: Operable defining expected structure
+            operable: Operable defining expected structure (carries its own adapter)
             capabilities: Set of field names allowed
             auto_fix: Enable auto-correction for each field
             strict: Raise if validation fails
@@ -324,9 +326,9 @@ class Validator:
             data, operable, capabilities, auto_fix=auto_fix, strict=strict
         )
 
-        # 2. Create model with capabilities
-        Model = operable.create_model(include=capabilities, adapter=adapter)
-        return operable.validate_model(validated_dict, Model, adapter=adapter)
+        # 2. Create model with capabilities (operable uses its own adapter)
+        Model = operable.create_model(include=capabilities)
+        return operable.adapter.validate_model(Model, validated_dict)
 
     def __repr__(self) -> str:
         """String representation."""

@@ -68,13 +68,10 @@ class CommunicateParams(Params):
 
     # Structured output params
     operable: Operable | None = None
-    """Operable for structured output validation"""
+    """Operable for structured output validation (carries its own adapter)"""
 
     capabilities: set[str] | None = None
     """Capabilities for validation (defaults to branch.capabilities)"""
-
-    adapter: str = "pydantic"
-    """Spec adapter for model creation"""
 
     # Retry params
     max_retries: int = 0
@@ -192,7 +189,6 @@ async def communicate(
                 operable=params.operable,
                 capabilities=capabilities,
                 validator=validator,
-                adapter=params.adapter,
                 fuzzy_parse=params.fuzzy_parse,
             )
         else:
@@ -242,12 +238,12 @@ async def _validate_structured(
     operable: Operable,
     capabilities: set[str],
     validator: Validator,
-    adapter: str,
     fuzzy_parse: bool,
 ) -> tuple[Any, str | None]:
     """Validate structured output via parse + Validator.
 
     Flow: response_text → parse() → dict → Validator.validate() → model
+    Operable carries its own adapter for framework-agnostic model creation.
     """
     try:
         # Get expected keys from operable specs
@@ -266,11 +262,11 @@ async def _validate_structured(
             return None, "Failed to extract JSON from response"
 
         # 2. Validate: dict → model (with capability enforcement)
+        # Operable uses its own adapter (op.adapter.create_model, etc.)
         validated = await validator.validate(
             data=parsed_dict,
             operable=operable,
             capabilities=capabilities,
-            adapter=adapter,
             auto_fix=fuzzy_parse,
             strict=True,
         )
