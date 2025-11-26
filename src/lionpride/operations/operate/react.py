@@ -166,6 +166,8 @@ async def react(
         raise ValueError("react requires imodel")
 
     # Get tool config
+    from .types import ActParams
+
     act = op.act or ActParams()
     if not act.tools:
         raise ValueError("react requires tools - set operate.act.tools")
@@ -377,6 +379,8 @@ async def react_stream(
 
     if gen.imodel is None:
         raise ValueError("react_stream requires imodel")
+
+    from .types import ActParams
 
     act = op.act or ActParams()
     if not act.tools:
