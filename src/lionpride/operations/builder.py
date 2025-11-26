@@ -32,6 +32,7 @@ class OperationGraphBuilder:
         parameters: dict[str, Any] | BaseModel | None = None,
         depends_on: list[str] | None = None,
         inherit_context: bool = False,
+        metadata: dict[str, Any] | None = None,
         **kwargs,
     ) -> OperationGraphBuilder:
         """Add operation to graph. Returns self for chaining.
@@ -42,6 +43,7 @@ class OperationGraphBuilder:
             parameters: Operation parameters dict or model
             depends_on: List of operation names this depends on
             inherit_context: Whether to inherit context from dependencies
+            metadata: Optional metadata dict for the Operation node
             **kwargs: Additional params merged into parameters (e.g., generate={...})
         """
         if name in self._nodes:
@@ -57,6 +59,7 @@ class OperationGraphBuilder:
         op = Operation(
             operation_type=operation,
             parameters=params,
+            metadata=metadata or {},
         )
 
         # Store name in metadata for reference
