@@ -78,6 +78,30 @@ class GenerateParams(Params):
     imodel_kwargs: dict[str, Any] = field(default_factory=dict)
     """Additional kwargs for imodel"""
 
+    @property
+    def instruction_message(self) -> Message | None:
+        """Get instruction as Message.
+
+        If instruction is already a Message, returns it.
+        If instruction is a string, creates Message with InstructionContent.
+        """
+        if self.instruction is None:
+            return None
+
+        if isinstance(self.instruction, Message):
+            return self.instruction
+
+        # Create Message from string instruction
+        from lionpride.session.messages import InstructionContent
+
+        content = InstructionContent(
+            instruction=self.instruction,
+            context=self.context,
+            images=self.images,
+            image_detail=self.image_detail,
+        )
+        return Message(content=content)
+
 
 @dataclass(init=False, frozen=True, slots=True)
 class ParseParams(Params):
