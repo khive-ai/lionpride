@@ -12,53 +12,18 @@ Flow:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 from lionpride.libs.string_handlers import extract_json
 from lionpride.ln import fuzzy_validate_mapping
 from lionpride.services.types import iModel
-from lionpride.types.base import ModelConfig, Params
+
+from .types import HandleUnmatched, ParseParams
 
 if TYPE_CHECKING:
     from lionpride.session import Branch, Session
 
 __all__ = ("ParseParams", "parse")
-
-# Type alias for handle_unmatched parameter
-HandleUnmatched = Literal["ignore", "raise", "remove", "fill", "force"]
-
-
-@dataclass(init=False, frozen=True, slots=True)
-class ParseParams(Params):
-    """Parameters for parse operation.
-
-    Parse extracts JSON from raw text. If extraction fails and imodel
-    is provided, uses LLM to reformat the text into valid JSON.
-    """
-
-    _config = ModelConfig(none_as_sentinel=True, empty_as_sentinel=True)
-
-    text: str = None
-    """Raw text to parse (e.g., LLM response)"""
-
-    target_keys: list[str] = field(default_factory=list)
-    """Expected keys for fuzzy matching (optional)"""
-
-    imodel: iModel | str = None
-    """Model for LLM reparse fallback (optional)"""
-
-    similarity_threshold: float = 0.85
-    """Fuzzy match threshold for key mapping"""
-
-    handle_unmatched: HandleUnmatched = "force"
-    """How to handle unmatched keys during fuzzy matching"""
-
-    max_retries: int = 3
-    """Retry attempts for LLM reparse"""
-
-    imodel_kwargs: dict[str, Any] = field(default_factory=dict)
-    """Additional kwargs for imodel"""
 
 
 async def parse(

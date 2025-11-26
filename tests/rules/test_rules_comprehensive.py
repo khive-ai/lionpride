@@ -541,66 +541,82 @@ class TestValidatorIntegration:
         assert validator.registry.has_rule(dict)
 
     @pytest.mark.asyncio
-    async def test_validator_validate_field(self):
-        """Test validator validates individual fields."""
+    async def test_validator_validate_spec(self):
+        """Test validator validates individual specs."""
+        from lionpride.types import Spec
+
         validator = Validator()
-        result = await validator.validate_field("name", "Ocean", str)
+        spec = Spec(str, name="name")
+        result = await validator.validate_spec(spec, "Ocean")
         assert result == "Ocean"
 
     @pytest.mark.asyncio
     async def test_validator_auto_fix(self):
         """Test validator auto-fixes values."""
+        from lionpride.types import Spec
+
         validator = Validator()
-        result = await validator.validate_field("score", "0.95", float, auto_fix=True)
+        spec = Spec(float, name="score")
+        result = await validator.validate_spec(spec, "0.95", auto_fix=True)
         assert result == 0.95
 
     @pytest.mark.asyncio
     async def test_validator_no_auto_fix(self):
         """Test validator respects auto_fix=False."""
+        from lionpride.types import Spec
+
         validator = Validator()
+        spec = Spec(float, name="score")
         with pytest.raises(ValidationError):
-            await validator.validate_field("score", "0.95", float, auto_fix=False)
+            await validator.validate_spec(spec, "0.95", auto_fix=False)
 
     @pytest.mark.asyncio
     async def test_validator_strict_mode(self):
         """Test validator strict mode raises on no rule."""
+        from lionpride.types import Spec
+
         validator = Validator()
+        spec = Spec(list, name="data")  # list has no registered rule
         with pytest.raises(ValidationError) as exc_info:
-            await validator.validate_field("data", [], list, strict=True)
+            await validator.validate_spec(spec, [], strict=True)
         assert "no rule found" in str(exc_info.value).lower()
 
     @pytest.mark.asyncio
     async def test_validator_non_strict_mode(self):
         """Test validator non-strict mode returns value on no rule."""
+        from lionpride.types import Spec
+
         validator = Validator()
-        result = await validator.validate_field("data", [1, 2], list, strict=False)
+        spec = Spec(list, name="data")  # list has no registered rule
+        result = await validator.validate_spec(spec, [1, 2], strict=False)
         assert result == [1, 2]
 
     @pytest.mark.asyncio
     async def test_validator_custom_registry(self):
         """Test validator with custom registry."""
         from lionpride.rules import RuleRegistry
+        from lionpride.types import Spec
 
         registry = RuleRegistry()
         registry.register(dict, MappingRule(required_keys={"name"}))
 
         validator = Validator(registry=registry)
+        spec = Spec(dict, name="config")
 
         # MappingRule applies to dict type
-        result = await validator.validate_field(
-            "config",
-            '{"name": "test"}',
-            dict,
-        )
+        result = await validator.validate_spec(spec, '{"name": "test"}')
         assert result == {"name": "test"}
 
     @pytest.mark.asyncio
     async def test_validator_validation_log(self):
         """Test validator logs validation errors."""
+        from lionpride.types import Spec
+
         validator = Validator()
+        spec = Spec(list, name="data")  # list has no registered rule
 
         try:
-            await validator.validate_field("data", [], list, strict=True)
+            await validator.validate_spec(spec, [], strict=True)
         except ValidationError:
             pass
 

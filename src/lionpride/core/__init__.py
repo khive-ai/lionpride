@@ -1,6 +1,7 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
+from ._utils import to_uuid
 from .broadcaster import Broadcaster
 from .element import Element
 from .event import Event, EventStatus, Execution
@@ -30,4 +31,5 @@ __all__ = [
     "Pile",
     "Processor",
     "Progression",
+    "to_uuid",
 ]

@@ -7,8 +7,26 @@ from .generate import generate
 from .interpret import interpret
 from .parse import parse
 from .react import ReactResult, ReactStep, react, react_stream
+from .types import (
+    ActParams,
+    AnalyzeParams,
+    CommunicateParams,
+    GenerateParams,
+    InterpretParams,
+    OperateParams,
+    ParseParams,
+    ReactParams,
+)
 
 __all__ = (
+    "ActParams",
+    "AnalyzeParams",
+    "CommunicateParams",
+    "GenerateParams",
+    "InterpretParams",
+    "OperateParams",
+    "ParseParams",
+    "ReactParams",
     "ReactResult",
     "ReactStep",
     "communicate",

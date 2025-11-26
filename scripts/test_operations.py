@@ -271,9 +271,28 @@ async def test_react():
         return f"No market data for sector '{sector}'"
 
     async def calculate_metric(expression: str) -> str:
-        """Calculate a financial metric."""
+        """Calculate a financial metric (safe arithmetic only)."""
+        import ast
+        import operator
+
+        # Safe operators for basic arithmetic
+        ops = {
+            ast.Add: operator.add,
+            ast.Sub: operator.sub,
+            ast.Mult: operator.mul,
+            ast.Div: operator.truediv,
+        }
+
+        def _safe_eval(node):
+            if isinstance(node, ast.Constant):
+                return node.value
+            elif isinstance(node, ast.BinOp):
+                return ops[type(node.op)](_safe_eval(node.left), _safe_eval(node.right))
+            raise ValueError(f"Unsupported operation: {type(node)}")
+
         try:
-            result = eval(expression)
+            tree = ast.parse(expression, mode="eval")
+            result = _safe_eval(tree.body)
             return f"Result: {result}"
         except Exception as e:
             return f"Calculation error: {e}"

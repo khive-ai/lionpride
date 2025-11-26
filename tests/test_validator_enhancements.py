@@ -85,16 +85,18 @@ class TestRuleRegistry:
 
 
 class TestStrictMode:
-    """Test strict parameter in validate_field."""
+    """Test strict parameter in validate_spec."""
 
     @pytest.mark.asyncio
     async def test_strict_true_raises_on_no_rule(self):
         """Test that strict=True raises ValidationError when no rule applies."""
-        validator = Validator()
+        from lionpride.types import Spec
 
-        # Use a type that no rule applies to
+        validator = Validator()
+        spec = Spec(list, name="unknown")  # list has no registered rule
+
         with pytest.raises(ValidationError) as exc_info:
-            await validator.validate_field("unknown", [], list, strict=True)
+            await validator.validate_spec(spec, [], strict=True)
 
         assert "no rule found" in str(exc_info.value).lower()
         assert len(validator.validation_log) == 1
@@ -102,50 +104,51 @@ class TestStrictMode:
     @pytest.mark.asyncio
     async def test_strict_false_returns_value_on_no_rule(self):
         """Test that strict=False returns value when no rule applies."""
+        from lionpride.types import Spec
+
         validator = Validator()
+        spec = Spec(list, name="unknown")
 
-        # Use a type that no rule applies to
-        result = await validator.validate_field("unknown", [1, 2, 3], list, strict=False)
+        result = await validator.validate_spec(spec, [1, 2, 3], strict=False)
 
-        # Should return the original value
         assert result == [1, 2, 3]
 
     @pytest.mark.asyncio
-    async def test_strict_true_default_in_validate_field(self):
+    async def test_strict_true_default_in_validate_spec(self):
         """Test that strict=True is the default."""
-        validator = Validator()
+        from lionpride.types import Spec
 
-        # Should raise by default (strict=True)
+        validator = Validator()
+        spec = Spec(list, name="unknown")
+
         with pytest.raises(ValidationError):
-            await validator.validate_field("unknown", [], list)
+            await validator.validate_spec(spec, [])
 
     @pytest.mark.asyncio
     async def test_strict_false_doesnt_log_error(self):
         """Test that strict=False doesn't log error when no rule applies."""
+        from lionpride.types import Spec
+
         validator = Validator()
+        spec = Spec(list, name="unknown")
 
-        result = await validator.validate_field("unknown", [], list, strict=False)
+        result = await validator.validate_spec(spec, [], strict=False)
 
-        # No error should be logged
         assert len(validator.validation_log) == 0
         assert result == []
 
     @pytest.mark.asyncio
     async def test_strict_mode_with_validation_failure(self):
         """Test that strict mode still raises on validation failure."""
-        # Configure custom registry with StringRule with min_length=1
+        from lionpride.types import Spec
+
         registry = RuleRegistry()
         registry.register(str, StringRule(min_length=1))
         validator = Validator(registry=registry)
+        spec = Spec(str, name="name")
 
-        # String rule should apply but validation should fail due to min_length
         with pytest.raises(ValidationError):
-            await validator.validate_field(
-                "name",
-                "",  # Empty string fails min_length=1 even after auto-fix
-                str,
-                strict=True,
-            )
+            await validator.validate_spec(spec, "", strict=True)
 
 
 class TestLogDuringValidation:
@@ -154,35 +157,33 @@ class TestLogDuringValidation:
     @pytest.mark.asyncio
     async def test_error_logged_on_validation_failure(self):
         """Test that validation errors are logged automatically."""
-        # Configure custom registry with StringRule with min_length=1
+        from lionpride.types import Spec
+
         registry = RuleRegistry()
         registry.register(str, StringRule(min_length=1))
         validator = Validator(registry=registry)
+        spec = Spec(str, name="name")
 
         try:
-            await validator.validate_field(
-                "name",
-                "",  # Empty string fails min_length=1 even after auto-fix
-                str,
-                strict=True,
-            )
+            await validator.validate_spec(spec, "", strict=True)
         except ValidationError:
             pass
 
-        # Error should be logged
         assert len(validator.validation_log) >= 1
 
     @pytest.mark.asyncio
     async def test_error_logged_on_strict_failure(self):
         """Test that strict mode errors are logged."""
+        from lionpride.types import Spec
+
         validator = Validator()
+        spec = Spec(list, name="unknown")
 
         try:
-            await validator.validate_field("unknown", [], list, strict=True)
+            await validator.validate_spec(spec, [], strict=True)
         except ValidationError:
             pass
 
-        # Error should be logged
         assert len(validator.validation_log) == 1
         log_entry = validator.validation_log[0]
         assert log_entry["field"] == "unknown"
@@ -195,21 +196,24 @@ class TestValidatorIntegration:
     @pytest.mark.asyncio
     async def test_enhanced_validator_with_all_features(self):
         """Test validator with registry, strict mode, and logging."""
+        from lionpride.types import Spec
+
         validator = Validator()
 
         # Valid string should pass
-        result = await validator.validate_field("name", "Ocean", str, strict=True)
+        spec_str = Spec(str, name="name")
+        result = await validator.validate_spec(spec_str, "Ocean", strict=True)
         assert result == "Ocean"
 
         # Invalid type with strict=False should return as-is
-        result = await validator.validate_field("data", [], list, strict=False)
+        spec_list = Spec(list, name="data")
+        result = await validator.validate_spec(spec_list, [], strict=False)
         assert result == []
 
         # list type has no rule - strict=True should raise
         with pytest.raises(ValidationError):
-            await validator.validate_field("data", [], list, strict=True)
+            await validator.validate_spec(spec_list, [], strict=True)
 
-        # Check that errors were logged
         assert len(validator.validation_log) >= 1
 
     @pytest.mark.asyncio

@@ -15,8 +15,7 @@ Flow:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
@@ -27,10 +26,10 @@ from lionpride.session.messages import (
     InstructionContent,
     Message,
 )
-from lionpride.types.base import ModelConfig, Params
 
-from .generate import GenerateParams, generate
-from .parse import ParseParams, parse
+from .generate import generate
+from .parse import parse
+from .types import CommunicateParams, GenerateParams, ParseParams
 
 if TYPE_CHECKING:
     from lionpride.session import Branch, Session
@@ -39,56 +38,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 __all__ = ("CommunicateParams", "communicate")
-
-
-@dataclass(init=False, frozen=True, slots=True)
-class CommunicateParams(Params):
-    """Parameters for communicate operation.
-
-    Communicate is stateful chat: generates response and persists messages
-    to branch. Optionally validates structured output.
-    """
-
-    _config = ModelConfig(none_as_sentinel=True, empty_as_sentinel=True)
-
-    instruction: str = None
-    """User instruction text"""
-
-    imodel: iModel | str = None
-    """Model to use for generation"""
-
-    context: dict[str, Any] | None = None
-    """Additional context for instruction"""
-
-    images: list[str] | None = None
-    """Image URLs for multimodal input"""
-
-    image_detail: str | None = None
-    """Image detail level"""
-
-    # Structured output params
-    operable: Operable | None = None
-    """Operable for structured output validation (carries its own adapter)"""
-
-    capabilities: set[str] | None = None
-    """Capabilities for validation (defaults to branch.capabilities)"""
-
-    # Retry params
-    max_retries: int = 0
-    """Retry attempts for validation failures"""
-
-    strict_validation: bool = False
-    """Raise on validation failure (vs return error dict)"""
-
-    fuzzy_parse: bool = True
-    """Enable fuzzy JSON parsing"""
-
-    # Output control
-    return_as: Literal["text", "raw", "message", "model"] = "text"
-    """Output format"""
-
-    imodel_kwargs: dict[str, Any] = field(default_factory=dict)
-    """Additional kwargs for imodel"""
 
 
 async def communicate(
@@ -105,7 +54,7 @@ async def communicate(
     Args:
         session: Session for services and message storage
         branch: Branch for message persistence and access control
-        params: Communicate parameters
+        params: Communicate parameters (with composed generate/parse params)
 
     Returns:
         Response in format specified by return_as
@@ -114,14 +63,19 @@ async def communicate(
         PermissionError: If branch doesn't have access to imodel
         ValueError: If validation fails with strict_validation=True
     """
-    if not params.instruction:
-        raise ValueError("communicate requires 'instruction' parameter")
+    # Validate required generate params
+    if params.generate is None:
+        raise ValueError("communicate requires 'generate' parameter")
 
-    if params.imodel is None:
-        raise ValueError("communicate requires 'imodel' parameter")
+    gen = params.generate
+    if gen.instruction is None:
+        raise ValueError("communicate requires 'generate.instruction' parameter")
+
+    if gen.imodel is None:
+        raise ValueError("communicate requires 'generate.imodel' parameter")
 
     # 1. Resource access check
-    model_name = params.imodel.name if isinstance(params.imodel, iModel) else params.imodel
+    model_name = gen.imodel.name if isinstance(gen.imodel, iModel) else gen.imodel
     if model_name not in branch.resources:
         raise PermissionError(
             f"Branch '{branch.name}' cannot access model '{model_name}'. "
@@ -129,25 +83,24 @@ async def communicate(
         )
 
     # Resolve imodel for sender name
-    imodel = (
-        params.imodel if isinstance(params.imodel, iModel) else session.services.get(model_name)
-    )
+    imodel = gen.imodel if isinstance(gen.imodel, iModel) else session.services.get(model_name)
 
     # Determine capabilities for validation
     capabilities = params.capabilities if params.capabilities is not None else branch.capabilities
 
-    # Create initial instruction message
-    ins_content = InstructionContent(
-        instruction=params.instruction,
-        context=params.context,
-        images=params.images,
-        image_detail=params.image_detail,
-    )
-    ins_msg = Message(
-        content=ins_content,
-        sender=branch.user,
-        recipient=session.id,
-    )
+    # Get initial instruction message (uses instruction_message property)
+    ins_msg = gen.instruction_message
+    if ins_msg is None:
+        raise ValueError("Failed to create instruction message")
+
+    # Set sender/recipient if not already set
+    if ins_msg.sender is None:
+        ins_msg = Message(
+            content=ins_msg.content,
+            sender=branch.user,
+            recipient=session.id,
+            metadata=ins_msg.metadata,
+        )
 
     # Retry loop
     last_error: str | None = None
@@ -159,7 +112,7 @@ async def communicate(
             imodel=model_name,
             instruction=ins_msg,
             return_as="message",
-            imodel_kwargs=params.imodel_kwargs,
+            imodel_kwargs=gen.imodel_kwargs,
         )
         result_msg = await generate(session, branch, gen_params)
 
@@ -190,6 +143,7 @@ async def communicate(
                 capabilities=capabilities,
                 validator=validator,
                 fuzzy_parse=params.fuzzy_parse,
+                parse_params=params.parse,
             )
         else:
             validated, error = response_text, None
@@ -214,9 +168,8 @@ async def communicate(
                 f"Your previous response failed validation with error:\n{error}\n\n"
                 f"Please provide a valid response that matches the expected format."
             )
-            ins_content = InstructionContent(instruction=retry_instruction)
             ins_msg = Message(
-                content=ins_content,
+                content=InstructionContent(instruction=retry_instruction),
                 sender=branch.user,
                 recipient=session.id,
             )
@@ -239,6 +192,7 @@ async def _validate_structured(
     capabilities: set[str],
     validator: Validator,
     fuzzy_parse: bool,
+    parse_params: ParseParams | None = None,
 ) -> tuple[Any, str | None]:
     """Validate structured output via parse + Validator.
 
@@ -250,13 +204,27 @@ async def _validate_structured(
         target_keys = [spec.name for spec in operable.get_specs() if spec.name]
 
         # 1. Parse: extract JSON dict
-        parse_params = ParseParams(
-            text=response_text,
-            target_keys=target_keys,
-            similarity_threshold=0.85 if fuzzy_parse else 1.0,
-            handle_unmatched="force" if fuzzy_parse else "raise",
-        )
-        parsed_dict = await parse(session, branch, parse_params)
+        # Use provided parse_params or create default
+        if parse_params is not None:
+            # Override text with response_text
+            p_params = ParseParams(
+                text=response_text,
+                target_keys=parse_params.target_keys or target_keys,
+                imodel=parse_params.imodel,
+                similarity_threshold=parse_params.similarity_threshold,
+                handle_unmatched=parse_params.handle_unmatched,
+                max_retries=parse_params.max_retries,
+                imodel_kwargs=parse_params.imodel_kwargs,
+            )
+        else:
+            p_params = ParseParams(
+                text=response_text,
+                target_keys=target_keys,
+                similarity_threshold=0.85 if fuzzy_parse else 1.0,
+                handle_unmatched="force" if fuzzy_parse else "raise",
+            )
+
+        parsed_dict = await parse(session, branch, p_params)
 
         if parsed_dict is None:
             return None, "Failed to extract JSON from response"

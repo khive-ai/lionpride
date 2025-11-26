@@ -9,101 +9,29 @@ Flow:
     instruction → communicate() → [tool execution] → result
                        │
                        └── parse() → Validator.validate() → typed model
+
+Request/Output Model Separation:
+    Request model (to LLM):  (*fields, reason?, action_requests?)
+    Output model (returned): (*fields, reason?, action_responses?)
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel
-
-from lionpride.rules import ActionRequest, Reason
+from lionpride.rules import ActionRequest, ActionResponse, Reason
 from lionpride.services.types import iModel
-from lionpride.types.base import ModelConfig, Params
 
-from .communicate import CommunicateParams, communicate
+from .communicate import communicate
 from .message_prep import prepare_tool_schemas
 from .tool_executor import execute_tools, has_action_requests
+from .types import CommunicateParams, GenerateParams, OperateParams
 
 if TYPE_CHECKING:
     from lionpride.session import Branch, Session
     from lionpride.types import Operable
 
 __all__ = ("OperateParams", "operate")
-
-
-@dataclass(init=False, frozen=True, slots=True)
-class OperateParams(Params):
-    """Parameters for operate - top-level orchestration.
-
-    Operate provides structured output with optional actions/tools.
-    Builds on communicate with tool execution layer.
-    """
-
-    _config = ModelConfig(none_as_sentinel=True, empty_as_sentinel=True)
-
-    instruction: str = None
-    """User instruction text"""
-
-    imodel: iModel | str = None
-    """Model to use for generation"""
-
-    # Structured output - one of these required
-    response_model: type[BaseModel] | None = None
-    """Pydantic model for validation (simple path)"""
-
-    operable: Operable | None = None
-    """Operable for validation (full path with Specs, carries its own adapter)"""
-
-    capabilities: set[str] | None = None
-    """Capabilities for validation (defaults to branch.capabilities)"""
-
-    # Context
-    context: dict[str, Any] | None = None
-    """Additional context for instruction"""
-
-    images: list[str] | None = None
-    """Image URLs for multimodal input"""
-
-    image_detail: str | None = None
-    """Image detail level"""
-
-    # Actions/tools
-    actions: bool = False
-    """Enable action_requests in output"""
-
-    reason: bool = False
-    """Enable reasoning in output"""
-
-    tools: list[str] | bool = False
-    """Tools to include (True=all, list=specific, False=none)"""
-
-    tool_schemas: list[dict] | None = None
-    """Pre-computed tool schemas (overrides tools param)"""
-
-    concurrent_tool_execution: bool = True
-    """Execute tools concurrently"""
-
-    # Retry/validation
-    max_retries: int = 0
-    """Retry attempts for validation failures"""
-
-    strict_validation: bool = False
-    """Raise on validation failure"""
-
-    fuzzy_parse: bool = True
-    """Enable fuzzy JSON parsing"""
-
-    skip_validation: bool = False
-    """Skip validation (return raw text)"""
-
-    # Output control
-    return_message: bool = False
-    """Return (result, message) tuple"""
-
-    imodel_kwargs: dict[str, Any] = field(default_factory=dict)
-    """Additional kwargs for imodel"""
 
 
 async def operate(
@@ -115,12 +43,17 @@ async def operate(
 
     Security:
     - Branch must have access to imodel (branch.resources)
-    - Structured output respects capabilities (branch.capabilities or params.capabilities)
+    - Structured output respects capabilities (branch.capabilities or params.communicate.capabilities)
+
+    Request/Output separation:
+    - Request model includes action_requests (what LLM proposes)
+    - Output model includes action_responses (results of execution)
+    - Original operable/capabilities are NOT mutated
 
     Args:
         session: Session for services and storage
         branch: Branch for access control and message persistence
-        params: Operate parameters
+        params: Operate parameters (with composed communicate/act params)
 
     Returns:
         Validated model instance, or (result, message) if return_message=True
@@ -129,36 +62,48 @@ async def operate(
         PermissionError: If branch doesn't have access to imodel
         ValueError: If validation fails with strict_validation=True
     """
-    if not params.instruction:
-        raise ValueError("operate requires 'instruction' parameter")
+    # Validate composed params
+    if params.communicate is None:
+        raise ValueError("operate requires 'communicate' parameter")
 
-    if params.imodel is None:
-        raise ValueError("operate requires 'imodel' parameter")
+    comm = params.communicate
+    if comm.generate is None:
+        raise ValueError("operate requires 'communicate.generate' parameter")
 
-    if params.response_model is None and params.operable is None:
-        raise ValueError("operate requires either 'response_model' or 'operable' parameter")
+    gen = comm.generate
+    if gen.instruction is None:
+        raise ValueError("operate requires instruction")
+
+    if gen.imodel is None:
+        raise ValueError("operate requires imodel")
+
+    if comm.operable is None:
+        raise ValueError("operate requires 'communicate.operable' parameter")
 
     # 1. Resource access check
-    model_name = params.imodel.name if isinstance(params.imodel, iModel) else params.imodel
+    model_name = gen.imodel.name if isinstance(gen.imodel, iModel) else gen.imodel
     if model_name not in branch.resources:
         raise PermissionError(
             f"Branch '{branch.name}' cannot access model '{model_name}'. "
             f"Allowed: {branch.resources or 'none'}"
         )
 
-    # 2. Build operable (validation_model only used for response_model path)
-    operable, _validation_model = _build_operable(
-        response_model=params.response_model,
-        operable=params.operable,
+    # 2. Build REQUEST operable/capabilities (with action_requests for LLM)
+    base_capabilities = comm.capabilities if comm.capabilities is not None else branch.capabilities
+    request_operable, request_capabilities = _build_request_model(
+        operable=comm.operable,
+        capabilities=base_capabilities,
         actions=params.actions,
         reason=params.reason,
     )
 
     # 3. Prepare tool schemas
-    tool_schemas = params.tool_schemas or prepare_tool_schemas(session, params.tools)
+    act = params.act
+    tools = act.tools if act else False
+    tool_schemas = (act.tool_schemas if act else None) or prepare_tool_schemas(session, tools)
 
     # 4. Build context with tool schemas
-    context = params.context
+    context = gen.context
     if tool_schemas:
         existing_context = context or {}
         if isinstance(existing_context, dict):
@@ -166,41 +111,38 @@ async def operate(
         else:
             context = {"original": existing_context, "tool_schemas": tool_schemas}
 
-    # Determine capabilities
-    capabilities = params.capabilities if params.capabilities is not None else branch.capabilities
+    # 5. Build communicate params with request operable
+    gen_params = GenerateParams(
+        imodel=model_name,
+        instruction=gen.instruction,
+        context=context,
+        images=gen.images,
+        image_detail=gen.image_detail,
+        imodel_kwargs=gen.imodel_kwargs,
+    )
 
-    # 5. Build communicate params
     if params.skip_validation:
         # Skip validation path - return raw text
         comm_params = CommunicateParams(
-            instruction=params.instruction,
-            imodel=model_name,
-            context=context,
-            images=params.images,
-            image_detail=params.image_detail,
-            max_retries=params.max_retries,
+            generate=gen_params,
+            parse=comm.parse,
+            max_retries=comm.max_retries,
             return_as="text",
-            imodel_kwargs=params.imodel_kwargs,
         )
     else:
-        # Validation path
+        # Validation path with request model
         comm_params = CommunicateParams(
-            instruction=params.instruction,
-            imodel=model_name,
-            context=context,
-            images=params.images,
-            image_detail=params.image_detail,
-            operable=operable,
-            capabilities=capabilities,
-            adapter=params.adapter,
-            max_retries=params.max_retries,
-            strict_validation=params.strict_validation,
-            fuzzy_parse=params.fuzzy_parse,
+            generate=gen_params,
+            parse=comm.parse,
+            operable=request_operable,
+            capabilities=request_capabilities,
+            max_retries=comm.max_retries,
+            strict_validation=comm.strict_validation,
+            fuzzy_parse=comm.fuzzy_parse,
             return_as="model",
-            imodel_kwargs=params.imodel_kwargs,
         )
 
-    # 6. Call communicate
+    # 6. Call communicate (LLM returns action_requests)
     result = await communicate(session, branch, comm_params)
 
     # Handle validation failure
@@ -211,12 +153,15 @@ async def operate(
 
     # 7. Execute actions if enabled and present
     if params.actions and has_action_requests(result):
+        concurrent = act.concurrent if act else True
+        # Execute tools and transform action_requests → action_responses
         result, _action_responses = await execute_tools(
             result,
             session,
             branch,
-            concurrent=params.concurrent_tool_execution,
+            concurrent=concurrent,
         )
+        # Result now has action_responses instead of action_requests
 
     # 8. Return result
     if params.return_message:
@@ -227,62 +172,159 @@ async def operate(
     return result
 
 
-def _build_operable(
-    response_model: type[BaseModel] | None,
-    operable: Operable | None,
+def _build_request_model(
+    operable: Operable,
+    capabilities: set[str],
     actions: bool,
     reason: bool,
-) -> tuple[Operable | None, type[BaseModel] | None]:
-    """Build validation model from response_model or operable.
+) -> tuple[Operable, set[str]]:
+    """Build REQUEST operable/capabilities with injected fields.
 
-    Two paths:
-    1. operable provided → use operable directly
-    2. response_model provided → extend with actions/reason if needed
+    Injects reason and action_requests into operable/capabilities without
+    mutating the originals. These are what the LLM will generate.
 
-    No round-trip conversion (Pydantic→Spec→Operable→Pydantic).
+    Args:
+        operable: Original operable (not mutated)
+        capabilities: Original capabilities (not mutated)
+        actions: Whether to inject action_requests
+        reason: Whether to inject reason
+
+    Returns:
+        (extended_operable, extended_capabilities) for LLM request
     """
-    from pydantic import Field, create_model
+    existing_fields = operable.allowed()
 
-    # Path 1: Operable provided - use Spec-based validation
-    if operable:
-        return operable, None
+    needs_reason = reason and "reason" not in existing_fields
+    needs_actions = actions and "action_requests" not in existing_fields
 
-    # Path 2: response_model provided
-    if response_model and (
-        not isinstance(response_model, type) or not issubclass(response_model, BaseModel)
-    ):
-        raise ValueError(
-            f"response_model must be a Pydantic BaseModel subclass, got {response_model}"
-        )
+    # No injection needed
+    if not needs_reason and not needs_actions:
+        return operable, capabilities
 
-    # No extensions needed - use response_model directly
-    if not actions and not reason:
-        return None, response_model
-
-    # Need to extend response_model with action/reason fields
-    extra_fields: dict[str, Any] = {}
-    existing_fields = set(response_model.model_fields.keys()) if response_model else set()
-
-    if reason and "reason" not in existing_fields:
-        extra_fields["reason"] = (Reason | None, Field(default=None))
-
-    if actions and "action_requests" not in existing_fields:
-        extra_fields["action_requests"] = (
-            list[ActionRequest] | None,
-            Field(default=None),
-        )
-
-    if not extra_fields:
-        return None, response_model
-
-    # Create extended model inheriting from response_model
-    base = response_model if response_model else BaseModel
-    model_name = f"{base.__name__}WithActions" if actions else f"{base.__name__}WithReason"
-
-    extended_model = create_model(
-        model_name,
-        __base__=base,
-        **extra_fields,
+    # Build extended operable
+    from lionpride.types import (
+        Operable as OperableCls,
+        Spec,
     )
 
-    return None, extended_model
+    specs = list(operable.get_specs())
+    extended_capabilities = set(capabilities)
+
+    if needs_reason:
+        specs.append(
+            Spec(
+                name="reason",
+                base_type=Reason,
+                nullable=True,
+                default=None,
+            )
+        )
+        extended_capabilities.add("reason")
+
+    if needs_actions:
+        specs.append(
+            Spec(
+                name="action_requests",
+                base_type=ActionRequest,
+                nullable=True,
+                listable=True,
+                default=None,
+            )
+        )
+        extended_capabilities.add("action_requests")
+
+    # Build model name
+    model_name = operable.name or "DynamicModel"
+    if needs_actions and needs_reason:
+        model_name = f"{model_name}WithReasonAndActions"
+    elif needs_actions:
+        model_name = f"{model_name}WithActions"
+    elif needs_reason:
+        model_name = f"{model_name}WithReason"
+
+    extended_operable = OperableCls(
+        specs=tuple(specs),
+        name=model_name,
+        adapter=operable._Operable__adapter_name,
+    )
+
+    return extended_operable, extended_capabilities
+
+
+def _build_output_model(
+    operable: Operable,
+    capabilities: set[str],
+    actions: bool,
+    reason: bool,
+) -> tuple[Operable, set[str]]:
+    """Build OUTPUT operable/capabilities with action_responses.
+
+    Similar to request model but uses action_responses instead of
+    action_requests. This is what gets returned after tool execution.
+
+    Args:
+        operable: Original operable (not mutated)
+        capabilities: Original capabilities (not mutated)
+        actions: Whether to inject action_responses
+        reason: Whether to inject reason
+
+    Returns:
+        (extended_operable, extended_capabilities) for output
+    """
+    existing_fields = operable.allowed()
+
+    needs_reason = reason and "reason" not in existing_fields
+    needs_actions = actions and "action_responses" not in existing_fields
+
+    # No injection needed
+    if not needs_reason and not needs_actions:
+        return operable, capabilities
+
+    # Build extended operable
+    from lionpride.types import (
+        Operable as OperableCls,
+        Spec,
+    )
+
+    specs = list(operable.get_specs())
+    extended_capabilities = set(capabilities)
+
+    if needs_reason:
+        specs.append(
+            Spec(
+                name="reason",
+                base_type=Reason,
+                nullable=True,
+                default=None,
+            )
+        )
+        extended_capabilities.add("reason")
+
+    if needs_actions:
+        specs.append(
+            Spec(
+                name="action_responses",
+                base_type=ActionResponse,
+                nullable=True,
+                listable=True,
+                default=None,
+            )
+        )
+        extended_capabilities.add("action_responses")
+
+    # Build model name
+    model_name = operable.name or "DynamicModel"
+    if needs_actions and needs_reason:
+        model_name = f"{model_name}OutputWithReasonAndActions"
+    elif needs_actions:
+        model_name = f"{model_name}OutputWithActions"
+    elif needs_reason:
+        model_name = f"{model_name}OutputWithReason"
+
+    extended_operable = OperableCls(
+        specs=tuple(specs),
+        name=model_name,
+        adapter=operable._Operable__adapter_name,
+    )
+
+    return extended_operable, extended_capabilities

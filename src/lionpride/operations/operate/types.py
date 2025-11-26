@@ -227,20 +227,52 @@ class OperateParams(Params):
 
 @dataclass(init=False, frozen=True, slots=True)
 class InterpretParams(Params):
-    """Parameters for interpret operation (response analysis)."""
+    """Parameters for interpret operation (refine user instructions).
+
+    Rewrites raw user input into clearer, more structured prompts.
+    """
 
     _config = ModelConfig(none_as_sentinel=True, empty_as_sentinel=True)
 
-    # TODO: Define interpret-specific params
+    text: str = None
+    """Raw user instruction to refine"""
+
+    imodel: iModel | str = None
+    """Model to use for interpretation"""
+
+    domain: str = "general"
+    """Domain hint for interpretation"""
+
+    style: str = "concise"
+    """Desired style of output"""
+
+    sample_writing: str | None = None
+    """Example of desired output style"""
+
+    temperature: float = 0.1
+    """Temperature for generation"""
 
 
 @dataclass(init=False, frozen=True, slots=True)
 class AnalyzeParams(Params):
-    """Parameters for analyze operation (deep analysis)."""
+    """Parameters for analyze operation (deep analysis).
+
+    Performs deep analysis on content or responses.
+    """
 
     _config = ModelConfig(none_as_sentinel=True, empty_as_sentinel=True)
 
-    # TODO: Define analyze-specific params
+    content: str = None
+    """Content to analyze"""
+
+    imodel: iModel | str = None
+    """Model to use for analysis"""
+
+    analysis_type: str = "general"
+    """Type of analysis to perform"""
+
+    depth: Literal["shallow", "medium", "deep"] = "medium"
+    """Analysis depth"""
 
 
 @dataclass(init=False, frozen=True, slots=True)
