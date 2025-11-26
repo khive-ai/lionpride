@@ -39,7 +39,14 @@ dependencies = [
 [project.optional-dependencies]
 schema-gen = ["datamodel-code-generator>=0.25.0"]
 mcp = ["fastmcp>=2.13.0"]
-all = ["lionpride[schema-gen, mcp]"]
+# Log adapters and broadcasters
+log-sqlite = ["aiosqlite>=0.19.0"]
+log-postgres = ["sqlalchemy[asyncio]>=2.0.0", "asyncpg>=0.29.0"]
+log-s3 = ["aioboto3>=12.0.0"]
+log-all = ["lionpride[log-sqlite, log-postgres, log-s3]"]
+# Testing with real infrastructure
+test-integration = ["lionpride[log-all]"]
+all = ["lionpride[schema-gen, mcp, log-all]"]
 
 [project.urls]
 Homepage = "https://github.com/khive-ai/lionpride"
@@ -99,5 +106,6 @@ dev = [
   "ipywidgets>=8.1.7",
   "nbmake>=1.5.5",
   "nbconvert>=7.16.6",
+  "testcontainers[postgres]>=4.0.0",
 ]
 docs = ["mkdocs>=1.5.0", "mkdocs-material>=9.5.0", "mkdocs-autorefs>=1.0.0"]

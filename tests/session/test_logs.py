@@ -9,6 +9,7 @@ import asyncio
 import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 import pytest
@@ -496,3 +497,316 @@ class TestLogStoreCapacity:
             # Check that dump file was created
             files = list(Path(tmpdir).glob("*.json"))
             assert len(files) == 1
+
+
+# -----------------------------------------------------------------------------
+# Mock implementations for adapter/broadcaster tests
+# -----------------------------------------------------------------------------
+
+
+class MockLogAdapter:
+    """Mock LogAdapter for testing."""
+
+    def __init__(self):
+        self.written_logs: list[Log] = []
+        self.write_called = False
+        self.close_called = False
+
+    async def write(self, logs: list[Log]) -> int:
+        self.write_called = True
+        self.written_logs.extend(logs)
+        return len(logs)
+
+    async def read(
+        self,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        log_type: str | None = None,
+        since: str | None = None,
+    ) -> list[dict[str, Any]]:
+        return [log.to_dict(mode="json") for log in self.written_logs[:limit]]
+
+    async def close(self) -> None:
+        self.close_called = True
+
+
+class MockLogSubscriber:
+    """Mock LogSubscriber for testing."""
+
+    def __init__(self, name: str = "mock_subscriber"):
+        self._name = name
+        self.received_logs: list[Log] = []
+        self.receive_called = False
+        self.close_called = False
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    async def receive(self, logs: list[Log]) -> int:
+        self.receive_called = True
+        self.received_logs.extend(logs)
+        return len(logs)
+
+    async def close(self) -> None:
+        self.close_called = True
+
+
+class MockLogBroadcaster:
+    """Mock LogBroadcaster for testing."""
+
+    def __init__(self):
+        self._subscribers: dict[str, MockLogSubscriber] = {}
+        self.broadcast_called = False
+        self.broadcasted_logs: list[Log] = []
+
+    def add_subscriber(self, subscriber: MockLogSubscriber) -> None:
+        self._subscribers[subscriber.name] = subscriber
+
+    async def broadcast(self, logs: list[Log]) -> dict[str, int]:
+        self.broadcast_called = True
+        self.broadcasted_logs.extend(logs)
+        results: dict[str, int] = {}
+        for name, sub in self._subscribers.items():
+            count = await sub.receive(logs)
+            results[name] = count
+        return results
+
+    async def close(self) -> None:
+        for sub in self._subscribers.values():
+            await sub.close()
+
+
+# -----------------------------------------------------------------------------
+# Tests for LogStore adapter/broadcaster integration
+# -----------------------------------------------------------------------------
+
+
+class TestLogStoreAdapterBroadcasterIntegration:
+    """Tests for LogStore integration with adapters and broadcasters."""
+
+    def test_logstore_set_adapter(self):
+        """set_adapter should update config.use_adapter to True."""
+        store = LogStore(auto_save_on_exit=False)
+        adapter = MockLogAdapter()
+
+        # Initially use_adapter is False
+        assert store._config.use_adapter is False
+
+        # Set adapter
+        store.set_adapter(adapter)
+
+        # Config should be updated
+        assert store._config.use_adapter is True
+        assert store._adapter is adapter
+
+    def test_logstore_set_broadcaster(self):
+        """set_broadcaster should update config.use_broadcaster to True."""
+        store = LogStore(auto_save_on_exit=False)
+        broadcaster = MockLogBroadcaster()
+
+        # Initially use_broadcaster is False
+        assert store._config.use_broadcaster is False
+
+        # Set broadcaster
+        store.set_broadcaster(broadcaster)
+
+        # Config should be updated
+        assert store._config.use_broadcaster is True
+        assert store._broadcaster is broadcaster
+
+    @pytest.mark.asyncio
+    async def test_logstore_aflush_with_adapter(self):
+        """aflush should write logs to adapter."""
+        store = LogStore(auto_save_on_exit=False)
+        adapter = MockLogAdapter()
+        store.set_adapter(adapter)
+
+        # Add some logs
+        store.log_info(source="test", message="msg1")
+        store.log_info(source="test", message="msg2")
+        store.log_api_call(model="gpt-4", total_tokens=100)
+
+        assert len(store) == 3
+
+        # Flush to adapter
+        results = await store.aflush(clear=True)
+
+        # Verify adapter received logs
+        assert adapter.write_called is True
+        assert len(adapter.written_logs) == 3
+        assert results["adapter"] == 3
+
+        # Logs should be cleared
+        assert len(store) == 0
+
+    @pytest.mark.asyncio
+    async def test_logstore_aflush_with_broadcaster(self):
+        """aflush should broadcast logs to all subscribers."""
+        store = LogStore(auto_save_on_exit=False)
+        broadcaster = MockLogBroadcaster()
+        subscriber1 = MockLogSubscriber(name="sub1")
+        subscriber2 = MockLogSubscriber(name="sub2")
+        broadcaster.add_subscriber(subscriber1)
+        broadcaster.add_subscriber(subscriber2)
+        store.set_broadcaster(broadcaster)
+
+        # Add some logs
+        store.log_info(source="test", message="broadcast_test")
+        store.log_error(error="test_error")
+
+        assert len(store) == 2
+
+        # Flush to broadcaster
+        results = await store.aflush(clear=True)
+
+        # Verify broadcaster received logs
+        assert broadcaster.broadcast_called is True
+        assert len(broadcaster.broadcasted_logs) == 2
+        assert "broadcaster" in results
+        assert results["broadcaster"]["sub1"] == 2
+        assert results["broadcaster"]["sub2"] == 2
+
+        # Both subscribers should have received logs
+        assert subscriber1.receive_called is True
+        assert subscriber2.receive_called is True
+        assert len(subscriber1.received_logs) == 2
+        assert len(subscriber2.received_logs) == 2
+
+        # Logs should be cleared
+        assert len(store) == 0
+
+    @pytest.mark.asyncio
+    async def test_logstore_aflush_with_both(self):
+        """aflush should write to adapter and broadcast simultaneously."""
+        store = LogStore(auto_save_on_exit=False)
+
+        # Set up adapter
+        adapter = MockLogAdapter()
+        store.set_adapter(adapter)
+
+        # Set up broadcaster
+        broadcaster = MockLogBroadcaster()
+        subscriber = MockLogSubscriber(name="test_sub")
+        broadcaster.add_subscriber(subscriber)
+        store.set_broadcaster(broadcaster)
+
+        # Add logs
+        store.log_info(source="test", message="both_test")
+        store.log_operation(source="op", message="operation_test")
+
+        assert len(store) == 2
+
+        # Flush
+        results = await store.aflush(clear=True)
+
+        # Verify adapter
+        assert adapter.write_called is True
+        assert len(adapter.written_logs) == 2
+        assert results["adapter"] == 2
+
+        # Verify broadcaster
+        assert broadcaster.broadcast_called is True
+        assert len(broadcaster.broadcasted_logs) == 2
+        assert results["broadcaster"]["test_sub"] == 2
+
+        # Logs should be cleared
+        assert len(store) == 0
+
+    @pytest.mark.asyncio
+    async def test_logstore_aflush_empty(self):
+        """aflush with no logs should return empty results."""
+        store = LogStore(auto_save_on_exit=False)
+        adapter = MockLogAdapter()
+        store.set_adapter(adapter)
+
+        assert len(store) == 0
+
+        # Flush empty store
+        results = await store.aflush()
+
+        # Should return empty results, adapter not called
+        assert results == {}
+        assert adapter.write_called is False
+
+    @pytest.mark.asyncio
+    async def test_logstore_aflush_clear_behavior(self):
+        """aflush clear=True should remove logs after successful flush."""
+        store = LogStore(auto_save_on_exit=False)
+        adapter = MockLogAdapter()
+        store.set_adapter(adapter)
+
+        # Add logs
+        store.log_info(message="test1")
+        store.log_info(message="test2")
+        assert len(store) == 2
+
+        # Flush with clear=True (default)
+        await store.aflush(clear=True)
+        assert len(store) == 0
+
+        # Add more logs
+        store.log_info(message="test3")
+        assert len(store) == 1
+
+        # Flush with clear=False
+        await store.aflush(clear=False)
+        assert len(store) == 1  # Logs should still be there
+
+    @pytest.mark.asyncio
+    async def test_logstore_aflush_no_clear_without_results(self):
+        """aflush should not clear logs if no adapter/broadcaster succeeded."""
+        store = LogStore(auto_save_on_exit=False)
+        # No adapter or broadcaster set
+
+        store.log_info(message="test")
+        assert len(store) == 1
+
+        # Flush with no adapter/broadcaster
+        results = await store.aflush(clear=True)
+
+        # Results empty (no adapter/broadcaster)
+        assert results == {}
+        # Logs should NOT be cleared (no successful flush)
+        assert len(store) == 1
+
+    def test_logstore_filter_until(self):
+        """filter with until param should filter logs by created_at <= until."""
+        store = LogStore(auto_save_on_exit=False)
+        now = datetime.now(UTC)
+
+        # Add logs
+        store.log_info(message="msg1")
+        store.log_info(message="msg2")
+        store.log_info(message="msg3")
+
+        # Filter with until in the past - should get nothing
+        logs = store.filter(until=now - timedelta(hours=1))
+        assert len(logs) == 0
+
+        # Filter with until in the future - should get all
+        logs = store.filter(until=now + timedelta(hours=1))
+        assert len(logs) == 3
+
+        # Combined filter: since and until
+        logs = store.filter(since=now - timedelta(seconds=1), until=now + timedelta(hours=1))
+        assert len(logs) == 3
+
+    def test_logstore_filter_combined_until_and_type(self):
+        """filter should combine until with other criteria."""
+        store = LogStore(auto_save_on_exit=False)
+        now = datetime.now(UTC)
+
+        store.log_info(message="info1")
+        store.log_error(error="error1")
+        store.log_info(message="info2")
+
+        # Filter by type and until
+        logs = store.filter(log_type=LogType.INFO, until=now + timedelta(hours=1))
+        assert len(logs) == 2
+        assert all(log.log_type == LogType.INFO for log in logs)
+
+        # Filter by type and until in past - should get nothing
+        logs = store.filter(log_type=LogType.INFO, until=now - timedelta(hours=1))
+        assert len(logs) == 0
