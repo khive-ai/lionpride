@@ -106,7 +106,7 @@ def _create_react_response_model(
 async def react(
     session: Session,
     branch: Branch,
-    params: ReactParams,
+    params: ReactParams | dict,
 ) -> ReactResult:
     """ReAct operation - multi-step reasoning with tool calling.
 
@@ -118,13 +118,17 @@ async def react(
     Args:
         session: Session for services and storage
         branch: Branch for access control
-        params: React parameters with composed operate params
+        params: React parameters (ReactParams or dict)
 
     Returns:
         ReactResult with steps and final response
     """
     from .factory import operate
     from .message_prep import prepare_tool_schemas
+
+    # Convert dict to ReactParams if needed
+    if isinstance(params, dict):
+        params = ReactParams(**params)
 
     # Validate params
     if params.operate is None:
@@ -302,7 +306,7 @@ def _check_stop_condition(result: Any, condition: str) -> bool:
 async def react_stream(
     session: Session,
     branch: Branch,
-    params: ReactParams,
+    params: ReactParams | dict,
 ):
     """Streaming ReAct operation - yields ReactStep as each step completes.
 
@@ -314,6 +318,10 @@ async def react_stream(
     """
     from .factory import operate
     from .message_prep import prepare_tool_schemas
+
+    # Convert dict to ReactParams if needed
+    if isinstance(params, dict):
+        params = ReactParams(**params)
 
     # Validate params (same as react)
     if params.operate is None:

@@ -29,7 +29,7 @@ __all__ = ("ParseParams", "parse")
 async def parse(
     session: Session,
     branch: Branch,
-    params: ParseParams,
+    params: ParseParams | dict,
 ) -> dict[str, Any] | None:
     """Parse raw text into JSON dict.
 
@@ -41,7 +41,7 @@ async def parse(
     Args:
         session: Session for service access
         branch: Branch for resource access control
-        params: Parse parameters
+        params: Parse parameters (ParseParams or dict)
 
     Returns:
         Extracted dict, or None if extraction fails
@@ -49,6 +49,10 @@ async def parse(
     Raises:
         PermissionError: If branch doesn't have access to imodel
     """
+    # Convert dict to ParseParams if needed
+    if isinstance(params, dict):
+        params = ParseParams(**params)
+
     text = params.text
     if not text:
         return None

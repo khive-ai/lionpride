@@ -37,7 +37,7 @@ __all__ = ("OperateParams", "operate")
 async def operate(
     session: Session,
     branch: Branch,
-    params: OperateParams,
+    params: OperateParams | dict,
 ) -> Any:
     """Structured output with optional actions.
 
@@ -53,7 +53,7 @@ async def operate(
     Args:
         session: Session for services and storage
         branch: Branch for access control and message persistence
-        params: Operate parameters (with composed communicate/act params)
+        params: Operate parameters (OperateParams or dict)
 
     Returns:
         Validated model instance, or (result, message) if return_message=True
@@ -62,6 +62,10 @@ async def operate(
         PermissionError: If branch doesn't have access to imodel
         ValueError: If validation fails with strict_validation=True
     """
+    # Convert dict to OperateParams if needed
+    if isinstance(params, dict):
+        params = OperateParams(**params)
+
     # Validate composed params
     if params.communicate is None:
         raise ValueError("operate requires 'communicate' parameter")

@@ -43,7 +43,7 @@ __all__ = ("CommunicateParams", "communicate")
 async def communicate(
     session: Session,
     branch: Branch,
-    params: CommunicateParams,
+    params: CommunicateParams | dict,
 ) -> str | dict | Message | BaseModel:
     """Stateful chat with optional structured output.
 
@@ -54,7 +54,7 @@ async def communicate(
     Args:
         session: Session for services and message storage
         branch: Branch for message persistence and access control
-        params: Communicate parameters (with composed generate/parse params)
+        params: Communicate parameters (CommunicateParams or dict)
 
     Returns:
         Response in format specified by return_as
@@ -63,6 +63,10 @@ async def communicate(
         PermissionError: If branch doesn't have access to imodel
         ValueError: If validation fails with strict_validation=True
     """
+    # Convert dict to CommunicateParams if needed
+    if isinstance(params, dict):
+        params = CommunicateParams(**params)
+
     # Validate required generate params
     if params.generate is None:
         raise ValueError("communicate requires 'generate' parameter")

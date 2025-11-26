@@ -210,3 +210,4 @@ __marimo__/
 .coverage
 coverage.*
 *.DS_Store
+cookbooks/data/*.pdf

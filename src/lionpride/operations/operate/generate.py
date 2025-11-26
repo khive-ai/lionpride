@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 __all__ = ("GenerateParams", "generate")
 
 
-async def generate(session: Session, branch: Branch, params: GenerateParams):
+async def generate(session: Session, branch: Branch, params: GenerateParams | dict):
     """Stateless LLM call.
 
     Security:
@@ -31,7 +31,7 @@ async def generate(session: Session, branch: Branch, params: GenerateParams):
     Args:
         session: Session for services
         branch: Branch for resource access control
-        params: Generate parameters
+        params: Generate parameters (GenerateParams or dict)
 
     Returns:
         Response in format specified by return_as
@@ -40,6 +40,10 @@ async def generate(session: Session, branch: Branch, params: GenerateParams):
         PermissionError: If branch doesn't have access to imodel
         ValueError: If no imodel specified
     """
+    # Convert dict to GenerateParams if needed
+    if isinstance(params, dict):
+        params = GenerateParams(**params)
+
     b = session.get_branch(branch, session.default_branch)
     if b is None:
         raise ValueError("No branch specified and no default_branch set on session")

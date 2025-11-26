@@ -24,14 +24,14 @@ __all__ = ("InterpretParams", "interpret")
 async def interpret(
     session: Session,
     branch: Branch,
-    params: InterpretParams,
+    params: InterpretParams | dict,
 ) -> str:
     """Interpret and refine user input into clearer prompts.
 
     Args:
         session: Session for services
         branch: Branch for resource access
-        params: Interpret parameters
+        params: Interpret parameters (InterpretParams or dict)
 
     Returns:
         Refined instruction string
@@ -40,6 +40,10 @@ async def interpret(
         ValueError: If required params missing
         PermissionError: If branch doesn't have access to imodel
     """
+    # Convert dict to InterpretParams if needed
+    if isinstance(params, dict):
+        params = InterpretParams(**params)
+
     if not params.text:
         raise ValueError("interpret requires 'text' parameter")
 

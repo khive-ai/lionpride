@@ -10,8 +10,9 @@ from uuid import UUID
 
 from pydantic import Field, PrivateAttr
 
-from lionpride.core import Element, Flow, Pile, Progression
+from lionpride.core import Element, Flow, Graph, Pile, Progression
 from lionpride.errors import NotFoundError
+from lionpride.operations.registry import OperationRegistry
 from lionpride.services import ServiceRegistry
 from lionpride.services.types import iModel
 from lionpride.types import Unset, not_sentinel
@@ -19,6 +20,7 @@ from lionpride.types import Unset, not_sentinel
 from .messages import Message, SystemContent
 
 if TYPE_CHECKING:
+    from lionpride.operations.node import Operation
     from lionpride.services.types import Calling
 
 __all__ = ("Branch", "Session")
@@ -93,6 +95,10 @@ class Session(Element):
     services: ServiceRegistry = Field(
         default_factory=ServiceRegistry,
         description="Available services (models, tools)",
+    )
+    operations: OperationRegistry = Field(
+        default_factory=OperationRegistry,
+        description="Available operations (operate, react, communicate, generate)",
     )
     _default_branch_id: UUID | None = PrivateAttr(None)
     _default_backends: dict[str, str] = PrivateAttr(default_factory=dict)
@@ -427,6 +433,117 @@ class Session(Element):
             poll_interval=poll_interval,
             **kwargs,
         )
+
+    async def conduct(
+        self,
+        operation_type: str,
+        branch: Branch | UUID | str | None = None,
+        **kwargs,
+    ) -> Operation:
+        """Conduct an operation through the registry.
+
+        Creates an Operation, binds it to session/branch, and invokes it.
+
+        Args:
+            operation_type: Operation name (communicate, operate, react, generate)
+            branch: Branch for execution (uses default if None)
+            **kwargs: Operation parameters
+
+        Returns:
+            Operation with execution results (access via operation.response)
+
+        Raises:
+            KeyError: If operation not registered
+            RuntimeError: If no branch provided and no default set
+        """
+        from lionpride.operations.node import Operation
+
+        # Resolve branch
+        resolved_branch = self._resolve_branch(branch)
+
+        # Create operation
+        op = Operation(operation_type=operation_type, parameters=kwargs)
+        op.bind(self, resolved_branch)
+
+        # Invoke and return
+        await op.invoke()
+        return op
+
+    async def flow(
+        self,
+        graph: Graph,
+        branch: Branch | UUID | str | None = None,
+        *,
+        context: dict | None = None,
+        max_concurrent: int | None = None,
+        stop_on_error: bool = True,
+        verbose: bool = False,
+    ) -> dict:
+        """Execute operation graph with dependency-aware scheduling.
+
+        Args:
+            graph: Operation graph (DAG) to execute
+            branch: Branch for execution (uses default if None)
+            context: Shared context for all operations
+            max_concurrent: Max concurrent operations (None = unlimited)
+            stop_on_error: Stop on first error
+            verbose: Enable verbose output
+
+        Returns:
+            Dictionary mapping operation names to their results
+        """
+        from lionpride.operations.flow import flow as flow_func
+
+        resolved_branch = self._resolve_branch(branch)
+        return await flow_func(
+            session=self,
+            branch=resolved_branch,
+            graph=graph,
+            context=context,
+            max_concurrent=max_concurrent,
+            stop_on_error=stop_on_error,
+            verbose=verbose,
+        )
+
+    def _resolve_branch(self, branch: Branch | UUID | str | None) -> Branch:
+        """Resolve branch parameter, falling back to default."""
+        if branch is not None:
+            return self.get_branch(branch)
+        if self.default_branch is not None:
+            return self.default_branch
+        raise RuntimeError("No branch provided and no default branch set")
+
+    def register_operation(
+        self,
+        name: str,
+        factory,
+        *,
+        override: bool = False,
+    ) -> None:
+        """Register custom operation factory.
+
+        Enables arbitrary workflow patterns including nested DAGs.
+
+        Args:
+            name: Operation name for conduct() and Builder
+            factory: Async function (session, branch, params) -> result
+            override: Allow replacing existing operation
+
+        Example:
+            async def my_nested_dag(session, branch, params):
+                # Build inner graph
+                builder = Builder()
+                builder.add("step1", "communicate", {...})
+                builder.add("step2", "operate", {...}, depends_on=["step1"])
+                graph = builder.build()
+
+                # Execute nested flow
+                return await session.flow(graph, branch)
+
+            session.register_operation("nested_dag", my_nested_dag)
+            result = await session.conduct("nested_dag", branch, ...)
+        """
+        self.operations.register(name, factory, override=override)
 
     def __repr__(self) -> str:
         return (
