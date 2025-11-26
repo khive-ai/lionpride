@@ -3,59 +3,73 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Literal
 
-from lionpride.session.messages import AssistantResponseContent, Message
+from lionpride.services.types import iModel
+from lionpride.session.messages import AssistantResponseContent, Message, prepare_messages_for_chat
+from lionpride.types import Params
+from lionpride.types.base import ModelConfig
 
 if TYPE_CHECKING:
     from lionpride.session import Branch, Session
 
 
-async def generate(
-    session: Session,
-    branch: Branch | str,
-    parameters: dict[str, Any],
-) -> str | dict | Message | Any:
-    """Stateless text generation - does not persist messages.
+@dataclass(init=False, frozen=True, slots=True)
+class GenerateParams(Params):
+    _config = ModelConfig(none_as_sentinel=True, empty_as_sentinel=True)
 
-    Args:
-        parameters: Must include 'imodel'. Optional: return_as (text|raw|message|calling).
-    """
-    imodel_param = parameters.pop("imodel", None)
-    if not imodel_param:
-        raise ValueError("generate requires 'imodel' parameter")
+    imodel: iModel = None
+    instruction: Message = None
+    return_as: Literal["text", "raw", "message", "calling"] = "calling"
+    imodel_kwargs: dict = field(default_factory=dict)
 
-    return_as: Literal["text", "raw", "message", "calling"] = parameters.pop("return_as", "text")
 
-    # Support both string name and direct iModel object
-    imodel = session.services.get(imodel_param) if isinstance(imodel_param, str) else imodel_param
+async def generate(session: Session, branch: Branch, params: GenerateParams):
+    b = session.get_branch(branch, session.default_branch)
+    if b is None:
+        raise ValueError("No branch specified and no default_branch set on session")
 
-    # Invoke via unified service interface
-    calling = await imodel.invoke(**parameters)
+    # Add instruction to branch if provided
+    if params.instruction is not None:
+        session.add_message(params.instruction, branches=b)
 
-    # Check execution status
-    if calling.execution.status.value != "completed":
-        error = calling.execution.error or f"status: {calling.execution.status}"
-        raise RuntimeError(f"Generation failed: {error}")
+    # Prepare messages for chat API
+    msgs = prepare_messages_for_chat(
+        session.messages[b], new_instruction=params.instruction, to_chat=True
+    )
 
-    response = calling.execution.response
+    imodel = params.imodel or session.default_generate_model
+    if imodel is None:
+        raise ValueError("No imodel specified and no default_generate_model set on session")
 
-    match return_as:
+    model_name = imodel.name if isinstance(imodel, iModel) else imodel
+
+    # Check branch has access to this model
+    if model_name not in b.resources:
+        raise PermissionError(
+            f"Branch '{b.name}' cannot access model '{model_name}'. "
+            f"Allowed: {b.resources or 'none'}"
+        )
+
+    calling = await session.request(model_name, messages=msgs, **params.imodel_kwargs)
+
+    match params.return_as:
         case "text":
-            return response.data
+            return calling.response.data
         case "raw":
-            return response.raw_response
+            return calling.response.raw_response
         case "message":
             return Message(
                 content=AssistantResponseContent(
-                    assistant_response=response.data,
+                    assistant_response=calling.response.data,
                 ),
                 metadata={
-                    "raw_response": response.raw_response,
-                    **response.metadata,
+                    "raw_response": calling.response.raw_response,
+                    **calling.response.metadata,
                 },
             )
         case "calling":
             return calling
 
-    raise ValueError(f"Unsupported return_as: {return_as}")
+    raise ValueError(f"Unsupported return_as: {params.return_as}")
