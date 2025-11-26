@@ -44,8 +44,6 @@ log-sqlite = ["aiosqlite>=0.19.0"]
 log-postgres = ["sqlalchemy[asyncio]>=2.0.0", "asyncpg>=0.29.0"]
 log-s3 = ["aioboto3>=12.0.0"]
 log-all = ["lionpride[log-sqlite, log-postgres, log-s3]"]
-# Testing with real infrastructure
-test-integration = ["lionpride[log-all]"]
 all = ["lionpride[schema-gen, mcp, log-all]"]
 
 [project.urls]
