@@ -117,6 +117,7 @@ from unittest.mock import patch
 import pytest
 
 from lionpride.types import Operable, Spec, Unset
+from lionpride.types.operable import get_adapter
 
 
 class TestOperable:
@@ -812,6 +813,9 @@ class TestOperable:
         Alternative (silent ignore) rejected: User has no idea what went wrong.
         Alternative (assert at module import) rejected: Breaks import even if adapter not used.
         """
+        # Clear cache from previous test runs to test import error path
+        get_adapter.cache_clear()
+
         spec1 = Spec(str, name="field1")
         operable = Operable((spec1,))
 
@@ -825,11 +829,16 @@ class TestOperable:
                 raise ImportError("Mocked: pydantic not available")
             return original_import(name, *args, **kwargs)
 
-        with (
-            patch("builtins.__import__", side_effect=mock_import),
-            pytest.raises(ImportError, match="PydanticSpecAdapter requires Pydantic"),
-        ):
-            operable.create_model(adapter="pydantic")
+        try:
+            with (
+                patch("builtins.__import__", side_effect=mock_import),
+                pytest.raises(ImportError, match="PydanticSpecAdapter requires Pydantic"),
+            ):
+                # Adapter is selected at construction time, access adapter property to trigger import
+                operable.create_model()
+        finally:
+            # Clear cache again so subsequent tests work correctly
+            get_adapter.cache_clear()
 
     def test_create_model_unsupported_adapter(self):
         """
@@ -873,11 +882,16 @@ class TestOperable:
         - Clear error messages (typo vs. dependency)
         - Faster failures (no import attempts)
         - Explicit supported adapter list (self-documenting)
+
+        Note: Adapter is selected at Operable construction time, not create_model time.
+        Creating Operable with unsupported adapter and calling create_model() triggers the error.
         """
         spec1 = Spec(str, name="field1")
-        operable = Operable((spec1,))
+        # Create Operable with unsupported adapter - this is where adapter is set
+        operable = Operable((spec1,), adapter="unsupported")  # type: ignore
         with pytest.raises(ValueError, match="Unsupported adapter"):
-            operable.create_model(adapter="unsupported")  # type: ignore
+            # Error occurs when accessing adapter property which calls get_adapter()
+            operable.create_model()
 
     def test_immutability(self):
         """

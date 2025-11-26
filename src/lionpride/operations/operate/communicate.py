@@ -114,11 +114,12 @@ async def communicate(
         raise ValueError("Failed to create instruction message")
 
     # Set sender/recipient if not already set
+    # Pattern: user sends instruction TO branch (which forwards to model)
     if ins_msg.sender is None:
         ins_msg = Message(
             content=ins_msg.content,
-            sender=branch.user,
-            recipient=session.id,
+            sender=branch.user or "user",
+            recipient=branch.id,
             metadata=ins_msg.metadata,
         )
 
@@ -142,11 +143,12 @@ async def communicate(
         metadata = {k: v for k, v in result_msg.metadata.items() if k != "raw_response"}
 
         # Create assistant message for persistence
+        # Pattern: branch (via model) responds TO user
         assistant_msg = Message(
             content=AssistantResponseContent(assistant_response=response_text),
-            sender=imodel.name,
-            recipient=branch.user,
-            metadata={"raw_response": raw_response, **metadata},
+            sender=branch.id,
+            recipient=branch.user or "user",
+            metadata={"raw_response": raw_response, "model": imodel.name, **metadata},
         )
 
         # 3. Add messages to session/branch (stateful)
@@ -192,8 +194,8 @@ async def communicate(
             )
             ins_msg = Message(
                 content=InstructionContent(instruction=retry_instruction),
-                sender=branch.user,
-                recipient=session.id,
+                sender=branch.user or "user",
+                recipient=branch.id,
             )
             logger.info(f"Retrying (attempt {attempt + 2}/{params.max_retries + 1})...")
 

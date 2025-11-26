@@ -3,16 +3,49 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from pydantic import BaseModel
 
-from lionpride.core import Edge, Graph
+from lionpride.core import Edge, Graph, to_uuid
 
 from .node import Operation, OperationType
 
+if TYPE_CHECKING:
+    from lionpride.session import Branch
+
 __all__ = ("Builder", "OperationGraphBuilder")
+
+
+def _resolve_branch_ref(branch: Any) -> UUID | str:
+    """Resolve branch reference to UUID or name string.
+
+    Args:
+        branch: Branch object, UUID, or name string
+
+    Returns:
+        UUID if resolvable, otherwise the branch name string
+    """
+    # If it's already a UUID, return it
+    if isinstance(branch, UUID):
+        return branch
+
+    # If it has an id attribute (Branch object), get its UUID
+    if hasattr(branch, "id"):
+        return branch.id
+
+    # Try to convert string to UUID
+    try:
+        return to_uuid(branch)
+    except (ValueError, TypeError):
+        pass
+
+    # Keep as name string if non-empty
+    if isinstance(branch, str) and branch.strip():
+        return branch.strip()
+
+    raise ValueError(f"Invalid branch reference: {branch}")
 
 
 class OperationGraphBuilder:
@@ -31,6 +64,7 @@ class OperationGraphBuilder:
         operation: OperationType | str,
         parameters: dict[str, Any] | BaseModel | None = None,
         depends_on: list[str] | None = None,
+        branch: str | UUID | Branch | None = None,
         inherit_context: bool = False,
         metadata: dict[str, Any] | None = None,
         **kwargs,
@@ -42,6 +76,7 @@ class OperationGraphBuilder:
             operation: Operation type (communicate, operate, react, generate)
             parameters: Operation parameters dict or model
             depends_on: List of operation names this depends on
+            branch: Branch object, UUID, or name to execute this operation on (None = default branch)
             inherit_context: Whether to inherit context from dependencies
             metadata: Optional metadata dict for the Operation node
             **kwargs: Additional params merged into parameters (e.g., generate={...})
@@ -64,6 +99,10 @@ class OperationGraphBuilder:
 
         # Store name in metadata for reference
         op.metadata["name"] = name
+
+        # Store branch assignment for execution (UUID or name string)
+        if branch is not None:
+            op.metadata["branch"] = _resolve_branch_ref(branch)
 
         # Store context inheritance strategy
         if inherit_context and depends_on:
@@ -161,11 +200,23 @@ class OperationGraphBuilder:
         operation: OperationType | str,
         parameters: dict[str, Any] | BaseModel | None = None,
         source_names: list[str] | None = None,
+        branch: str | UUID | Branch | None = None,
         inherit_context: bool = False,
         inherit_from_source: int = 0,
         **kwargs,
     ) -> OperationGraphBuilder:
-        """Add aggregation operation that collects from multiple sources."""
+        """Add aggregation operation that collects from multiple sources.
+
+        Args:
+            name: Operation name for reference
+            operation: Operation type
+            parameters: Operation parameters dict or model
+            source_names: List of source operation names to aggregate from
+            branch: Branch object, UUID, or name to execute this operation on (None = default branch)
+            inherit_context: Whether to inherit context from sources
+            inherit_from_source: Index of source to inherit context from
+            **kwargs: Additional params merged into parameters
+        """
         sources = source_names or self._current_heads
         if not sources:
             raise ValueError("No source operations for aggregation")
@@ -198,6 +249,10 @@ class OperationGraphBuilder:
         # Store aggregation sources in metadata, not parameters
         op.metadata["aggregation_sources"] = [str(self._nodes[s].id) for s in sources]
         op.metadata["aggregation_count"] = len(sources)
+
+        # Store branch assignment for execution (UUID or name string)
+        if branch is not None:
+            op.metadata["branch"] = _resolve_branch_ref(branch)
 
         # Store context inheritance for aggregations
         if inherit_context and sources:

@@ -36,12 +36,18 @@ def get_adapter(adapter_name: str) -> type[SpecAdapter]:
 
     Raises:
         ValueError: If adapter not supported
+        ImportError: If adapter dependencies not installed
     """
     match adapter_name:
         case "pydantic":
-            from .spec_adapters.pydantic_field import PydanticSpecAdapter
+            try:
+                from .spec_adapters.pydantic_field import PydanticSpecAdapter
 
-            return PydanticSpecAdapter
+                return PydanticSpecAdapter
+            except ImportError as e:
+                raise ImportError(
+                    "PydanticSpecAdapter requires Pydantic. Install with: pip install pydantic"
+                ) from e
         # case "rust":
         #     from .spec_adapters.rust_field import RustSpecAdapter
         #     return RustSpecAdapter
@@ -189,6 +195,8 @@ class Operable:
         Returns:
             Framework model class (e.g., Pydantic BaseModel subclass)
         """
+        # Filter out 'adapter' kwarg - it's for selecting adapter, not passing to it
+        kw.pop("adapter", None)
         return self.adapter.create_model(
             self,
             model_name=model_name or self.name or "DynamicModel",

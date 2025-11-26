@@ -22,9 +22,9 @@ from typing import TYPE_CHECKING, Any
 from lionpride.rules import ActionRequest, ActionResponse, Reason
 from lionpride.services.types import iModel
 
+from ..actions import execute_tools, has_action_requests
 from .communicate import communicate
 from .message_prep import prepare_tool_schemas
-from .tool_executor import execute_tools, has_action_requests
 from .types import CommunicateParams, GenerateParams, OperateParams
 
 if TYPE_CHECKING:
@@ -260,7 +260,7 @@ def _build_request_model(
     extended_operable = OperableCls(
         specs=tuple(specs),
         name=model_name,
-        adapter=operable._Operable__adapter_name,
+        adapter=operable.__adapter_name__,
     )
 
     return extended_operable, extended_capabilities
@@ -339,7 +339,7 @@ def _build_output_model(
     extended_operable = OperableCls(
         specs=tuple(specs),
         name=model_name,
-        adapter=operable._Operable__adapter_name,
+        adapter=operable.__adapter_name__,
     )
 
     return extended_operable, extended_capabilities

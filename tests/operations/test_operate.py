@@ -358,13 +358,11 @@ class TestFactoryCoverage:
         assert isinstance(result, tuple)
         assert len(result) == 2
 
-    @pytest.mark.skip(reason="Factory bug: _build_request_model uses wrong attr name for adapter")
     @pytest.mark.asyncio
     async def test_operate_with_reason_param(self, session_with_model):
         """Test operate with reason=True parameter.
 
-        Note: This test is skipped due to a bug in factory.py:263 where
-        operable._Operable__adapter_name should be operable.__adapter_name__.
+        TODO: Implement actual test for reason=True parameter injection.
         """
         pass
 
@@ -400,7 +398,7 @@ class TestFactoryCoverage:
     @pytest.mark.asyncio
     async def test_operate_with_actions_executes_tools(self, session_with_model):
         """Test operate with actions=True executes tools."""
-        from lionpride.operations.operate.tool_executor import execute_tools, has_action_requests
+        from lionpride.operations.actions import execute_tools, has_action_requests
         from lionpride.services import iModel
         from lionpride.services.types.tool import Tool, ToolConfig
 
@@ -577,21 +575,18 @@ class TestFactoryCoverage:
         with pytest.raises(ValueError, match="Response validation failed"):
             await operate(session, branch, parameters)
 
-    @pytest.mark.skip(reason="Factory bug: _build_request_model uses wrong attr name for adapter")
     @pytest.mark.asyncio
     async def test_operate_action_branch_execution(self, session_with_model):
         """Test action execution with branch object.
 
-        Note: This test is skipped due to a bug in factory.py:263 where
-        operable._Operable__adapter_name should be operable.__adapter_name__.
-        The actions=True param triggers _build_request_model even with skip_validation.
+        TODO: Implement actual test for actions=True with branch object.
         """
         pass
 
     @pytest.mark.asyncio
     async def test_operate_action_execution_with_branch(self, session_with_model):
         """Test branch resolution for tool execution."""
-        from lionpride.operations.operate.tool_executor import execute_tools
+        from lionpride.operations.actions import execute_tools
         from lionpride.services import iModel
         from lionpride.services.types.tool import Tool, ToolConfig
 
@@ -662,3 +657,285 @@ class TestFactoryCoverage:
         result = await operate(session, branch, parameters)
 
         assert isinstance(result, tuple)
+
+
+class TestResponseModelFlattening:
+    """Test that response_model fields are flattened at top level when actions=True.
+
+    PR Claim: Response_model fields are now flattened into top-level specs.
+    These tests verify the schema structure of _build_request_model output.
+    """
+
+    def test_response_model_fields_flattened_with_actions(self):
+        """Test action_requests field is at top level (not nested) when actions=True.
+
+        Verifies that when actions=True:
+        - action_requests field is added at top level
+        - Original response_model fields remain at top level
+        - No wrapper nesting like {response_model_name: {...}}
+        """
+        from lionpride.operations.operate.factory import _build_request_model
+        from lionpride.rules import ActionRequest
+
+        # Create a response_model with known fields
+        class AnalysisModel(BaseModel):
+            reasoning: str = Field(..., description="Analysis reasoning")
+            recommendation: str = Field(..., description="Final recommendation")
+
+        operable = Operable(
+            [
+                Spec(AnalysisModel, name="reasoning"),
+                Spec(str, name="recommendation"),
+            ],
+            name="Analysis",
+        )
+
+        # Call _build_request_model with actions=True
+        extended_operable, extended_caps = _build_request_model(
+            operable=operable,
+            capabilities={"reasoning", "recommendation"},
+            actions=True,
+            reason=False,
+        )
+
+        # Verify action_requests is at top level
+        allowed_fields = extended_operable.allowed()
+        assert "action_requests" in allowed_fields, (
+            "action_requests should be at top level when actions=True"
+        )
+
+        # Verify original fields are still at top level
+        assert "reasoning" in allowed_fields, (
+            "Original field 'reasoning' should remain at top level"
+        )
+        assert "recommendation" in allowed_fields, (
+            "Original field 'recommendation' should remain at top level"
+        )
+
+        # Verify no nesting - specs should be flat list
+        specs = extended_operable.get_specs()
+        spec_names = {s.name for s in specs}
+        assert spec_names == {"reasoning", "recommendation", "action_requests"}, (
+            f"All fields should be at top level, got: {spec_names}"
+        )
+
+        # Verify the action_requests spec has correct type
+        action_req_spec = extended_operable.get("action_requests")
+        assert action_req_spec is not None
+        assert action_req_spec.base_type == ActionRequest
+        assert action_req_spec.is_listable is True
+        assert action_req_spec.is_nullable is True
+
+        # Verify capabilities extended
+        assert "action_requests" in extended_caps
+
+    def test_reason_field_flattened_with_reason_param(self):
+        """Test reason field is at top level (not nested) when reason=True.
+
+        Similar to actions, the reason field should be injected at top level.
+        """
+        from lionpride.operations.operate.factory import _build_request_model
+        from lionpride.rules import Reason
+
+        class SimpleModel(BaseModel):
+            answer: str
+
+        operable = Operable(
+            [
+                Spec(str, name="answer"),
+            ],
+            name="Simple",
+        )
+
+        # Call with reason=True
+        extended_operable, extended_caps = _build_request_model(
+            operable=operable,
+            capabilities={"answer"},
+            actions=False,
+            reason=True,
+        )
+
+        # Verify reason is at top level
+        allowed_fields = extended_operable.allowed()
+        assert "reason" in allowed_fields, "reason should be at top level when reason=True"
+        assert "answer" in allowed_fields, "Original field 'answer' should remain at top level"
+
+        # Verify the reason spec has correct type
+        reason_spec = extended_operable.get("reason")
+        assert reason_spec is not None
+        assert reason_spec.base_type == Reason
+        assert reason_spec.is_nullable is True
+
+        # Verify capabilities extended
+        assert "reason" in extended_caps
+
+    def test_both_actions_and_reason_flattened(self):
+        """Test both action_requests and reason are flattened when both params True."""
+        from lionpride.operations.operate.factory import _build_request_model
+
+        class OutputModel(BaseModel):
+            result: str
+
+        operable = Operable(
+            [
+                Spec(str, name="result"),
+            ],
+            name="Output",
+        )
+
+        extended_operable, _extended_caps = _build_request_model(
+            operable=operable,
+            capabilities={"result"},
+            actions=True,
+            reason=True,
+        )
+
+        # Verify all fields at top level
+        allowed_fields = extended_operable.allowed()
+        assert allowed_fields == {"result", "action_requests", "reason"}, (
+            f"All fields should be flat at top level, got: {allowed_fields}"
+        )
+
+        # Verify model name indicates extensions
+        assert "WithReasonAndActions" in extended_operable.name
+
+    def test_duplicate_action_requests_skipped(self):
+        """Test that if response_model already has action_requests, no duplicate is added.
+
+        When the original operable already defines action_requests,
+        _build_request_model should NOT add a duplicate field.
+        """
+        from lionpride.operations.operate.factory import _build_request_model
+        from lionpride.rules import ActionRequest
+
+        # Create an operable that already has action_requests
+        operable = Operable(
+            [
+                Spec(str, name="answer"),
+                Spec(ActionRequest, name="action_requests", listable=True, nullable=True),
+            ],
+            name="ModelWithActions",
+        )
+
+        original_caps = {"answer", "action_requests"}
+
+        # Call with actions=True - should NOT duplicate
+        extended_operable, extended_caps = _build_request_model(
+            operable=operable,
+            capabilities=original_caps,
+            actions=True,
+            reason=False,
+        )
+
+        # Should return original operable unchanged (no injection needed)
+        assert extended_operable is operable, (
+            "Should return original operable when action_requests already exists"
+        )
+        assert extended_caps is original_caps, (
+            "Should return original capabilities when no injection needed"
+        )
+
+        # Verify only one action_requests field
+        specs = extended_operable.get_specs()
+        action_req_count = sum(1 for s in specs if s.name == "action_requests")
+        assert action_req_count == 1, (
+            f"Should have exactly one action_requests field, got {action_req_count}"
+        )
+
+    def test_duplicate_reason_skipped(self):
+        """Test that if response_model already has reason, no duplicate is added."""
+        from lionpride.operations.operate.factory import _build_request_model
+        from lionpride.rules import Reason
+
+        # Create an operable that already has reason
+        operable = Operable(
+            [
+                Spec(str, name="answer"),
+                Spec(Reason, name="reason", nullable=True),
+            ],
+            name="ModelWithReason",
+        )
+
+        original_caps = {"answer", "reason"}
+
+        # Call with reason=True - should NOT duplicate
+        extended_operable, _extended_caps = _build_request_model(
+            operable=operable,
+            capabilities=original_caps,
+            actions=False,
+            reason=True,
+        )
+
+        # Should return original operable unchanged
+        assert extended_operable is operable, (
+            "Should return original operable when reason already exists"
+        )
+
+        # Verify only one reason field
+        specs = extended_operable.get_specs()
+        reason_count = sum(1 for s in specs if s.name == "reason")
+        assert reason_count == 1, f"Should have exactly one reason field, got {reason_count}"
+
+    def test_no_injection_when_params_false(self):
+        """Test that no fields are injected when actions=False and reason=False."""
+        from lionpride.operations.operate.factory import _build_request_model
+
+        operable = Operable(
+            [
+                Spec(str, name="output"),
+            ],
+            name="Simple",
+        )
+
+        original_caps = {"output"}
+
+        extended_operable, result_caps = _build_request_model(
+            operable=operable,
+            capabilities=original_caps,
+            actions=False,
+            reason=False,
+        )
+
+        # Should return original unchanged
+        assert extended_operable is operable
+        assert result_caps is original_caps
+        assert extended_operable.allowed() == {"output"}
+
+    def test_output_model_uses_action_responses(self):
+        """Test _build_output_model injects action_responses (not action_requests).
+
+        The output model should have action_responses for tool execution results,
+        distinct from action_requests which is for LLM proposals.
+        """
+        from lionpride.operations.operate.factory import _build_output_model
+        from lionpride.rules import ActionResponse
+
+        operable = Operable(
+            [
+                Spec(str, name="answer"),
+            ],
+            name="Output",
+        )
+
+        extended_operable, _extended_caps = _build_output_model(
+            operable=operable,
+            capabilities={"answer"},
+            actions=True,
+            reason=False,
+        )
+
+        # Verify action_responses (not action_requests) is at top level
+        allowed_fields = extended_operable.allowed()
+        assert "action_responses" in allowed_fields, (
+            "Output model should have action_responses field"
+        )
+        assert "action_requests" not in allowed_fields, (
+            "Output model should NOT have action_requests field"
+        )
+
+        # Verify correct type
+        action_resp_spec = extended_operable.get("action_responses")
+        assert action_resp_spec is not None
+        assert action_resp_spec.base_type == ActionResponse
+        assert action_resp_spec.is_listable is True
+        assert action_resp_spec.is_nullable is True

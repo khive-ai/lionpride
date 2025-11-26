@@ -290,6 +290,36 @@ class Validator:
 
         return validated
 
+    async def validate_operable(
+        self,
+        data: dict[str, Any],
+        operable: Operable,
+        auto_fix: bool = True,
+        strict: bool = True,
+    ) -> dict[str, Any]:
+        """Validate data spec-by-spec against an Operable.
+
+        Validates all fields defined in the operable. This is a convenience
+        wrapper around _validate_data that validates all fields.
+
+        Args:
+            data: Raw data dict (e.g., from LLM response)
+            operable: Operable defining expected structure
+            auto_fix: Enable auto-correction for each field
+            strict: Raise if validation fails
+
+        Returns:
+            Dict of validated field values
+
+        Raises:
+            ValidationError: If any field validation fails
+        """
+        # Validate all fields in the operable
+        capabilities = operable.allowed()
+        return await self._validate_data(
+            data, operable, capabilities, auto_fix=auto_fix, strict=strict
+        )
+
     async def validate(
         self,
         data: dict[str, Any],
