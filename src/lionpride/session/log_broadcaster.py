@@ -110,7 +110,7 @@ class S3LogSubscriber(LogSubscriber):
             )
 
         session = aioboto3.Session()
-        self._session = session
+        self._client = session
 
     async def receive(self, logs: list[Log]) -> int:
         """Write logs to S3 as JSON file."""
@@ -128,7 +128,7 @@ class S3LogSubscriber(LogSubscriber):
         content = json.dumps(log_dicts, indent=2, default=str)
 
         try:
-            async with self._session.client(
+            async with self._client.client(
                 "s3",
                 endpoint_url=self.endpoint_url,
                 aws_access_key_id=self.aws_access_key_id,
@@ -275,12 +275,6 @@ class LogBroadcasterConfig(BaseModel):
     parallel: bool = Field(
         default=True,
         description="Send to subscribers in parallel",
-    )
-    retry_count: int = Field(
-        default=1,
-        ge=0,
-        le=5,
-        description="Number of retries on failure",
     )
 
 

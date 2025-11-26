@@ -80,21 +80,6 @@ class TestLogBroadcasterConfig:
         config = LogBroadcasterConfig()
         assert config.fail_fast is False
         assert config.parallel is True
-        assert config.retry_count == 1
-
-    def test_config_validation(self):
-        """Config validation."""
-        # Valid retry_count
-        config = LogBroadcasterConfig(retry_count=5)
-        assert config.retry_count == 5
-
-        # Invalid retry_count (too high)
-        with pytest.raises(ValueError):
-            LogBroadcasterConfig(retry_count=10)
-
-        # Invalid retry_count (negative)
-        with pytest.raises(ValueError):
-            LogBroadcasterConfig(retry_count=-1)
 
 
 # -----------------------------------------------------------------------------
@@ -496,9 +481,9 @@ class TestS3LogSubscriber:
         mock_session = MagicMock()
         mock_session.client = MagicMock(return_value=MockClientCM())
 
-        # Patch _ensure_client to set our mock session instead of real one
+        # Patch _ensure_client to set our mock client instead of real one
         async def mock_ensure_client():
-            sub._session = mock_session
+            sub._client = mock_session
 
         with patch.object(sub, "_ensure_client", mock_ensure_client):
             logs = [Log(log_type=LogType.INFO, message="test")]
@@ -648,8 +633,8 @@ class TestLogStoreBroadcasterIntegration:
         assert results["broadcaster"]["sub1"] == 1
         assert results["broadcaster"]["sub2"] == 0
 
-        # Logs should still be cleared (some succeeded)
-        assert len(store) == 0
+        # Logs should NOT be cleared on partial failure (data loss prevention)
+        assert len(store) == 1
 
 
 # -----------------------------------------------------------------------------

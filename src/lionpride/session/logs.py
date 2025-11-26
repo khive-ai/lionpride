@@ -487,8 +487,21 @@ class LogStore:
                 broadcast_results = await self._broadcaster.broadcast(logs_list)
                 results["broadcaster"] = broadcast_results
 
-            # Clear if requested and successful
-            if clear and results:
+            # Clear if requested and ALL destinations succeeded
+            # Don't clear on partial success to prevent data loss
+            should_clear = clear and results
+            if should_clear:
+                # Check adapter success (if configured)
+                if self._adapter and results.get("adapter", 0) == 0:
+                    should_clear = False
+                # Check broadcaster success (if configured)
+                if self._broadcaster and "broadcaster" in results:
+                    broadcast_results = results["broadcaster"]
+                    # Any subscriber with 0 count indicates failure
+                    if any(count == 0 for count in broadcast_results.values()):
+                        should_clear = False
+
+            if should_clear:
                 self._logs.clear()
 
         return results
