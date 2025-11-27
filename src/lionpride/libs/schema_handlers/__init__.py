@@ -3,6 +3,7 @@
 
 from typing import TYPE_CHECKING
 
+from ._breakdown_pydantic_annotation import breakdown_pydantic_annotation, is_pydantic_model
 from ._function_call_parser import (
     map_positional_args,
     nest_arguments_by_schema,
@@ -16,6 +17,8 @@ if TYPE_CHECKING:
 
 
 __all__ = (
+    "breakdown_pydantic_annotation",
+    "is_pydantic_model",
     "load_pydantic_model_from_schema",
     "map_positional_args",
     "minimal_yaml",
