@@ -86,7 +86,8 @@ class OperationGraphBuilder:
             raise ValueError(f"Operation with name '{name}' already exists")
 
         # Merge kwargs into parameters (allows builder.add(..., generate={...}))
-        params = parameters if isinstance(parameters, dict) else {}
+        # Copy dict to avoid mutating caller's parameters
+        params = dict(parameters) if isinstance(parameters, dict) else {}
         if parameters and isinstance(parameters, BaseModel):
             params = parameters.model_dump()
         params.update(kwargs)

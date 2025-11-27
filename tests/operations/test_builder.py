@@ -4,13 +4,16 @@
 """Comprehensive coverage tests for OperationGraphBuilder.
 
 Targets missing coverage lines:
+- Lines 22-49: _resolve_branch_ref() function
 - Lines 93-94: inherit_context with primary_dependency
+- Lines 106-107: branch parameter in add()
 - Line 149: Target not found in depends_on
 - Line 155: Dependency not found in depends_on
 - Lines 186-192: sequence() validation and execution
 - Lines 210-215: parallel() validation
 - Lines 232-234: get() ValueError path
 - Line 248: get_by_id() None return path
+- Lines 256-257: branch parameter in add_aggregation()
 - Line 284: add_aggregation() ValueError for no sources
 - Lines 302-305: add_aggregation() with inherit_context
 - Line 314: add_aggregation() ValueError for source not found
@@ -19,12 +22,237 @@ Targets missing coverage lines:
 - Lines 384-388: clear() method
 """
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
 from lionpride.operations import Builder
+from lionpride.operations.builder import _resolve_branch_ref
 from lionpride.operations.node import create_operation
+
+
+class TestResolveBranchRef:
+    """Test _resolve_branch_ref() function (lines 22-49)."""
+
+    def test_uuid_input_returns_uuid(self):
+        """Test UUID input is returned as-is (line 32-33)."""
+        test_uuid = uuid4()
+        result = _resolve_branch_ref(test_uuid)
+        assert result == test_uuid
+        assert isinstance(result, UUID)
+
+    def test_object_with_id_attribute(self):
+        """Test object with id attribute returns its UUID (lines 36-37)."""
+
+        class MockBranch:
+            def __init__(self):
+                self.id = uuid4()
+
+        branch = MockBranch()
+        result = _resolve_branch_ref(branch)
+        assert result == branch.id
+        assert isinstance(result, UUID)
+
+    def test_uuid_string_converts_to_uuid(self):
+        """Test valid UUID string is converted (lines 40-43)."""
+        test_uuid = uuid4()
+        uuid_str = str(test_uuid)
+        result = _resolve_branch_ref(uuid_str)
+        assert result == test_uuid
+        assert isinstance(result, UUID)
+
+    def test_branch_name_string_returned_stripped(self):
+        """Test non-UUID string is returned as stripped name (lines 46-47)."""
+        result = _resolve_branch_ref("  main  ")
+        assert result == "main"
+        assert isinstance(result, str)
+
+    def test_branch_name_without_whitespace(self):
+        """Test branch name without extra whitespace."""
+        result = _resolve_branch_ref("feature/test-branch")
+        assert result == "feature/test-branch"
+        assert isinstance(result, str)
+
+    def test_empty_string_raises_value_error(self):
+        """Test empty string raises ValueError (line 49)."""
+        with pytest.raises(ValueError, match="Invalid branch reference"):
+            _resolve_branch_ref("")
+
+    def test_whitespace_only_string_raises_value_error(self):
+        """Test whitespace-only string raises ValueError (line 49)."""
+        with pytest.raises(ValueError, match="Invalid branch reference"):
+            _resolve_branch_ref("   ")
+
+    def test_none_raises_value_error(self):
+        """Test None raises ValueError (line 49)."""
+        with pytest.raises(ValueError, match="Invalid branch reference"):
+            _resolve_branch_ref(None)
+
+    def test_integer_raises_value_error(self):
+        """Test integer raises ValueError (line 49)."""
+        with pytest.raises(ValueError, match="Invalid branch reference"):
+            _resolve_branch_ref(123)
+
+    def test_list_raises_value_error(self):
+        """Test list raises ValueError (line 49)."""
+        with pytest.raises(ValueError, match="Invalid branch reference"):
+            _resolve_branch_ref(["main"])
+
+
+class TestBuilderBranchParameter:
+    """Test branch parameter in add() and add_aggregation() (lines 106-107, 256-257)."""
+
+    def test_add_with_uuid_branch(self):
+        """Test add() with UUID branch sets metadata (lines 106-107)."""
+        builder = Builder()
+        branch_uuid = uuid4()
+        builder.add("task1", "generate", {"instruction": "First"}, branch=branch_uuid)
+
+        task1 = builder.get("task1")
+        assert task1.metadata.get("branch") == branch_uuid
+
+    def test_add_with_string_branch_name(self):
+        """Test add() with string branch name sets metadata (lines 106-107)."""
+        builder = Builder()
+        builder.add("task1", "generate", {"instruction": "First"}, branch="main")
+
+        task1 = builder.get("task1")
+        assert task1.metadata.get("branch") == "main"
+
+    def test_add_with_branch_object(self):
+        """Test add() with Branch-like object extracts UUID (lines 106-107)."""
+
+        class MockBranch:
+            def __init__(self):
+                self.id = uuid4()
+
+        builder = Builder()
+        branch = MockBranch()
+        builder.add("task1", "generate", {"instruction": "First"}, branch=branch)
+
+        task1 = builder.get("task1")
+        assert task1.metadata.get("branch") == branch.id
+
+    def test_add_without_branch_no_metadata(self):
+        """Test add() without branch doesn't set metadata."""
+        builder = Builder()
+        builder.add("task1", "generate", {"instruction": "First"})
+
+        task1 = builder.get("task1")
+        assert "branch" not in task1.metadata
+
+    def test_add_aggregation_with_uuid_branch(self):
+        """Test add_aggregation() with UUID branch sets metadata (lines 256-257)."""
+        builder = Builder()
+        builder.add("source1", "generate", {"instruction": "First"})
+        builder.add("source2", "generate", {"instruction": "Second"})
+
+        branch_uuid = uuid4()
+        builder.add_aggregation(
+            "agg",
+            "operate",
+            {"instruction": "Aggregate"},
+            source_names=["source1", "source2"],
+            branch=branch_uuid,
+        )
+
+        agg_op = builder.get("agg")
+        assert agg_op.metadata.get("branch") == branch_uuid
+
+    def test_add_aggregation_with_string_branch(self):
+        """Test add_aggregation() with string branch name sets metadata (lines 256-257)."""
+        builder = Builder()
+        builder.add("source1", "generate", {"instruction": "First"})
+        builder.add("source2", "generate", {"instruction": "Second"})
+
+        builder.add_aggregation(
+            "agg",
+            "operate",
+            {"instruction": "Aggregate"},
+            source_names=["source1", "source2"],
+            branch="feature-branch",
+        )
+
+        agg_op = builder.get("agg")
+        assert agg_op.metadata.get("branch") == "feature-branch"
+
+    def test_add_aggregation_without_branch_no_metadata(self):
+        """Test add_aggregation() without branch doesn't set metadata."""
+        builder = Builder()
+        builder.add("source1", "generate", {"instruction": "First"})
+        builder.add("source2", "generate", {"instruction": "Second"})
+
+        builder.add_aggregation(
+            "agg",
+            "operate",
+            {"instruction": "Aggregate"},
+            source_names=["source1", "source2"],
+        )
+
+        agg_op = builder.get("agg")
+        assert "branch" not in agg_op.metadata
+
+    def test_multi_branch_workflow(self):
+        """Test multi-branch workflow with operations on different branches."""
+        builder = Builder()
+        branch1_id = uuid4()
+        branch2_id = uuid4()
+
+        # Operations on branch 1
+        builder.add("extract", "generate", {"instruction": "Extract"}, branch=branch1_id)
+        builder.add("transform", "operate", {"instruction": "Transform"}, branch=branch1_id)
+
+        # Operations on branch 2
+        builder.add("analyze", "generate", {"instruction": "Analyze"}, branch=branch2_id)
+
+        # Aggregation from both branches
+        builder.add_aggregation(
+            "combine",
+            "operate",
+            {"instruction": "Combine"},
+            source_names=["transform", "analyze"],
+            branch="main",
+        )
+
+        # Verify branch assignments
+        assert builder.get("extract").metadata["branch"] == branch1_id
+        assert builder.get("transform").metadata["branch"] == branch1_id
+        assert builder.get("analyze").metadata["branch"] == branch2_id
+        assert builder.get("combine").metadata["branch"] == "main"
+
+        # Graph should still be valid
+        graph = builder.build()
+        assert len(graph.nodes) == 4
+
+
+class TestBuilderParameterMutation:
+    """Test that add() doesn't mutate caller's parameters (B1 fix)."""
+
+    def test_add_does_not_mutate_dict_parameters(self):
+        """Test add() makes a copy of dict parameters (line 90)."""
+        builder = Builder()
+        original_params = {"instruction": "First", "model": "default"}
+        original_copy = dict(original_params)  # Keep a copy to compare
+
+        builder.add("task1", "generate", original_params, extra_key="extra_value")
+
+        # Original params should be unchanged
+        assert original_params == original_copy
+        assert "extra_key" not in original_params
+
+    def test_add_with_kwargs_does_not_mutate(self):
+        """Test add() with kwargs doesn't mutate original dict."""
+        builder = Builder()
+        original = {"instruction": "Test"}
+
+        builder.add("task1", "generate", original, temperature=0.7, max_tokens=100)
+
+        # Verify kwargs were added to operation but not original
+        task1 = builder.get("task1")
+        assert task1.parameters.get("temperature") == 0.7
+        assert task1.parameters.get("max_tokens") == 100
+        assert "temperature" not in original
+        assert "max_tokens" not in original
 
 
 class TestBuilderContextInheritance:

@@ -1214,3 +1214,241 @@ class TestFlowStreamExecute:
         assert len(results) == 1
         assert results[0].name == "task1"
         assert results[0].success is True
+
+
+# -------------------------------------------------------------------------
+# Branch-Aware Execution Tests (P1 Fix)
+# -------------------------------------------------------------------------
+
+
+class TestFlowBranchAwareExecution:
+    """Test per-operation branch assignment via metadata['branch']."""
+
+    async def test_operation_uses_metadata_branch_by_name(self, session_with_model):
+        """Test that operations use their metadata['branch'] when specified as string."""
+        session, _model = session_with_model
+
+        # Create two branches
+        branch1 = session.create_branch(name="branch1")
+        branch2 = session.create_branch(name="branch2")
+
+        # Track which branch each operation runs on
+        execution_branches = {}
+
+        async def branch_tracker(session, branch, parameters):
+            op_name = parameters.get("_op_name", "unknown")
+            execution_branches[op_name] = branch
+            return "done"
+
+        session.operations.register("track_branch", branch_tracker)
+
+        # Create operations with explicit branch assignments
+        op1 = create_operation(
+            operation="track_branch",
+            parameters={"_op_name": "task1"},
+        )
+        op1.metadata["name"] = "task1"
+        op1.metadata["branch"] = "branch1"  # String name
+
+        op2 = create_operation(
+            operation="track_branch",
+            parameters={"_op_name": "task2"},
+        )
+        op2.metadata["name"] = "task2"
+        op2.metadata["branch"] = "branch2"  # String name
+
+        graph = Graph()
+        graph.add_node(op1)
+        graph.add_node(op2)
+
+        # Execute with a different default branch
+        default_branch = session.create_branch(name="default")
+        await flow(session, default_branch, graph)
+
+        # Verify operations ran on their specified branches
+        assert execution_branches["task1"] == branch1
+        assert execution_branches["task2"] == branch2
+
+    async def test_operation_uses_metadata_branch_by_uuid(self, session_with_model):
+        """Test that operations use their metadata['branch'] when specified as UUID."""
+        session, _model = session_with_model
+
+        # Create branch
+        target_branch = session.create_branch(name="target")
+
+        execution_branches = {}
+
+        async def branch_tracker(session, branch, parameters):
+            op_name = parameters.get("_op_name", "unknown")
+            execution_branches[op_name] = branch
+            return "done"
+
+        session.operations.register("track_uuid_branch", branch_tracker)
+
+        # Create operation with UUID branch assignment
+        op = create_operation(
+            operation="track_uuid_branch",
+            parameters={"_op_name": "uuid_task"},
+        )
+        op.metadata["name"] = "uuid_task"
+        op.metadata["branch"] = target_branch.id  # UUID
+
+        graph = Graph()
+        graph.add_node(op)
+
+        # Execute with different default branch
+        default_branch = session.create_branch(name="default")
+        await flow(session, default_branch, graph)
+
+        # Verify operation ran on target branch (by UUID)
+        assert execution_branches["uuid_task"] == target_branch
+
+    async def test_operation_fallback_to_default_branch(self, session_with_model):
+        """Test that operations without metadata['branch'] use default branch."""
+        session, _model = session_with_model
+
+        default_branch = session.create_branch(name="default")
+
+        execution_branches = {}
+
+        async def branch_tracker(session, branch, parameters):
+            op_name = parameters.get("_op_name", "unknown")
+            execution_branches[op_name] = branch
+            return "done"
+
+        session.operations.register("track_default", branch_tracker)
+
+        # Create operation WITHOUT branch metadata
+        op = create_operation(
+            operation="track_default",
+            parameters={"_op_name": "no_branch_task"},
+        )
+        op.metadata["name"] = "no_branch_task"
+        # No branch metadata set
+
+        graph = Graph()
+        graph.add_node(op)
+
+        await flow(session, default_branch, graph)
+
+        # Verify operation ran on default branch
+        assert execution_branches["no_branch_task"] == default_branch
+
+    async def test_unresolvable_branch_falls_back_to_default(self, session_with_model):
+        """Test that unresolvable branch reference falls back to default."""
+        session, _model = session_with_model
+
+        default_branch = session.create_branch(name="default")
+
+        execution_branches = {}
+
+        async def branch_tracker(session, branch, parameters):
+            op_name = parameters.get("_op_name", "unknown")
+            execution_branches[op_name] = branch
+            return "done"
+
+        session.operations.register("track_fallback", branch_tracker)
+
+        # Create operation with non-existent branch name
+        op = create_operation(
+            operation="track_fallback",
+            parameters={"_op_name": "fallback_task"},
+        )
+        op.metadata["name"] = "fallback_task"
+        op.metadata["branch"] = "non_existent_branch"  # This won't resolve
+
+        graph = Graph()
+        graph.add_node(op)
+
+        await flow(session, default_branch, graph)
+
+        # Should fall back to default branch
+        assert execution_branches["fallback_task"] == default_branch
+
+    async def test_multi_branch_workflow_with_builder(self, session_with_model):
+        """Test multi-branch workflow built with Builder.add(..., branch=...)."""
+        session, _model = session_with_model
+
+        # Create branches
+        extraction_branch = session.create_branch(name="extraction")
+        analysis_branch = session.create_branch(name="analysis")
+        merge_branch = session.create_branch(name="merge")
+
+        execution_branches = {}
+
+        async def branch_tracker(session, branch, parameters):
+            op_name = parameters.get("_op_name", "unknown")
+            execution_branches[op_name] = branch
+            return f"result_from_{op_name}"
+
+        session.operations.register("multi_branch_op", branch_tracker)
+
+        # Build workflow with explicit branch assignments
+        builder = Builder()
+        builder.add(
+            "extract",
+            "multi_branch_op",
+            {"_op_name": "extract"},
+            branch="extraction",
+        )
+        builder.add(
+            "analyze",
+            "multi_branch_op",
+            {"_op_name": "analyze"},
+            branch="analysis",
+        )
+        builder.add_aggregation(
+            "merge",
+            "multi_branch_op",
+            {"_op_name": "merge"},
+            source_names=["extract", "analyze"],
+            branch="merge",
+        )
+
+        graph = builder.build()
+
+        # Execute with a different default branch
+        default_branch = session.create_branch(name="default")
+        results = await flow(session, default_branch, graph)
+
+        # Verify all operations completed
+        assert "extract" in results
+        assert "analyze" in results
+        assert "merge" in results
+
+        # Verify operations ran on their specified branches
+        assert execution_branches["extract"] == extraction_branch
+        assert execution_branches["analyze"] == analysis_branch
+        assert execution_branches["merge"] == merge_branch
+
+    async def test_resolve_operation_branch_with_branch_object(self, session_with_model):
+        """Test _resolve_operation_branch handles Branch-like objects."""
+        session, _model = session_with_model
+        branch = session.create_branch(name="test")
+
+        graph = Graph()
+        executor = DependencyAwareExecutor(
+            session=session,
+            graph=graph,
+            default_branch=branch,
+        )
+
+        # Test Branch-like object (has id and order attributes)
+        result = executor._resolve_operation_branch(branch)
+        assert result == branch
+
+        # Test UUID resolution
+        result = executor._resolve_operation_branch(branch.id)
+        assert result == branch
+
+        # Test string name resolution
+        result = executor._resolve_operation_branch("test")
+        assert result == branch
+
+        # Test unresolvable returns None
+        result = executor._resolve_operation_branch("non_existent")
+        assert result is None
+
+        # Test invalid type returns None
+        result = executor._resolve_operation_branch(12345)
+        assert result is None
