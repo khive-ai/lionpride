@@ -688,16 +688,17 @@ class TestSessionConduct:
         assert op.response is not None
         assert "mock response" in op.response
 
-    async def test_conduct_with_default_imodel(self, mock_model):
-        """Test conduct() using default_imodel."""
-        session = Session(default_imodel=mock_model)
+    async def test_conduct_with_explicit_imodel(self, mock_model):
+        """Test conduct() with explicitly passed imodel."""
+        session = Session()
         session.services.register(mock_model, update=True)
         branch = session.create_branch(name="test")
 
-        # No imodel= passed, should use default
+        # Pass imodel explicitly
         op = await session.conduct(
             "generate",
             branch,
+            imodel=mock_model,
             messages=[{"role": "user", "content": "Hello"}],
         )
 
@@ -707,7 +708,7 @@ class TestSessionConduct:
         assert op.response is not None
 
     async def test_conduct_explicit_imodel_overrides_default(self, mock_model):
-        """Test explicit imodel overrides default_imodel."""
+        """Test explicit imodel overrides default_generate_model."""
         from dataclasses import dataclass
         from unittest.mock import AsyncMock
 
@@ -745,7 +746,7 @@ class TestSessionConduct:
 
         object.__setattr__(explicit_model, "invoke", AsyncMock(side_effect=explicit_mock_invoke))
 
-        session = Session(default_imodel=mock_model)
+        session = Session(default_generate_model=mock_model)
         session.services.register(mock_model, update=True)
         session.services.register(explicit_model, update=True)
         branch = session.create_branch(name="test")
@@ -760,25 +761,31 @@ class TestSessionConduct:
 
         assert "explicit model response" in op.response
 
-    async def test_conduct_no_imodel_raises_error(self):
-        """Test conduct() raises ValueError when no imodel available."""
-        session = Session()  # No default_imodel
+    async def test_conduct_without_imodel_fails(self):
+        """Test conduct() without imodel fails during operation execution."""
+        from lionpride.core import EventStatus
+
+        session = Session()
         branch = session.create_branch(name="test")
 
-        with pytest.raises(ValueError, match="requires imodel"):
-            await session.conduct(
-                "generate",
-                branch,
-                messages=[{"role": "user", "content": "Hello"}],
-            )
+        # Without imodel, the operation should fail
+        op = await session.conduct(
+            "generate",
+            branch,
+            messages=[{"role": "user", "content": "Hello"}],
+        )
+
+        # Operation should fail due to missing imodel
+        assert op.status == EventStatus.FAILED
 
     async def test_conduct_branch_uses_default(self, session_with_model):
         """Test conduct() uses default_branch when None passed."""
         session, model = session_with_model
-        branch1 = session.create_branch(name="first")  # Auto-set as default
+        branch1 = session.create_branch(name="first")
         _branch2 = session.create_branch(name="second")
 
-        # Verify first branch is default
+        # Explicitly set default branch
+        session.set_default_branch(branch1)
         assert session.default_branch is branch1
 
         # Pass None for branch - should use default_branch
@@ -794,27 +801,21 @@ class TestSessionConduct:
         assert op.status == EventStatus.COMPLETED
         assert op._branch is branch1
 
-    async def test_conduct_branch_auto_create_default(self, mock_model):
-        """Test conduct() creates default branch when session has none."""
-        session = Session(default_imodel=mock_model)
+    async def test_conduct_no_branch_raises_error(self, mock_model):
+        """Test conduct() raises error when no branch and no default set."""
+        session = Session()
         session.services.register(mock_model, update=True)
         # No branches created yet
         assert len(session.branches) == 0
         assert session.default_branch is None
 
-        op = await session.conduct(
-            "generate",
-            None,
-            messages=[{"role": "user", "content": "Hello"}],
-        )
-
-        from lionpride.core import EventStatus
-
-        assert op.status == EventStatus.COMPLETED
-        # Verify default branch was created and set as default
-        assert len(session.branches) == 1
-        assert session.default_branch is not None
-        assert session.default_branch.name == "default"
+        with pytest.raises(RuntimeError, match="No branch provided and no default branch set"):
+            await session.conduct(
+                "generate",
+                None,
+                imodel=mock_model,
+                messages=[{"role": "user", "content": "Hello"}],
+            )
 
     async def test_conduct_branch_by_uuid(self, session_with_model):
         """Test conduct() accepts branch by UUID."""
@@ -950,7 +951,7 @@ class TestSessionConduct:
 
         object.__setattr__(json_model, "invoke", AsyncMock(side_effect=mock_invoke_json))
 
-        session = Session(default_imodel=json_model)
+        session = Session()
         session.services.register(json_model, update=True)
         branch = session.create_branch(name="test")
 
@@ -958,6 +959,7 @@ class TestSessionConduct:
             "operate",
             branch,
             instruction="Analyze this",
+            imodel=json_model,
             response_model=ExampleOutput,
             model_kwargs={"model_name": "gpt-4.1-mini"},
         )
@@ -1034,8 +1036,8 @@ class TestSessionDefaultBranch:
     def test_set_default_branch_by_instance(self):
         """Test set_default_branch() with Branch instance."""
         session = Session()
-        _branch1 = session.create_branch(name="first", set_as_default=False)
-        branch2 = session.create_branch(name="second", set_as_default=False)
+        _branch1 = session.create_branch(name="first")
+        branch2 = session.create_branch(name="second")
 
         assert session.default_branch is None
 
@@ -1045,8 +1047,8 @@ class TestSessionDefaultBranch:
     def test_set_default_branch_by_uuid(self):
         """Test set_default_branch() with UUID."""
         session = Session()
-        _branch1 = session.create_branch(name="first", set_as_default=False)
-        branch2 = session.create_branch(name="second", set_as_default=False)
+        _branch1 = session.create_branch(name="first")
+        branch2 = session.create_branch(name="second")
 
         session.set_default_branch(branch2.id)
         assert session.default_branch is branch2
@@ -1054,29 +1056,35 @@ class TestSessionDefaultBranch:
     def test_set_default_branch_by_name(self):
         """Test set_default_branch() with branch name."""
         session = Session()
-        _branch1 = session.create_branch(name="first", set_as_default=False)
-        branch2 = session.create_branch(name="second", set_as_default=False)
+        _branch1 = session.create_branch(name="first")
+        branch2 = session.create_branch(name="second")
 
         session.set_default_branch("second")
         assert session.default_branch is branch2
 
     def test_set_default_branch_not_found_raises(self):
-        """Test set_default_branch() raises ValueError for non-existent branch."""
+        """Test set_default_branch() raises NotFoundError for non-existent branch."""
         from uuid import uuid4
+
+        from lionpride.errors import NotFoundError
 
         session = Session()
         _branch = session.create_branch(name="test")
 
         fake_uuid = uuid4()
-        with pytest.raises(ValueError, match="not found"):
+        with pytest.raises(NotFoundError):
             session.set_default_branch(fake_uuid)
 
     def test_set_default_branch_switches_between_branches(self):
         """Test switching default branch multiple times."""
         session = Session()
-        branch1 = session.create_branch(name="first")  # Auto-set as default
+        branch1 = session.create_branch(name="first")
         branch2 = session.create_branch(name="second")
 
+        # No default initially
+        assert session.default_branch is None
+
+        session.set_default_branch(branch1)
         assert session.default_branch is branch1
 
         session.set_default_branch(branch2)
@@ -1089,6 +1097,7 @@ class TestSessionDefaultBranch:
         """Test default_branch returns None if deleted."""
         session = Session()
         branch = session.create_branch(name="test")
+        session.set_default_branch(branch)
 
         assert session.default_branch is branch
 
@@ -1097,59 +1106,34 @@ class TestSessionDefaultBranch:
 
         # Should return None gracefully
         assert session.default_branch is None
-        # And clear the stale reference
-        assert session.default_branch_id is None
 
-    async def test_conduct_auto_creates_after_default_deleted(self, mock_model):
-        """Test conduct() auto-creates branch after default deleted."""
-        session = Session(default_imodel=mock_model)
+    async def test_conduct_raises_after_default_deleted(self, mock_model):
+        """Test conduct() raises RuntimeError after default branch deleted."""
+        session = Session()
         session.services.register(mock_model, update=True)
         branch = session.create_branch(name="test")
+        session.set_default_branch(branch)
 
         assert session.default_branch is branch
 
         # Delete the branch
         session.conversations.remove_progression(branch.id)
 
-        # conduct() should auto-create new default
-        op = await session.conduct(
-            "generate",
-            None,
-            messages=[{"role": "user", "content": "Hello"}],
-        )
+        # conduct() should raise RuntimeError
+        with pytest.raises(RuntimeError, match="No branch provided"):
+            await session.conduct(
+                "generate",
+                None,
+                imodel=mock_model,
+                messages=[{"role": "user", "content": "Hello"}],
+            )
 
-        from lionpride.core import EventStatus
+    def test_default_branch_via_init(self):
+        """Test default_branch set via __init__ parameter."""
+        session = Session(default_branch="main")
 
-        assert op.status == EventStatus.COMPLETED
         assert session.default_branch is not None
-        assert session.default_branch.name == "default"
-
-    def test_default_branch_serialization(self):
-        """Test default_branch_id is serialized and restored (critical for save/load)."""
-        session = Session()
-        branch = session.create_branch(name="test")
-
-        assert session.default_branch is branch
-        original_branch_id = branch.id
-
-        # Serialize to dict
-        data = session.model_dump()
-
-        # CRITICAL: Verify default_branch_id is in serialized data
-        # (This was the BLOCKING bug - PrivateAttr excluded it from serialization)
-        assert "default_branch_id" in data
-        assert data["default_branch_id"] == original_branch_id
-
-        # Deserialize from dict
-        restored = Session.model_validate(data)
-
-        # Verify default_branch_id was restored (UUID preserved)
-        assert restored.default_branch_id == original_branch_id
-
-        # Note: restored.default_branch will be None because the branch
-        # itself was serialized in conversations, and the full conversation
-        # structure would need to be restored for default_branch to resolve.
-        # The critical test is that default_branch_id is serialized/deserialized.
+        assert session.default_branch.name == "main"
 
 
 # -------------------------------------------------------------------------

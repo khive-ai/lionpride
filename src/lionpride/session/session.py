@@ -1,18 +1,29 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
+"""Session and Branch - Core conversation management.
+
+Session orchestrates messages, branches, services, and operations.
+Branch is a named progression of message UUIDs with access control.
+"""
+
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+import contextlib
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, PrivateAttr
 
-from lionpride.core import Element, Flow, Progression
+from lionpride.core import Element, Flow, Graph, Progression
+from lionpride.errors import NotFoundError
+from lionpride.operations.node import Operation
 from lionpride.operations.registry import OperationRegistry
-from lionpride.services import ServiceRegistry
+from lionpride.services import ServiceRegistry, iModel
+from lionpride.types import Unset, not_sentinel
 
-from .messages import Message, SenderRecipient
+from .messages import Message, SystemContent
 
 if TYPE_CHECKING:
     from lionpride.services.types import Calling
@@ -20,316 +31,451 @@ if TYPE_CHECKING:
 __all__ = ("Branch", "Session")
 
 
+# =============================================================================
+# Branch
+# =============================================================================
+
+
 class Branch(Progression):
-    """Named progression of messages within a session.
+    """Named progression of messages with access control.
 
-    Branch is a Progression (ordered UUIDs) with session context:
-    - user: who is commanding this branch
-    - system_message: system message UUID at order[0]
-    - capabilities: structured output schemas allowed
-    - resources: backend services allowed
-
+    Extends Progression (ordered UUIDs) with session context and permissions.
     Operations are invoked via Session.conduct(), not Branch methods.
+
+    Attributes:
+        session_id: Parent session UUID (frozen).
+        user: Entity commanding this branch (default: session_id).
+        system_message: System message UUID, always at order[0] if set.
+        capabilities: Allowed structured output schema names.
+        resources: Allowed backend service names.
     """
 
-    session_id: UUID = Field(..., frozen=True, description="Parent Session UUID")
-    user: str | UUID | None = Field(default=None, description="User identifier")
-    system_message: UUID | None = Field(default=None, description="System message UUID")
-    capabilities: set[str] = Field(
-        default_factory=set, description="Structured output schemas allowed"
-    )
-    resources: set[str] = Field(default_factory=set, description="Backend service names allowed")
+    session_id: UUID = Field(..., frozen=True)
+    user: str | UUID | None = None
+    system_message: UUID | None = None
+    capabilities: set[str] = Field(default_factory=set)
+    resources: set[str] = Field(default_factory=set)
 
-    def set_system_message(self, message_id: UUID) -> None:
-        """Set system message, ensuring it's at order[0]."""
+    def set_system_message(self, message_id: UUID | Message) -> None:
+        """Set system message at order[0].
+
+        Args:
+            message_id: Message UUID or Message instance.
+        """
+        msg_id = message_id.id if isinstance(message_id, Message) else message_id
         old_system = self.system_message
-        self.system_message = message_id
+        self.system_message = msg_id
 
         if old_system is not None and len(self) > 0:
-            self[0] = message_id
+            self[0] = msg_id
         else:
-            self.insert(0, message_id)
+            self.insert(0, msg_id)
 
     def __repr__(self) -> str:
         name_str = f" name='{self.name}'" if self.name else ""
-        return f"Branch(messages={len(self)}, session={self.session_id}{name_str})"
+        return f"Branch(messages={len(self)}, session={str(self.session_id)[:8]}{name_str})"
+
+
+# =============================================================================
+# Session
+# =============================================================================
 
 
 class Session(Element):
-    """Central storage for messages, branches, services, and operations.
-
-    Attributes:
-        user: User identifier
-        default_imodel: Default iModel for operations (better DX)
-        conversations: Flow[Message, Branch] for message storage and branch progressions
-        services: ServiceRegistry for models and tools
-        operations: OperationRegistry for operation factories
-        messages: Read-only view of conversations.items (Pile[Message])
-        branches: Read-only view of conversations.progressions (Pile[Branch])
+    """Central orchestrator for messages, branches, services, and operations.
 
     Example:
-        # Better DX with default_imodel
-        session = Session(default_imodel=iModel(backend=OpenAI(...)))
-        branch = session.create_branch()
-        result = await session.conduct("operate", branch, instruction="...", ...)
-
-        # Or explicit imodel per-operation
-        result = await session.conduct("operate", branch, imodel=my_model, ...)
+        session = Session(default_generate_model=my_model)
+        branch = session.create_branch(name="main")
+        op = await session.conduct("operate", branch, instruction="Analyze this")
+        result = op.response
     """
 
-    user: str | None = Field(default=None, description="User identifier")
-    default_imodel: Any = Field(
-        default=None,
-        description="Default iModel for operations. Improves DX by eliminating repeated imodel= args.",
-    )
-    conversations: Flow[Message, Branch] = Field(
-        default_factory=lambda: Flow(item_type=Message),
-        description="Message flow with branches",
-    )
-    services: ServiceRegistry = Field(
-        default_factory=ServiceRegistry,
-        description="Available services (models, tools)",
-    )
-    operations: OperationRegistry = Field(
-        default_factory=OperationRegistry,
-        description="Operation factories (operate, react, communicate, generate)",
-    )
-    default_branch_id: UUID | None = Field(
-        default=None,
-        description="UUID of default branch for operations (auto-set to first created branch)",
-    )
+    # -------------------------------------------------------------------------
+    # Fields
+    # -------------------------------------------------------------------------
+
+    user: str | None = None
+    """User identifier for this session."""
+
+    conversations: Flow[Message, Branch] = Field(default_factory=lambda: Flow(item_type=Message))
+    """Message storage (items) and branch progressions."""
+
+    services: ServiceRegistry = Field(default_factory=ServiceRegistry)
+    """Registered models and tools."""
+
+    operations: OperationRegistry = Field(default_factory=OperationRegistry)
+    """Registered operation factories."""
+
+    _default_branch_id: UUID | None = PrivateAttr(None)
+    _default_backends: dict[str, str] = PrivateAttr(default_factory=dict)
+
+    # -------------------------------------------------------------------------
+    # Initialization
+    # -------------------------------------------------------------------------
+
+    def __init__(
+        self,
+        user: str | UUID | None = None,
+        conversations: Flow[Message, Branch] | None = None,
+        services: ServiceRegistry | None = None,
+        *,
+        default_branch: Branch | UUID | str | None = None,
+        default_generate_model: iModel | str | None = None,
+        default_parse_model: iModel | str | None = None,
+        default_capabilities: set[str] | None = None,
+        default_system: Message | None = None,
+        **data,
+    ):
+        """Initialize session with optional defaults.
+
+        Args:
+            user: User identifier.
+            conversations: Pre-built Flow (rare).
+            services: Pre-built ServiceRegistry (rare).
+            default_branch: Auto-create or use this branch as default.
+            default_generate_model: Default model for generate operations.
+            default_parse_model: Default model for parse operations.
+            default_capabilities: Capabilities granted to default branch.
+            default_system: System message for default branch.
+        """
+        d_ = {"user": user, "conversations": conversations, "services": services, **data}
+        super().__init__(**{k: v for k, v in d_.items() if not_sentinel(v, True, True)})
+
+        # Collect default model names for branch resources
+        default_resources: set[str] = set()
+
+        # Register default models
+        for model, key in [
+            (default_generate_model, "generate"),
+            (default_parse_model, "parse"),
+        ]:
+            if model is not None:
+                name = model.name if isinstance(model, iModel) else model
+                self._default_backends[key] = name
+                default_resources.add(name)
+                if isinstance(model, iModel) and not self.services.has(name):
+                    self.services.register(model)
+
+        # Set up default branch
+        if default_branch is not None:
+            if isinstance(default_branch, Branch):
+                default_branch.resources.update(default_resources)
+                if default_capabilities:
+                    default_branch.capabilities.update(default_capabilities)
+                self.conversations.add_progression(default_branch)
+                self._default_branch_id = default_branch.id
+            else:
+                branch_obj = self.create_branch(
+                    name=str(default_branch),
+                    resources=default_resources,
+                    capabilities=default_capabilities or set(),
+                    system=default_system,
+                )
+                self._default_branch_id = branch_obj.id
+
+    # -------------------------------------------------------------------------
+    # Properties
+    # -------------------------------------------------------------------------
 
     @property
     def messages(self):
-        """Read-only view of conversations.items (Pile[Message])."""
+        """All messages in session (Pile[Message])."""
         return self.conversations.items
 
     @property
     def branches(self):
-        """Read-only view of conversations.progressions (Pile[Branch])."""
+        """All branches in session (Pile[Branch])."""
         return self.conversations.progressions
 
     @property
     def default_branch(self) -> Branch | None:
-        """Get the default branch for operations when none specified."""
-        if self.default_branch_id is None:
+        """Default branch for operations, or None."""
+        if self._default_branch_id is None:
             return None
-        try:
-            return self.conversations.get_progression(self.default_branch_id)
-        except (KeyError, ValueError, Exception):
-            # Branch was removed (NotFoundError, KeyError, ValueError)
-            # Clear stale reference and return None gracefully
-            self.default_branch_id = None
-            return None
+        with contextlib.suppress(KeyError, NotFoundError):
+            return self.conversations.get_progression(self._default_branch_id)
+        return None
 
-    def set_default_branch(self, branch: Branch | UUID | str) -> None:
-        """Set the default branch for operations.
+    @property
+    def default_generate_model(self) -> iModel | None:
+        """Default model for generate operations."""
+        name = self._default_backends.get("generate")
+        return self.services.get(name) if name and self.services.has(name) else None
 
-        Args:
-            branch: Branch instance, UUID, or name to set as default
+    @property
+    def default_parse_model(self) -> iModel | None:
+        """Default model for parse operations."""
+        name = self._default_backends.get("parse")
+        return self.services.get(name) if name and self.services.has(name) else None
 
-        Raises:
-            ValueError: If branch not found in session
-        """
-        if isinstance(branch, Branch):
-            branch_id = branch.id
-        elif isinstance(branch, UUID):
-            branch_id = branch
-        else:
-            # Lookup by name
-            resolved = self.conversations.get_progression(branch)
-            branch_id = resolved.id
-
-        # Verify branch exists
-        if branch_id not in self.branches:
-            raise ValueError(f"Branch {branch_id} not found in session")
-
-        self.default_branch_id = branch_id
+    # -------------------------------------------------------------------------
+    # Branch Management
+    # -------------------------------------------------------------------------
 
     def create_branch(
         self,
         *,
         name: str | None = None,
-        system_message: Message | UUID | None = None,
+        system: Message | UUID | None = None,
         capabilities: set[str] | None = None,
         resources: set[str] | None = None,
-        set_as_default: bool | None = None,
+        messages: Iterable[UUID | Message] | None = None,
     ) -> Branch:
-        """Create new branch for isolated conversation threads.
+        """Create a new branch.
 
         Args:
-            name: Optional branch name (auto-generated if None)
-            system_message: Optional system message to set
-            capabilities: Structured output schemas allowed
-            resources: Backend service names allowed
-            set_as_default: If True, set as default branch. If None (default),
-                           auto-sets as default if this is the first branch.
+            name: Branch name (auto-generated if None).
+            system: System message (Message or UUID).
+            capabilities: Allowed structured output schemas.
+            resources: Allowed backend services.
+            messages: Initial message UUIDs to include.
 
         Returns:
-            The created Branch
-        """
-        # Auto-set first branch as default if not specified
-        is_first_branch = len(self.branches) == 0
-        should_set_default = set_as_default if set_as_default is not None else is_first_branch
+            Created Branch.
 
-        branch_name = name or f"branch_{len(self.branches)}"
+        Raises:
+            ValueError: If system UUID not found in session.
+        """
+        if system is not None and system not in self.messages:
+            if isinstance(system, UUID):
+                raise ValueError(f"System message UUID {system} not found")
+            if not isinstance(system, Message):
+                raise ValueError("system must be Message or UUID")
+            self.conversations.add_item(system)
+
         branch = Branch(
             session_id=self.id,
-            user=self.id,  # Branch user = session id
-            name=branch_name,
+            user=self.id,
+            name=name or f"branch_{len(self.branches)}",
             capabilities=capabilities or set(),
             resources=resources or set(),
+            order=list(messages) if messages else [],
         )
 
-        if system_message is not None:
-            if isinstance(system_message, Message):
-                if system_message.id not in self.messages:
-                    self.conversations.add_item(system_message)
-                branch.set_system_message(system_message.id)
-            else:
-                branch.set_system_message(system_message)
+        if system is not None:
+            branch.set_system_message(system)
 
         self.conversations.add_progression(branch)
-
-        # Set as default if appropriate
-        if should_set_default:
-            self.default_branch_id = branch.id
-
         return branch
+
+    def get_branch(self, branch: UUID | str | Branch, default=Unset, /) -> Branch:
+        """Get branch by UUID, name, or instance.
+
+        Args:
+            branch: Branch identifier.
+            default: Return this if not found (else raise).
+
+        Returns:
+            Branch instance.
+
+        Raises:
+            NotFoundError: If not found and no default.
+        """
+        if isinstance(branch, Branch) and branch in self.branches:
+            return branch
+        with contextlib.suppress(KeyError):
+            return self.conversations.get_progression(branch)
+        if default is not Unset:
+            return default
+        raise NotFoundError("Branch not found")
+
+    def set_default_branch(self, branch: Branch | UUID | str) -> None:
+        """Set the default branch for operations.
+
+        Args:
+            branch: Branch to set as default (must exist).
+
+        Raises:
+            NotFoundError: If branch not in session.
+        """
+        resolved = self.get_branch(branch)
+        self._default_branch_id = resolved.id
 
     def fork(
         self,
         branch: Branch | UUID | str,
         *,
         name: str | None = None,
-        sender: SenderRecipient | None = None,
-        capabilities: set[str] | None = None,
-        resources: set[str] | None = None,
+        capabilities: set[str] | Literal[True] | None = None,
+        resources: set[str] | Literal[True] | None = None,
+        system: UUID | Message | Literal[True] | None = None,
     ) -> Branch:
-        """Fork branch to create divergent conversation path.
-
-        Creates a new branch with cloned messages for independent exploration.
+        """Fork branch for divergent exploration.
 
         Args:
-            branch: Source branch to fork from
-            name: Name for forked branch (auto-generated if None)
-            sender: Optional sender for cloned messages
-            capabilities: Structured output schemas (None = copy from source)
-            resources: Backend services (None = copy from source)
+            branch: Source branch.
+            name: Name for fork (auto-generated if None).
+            capabilities: True=copy from source, None=empty, or explicit set.
+            resources: True=copy from source, None=empty, or explicit set.
+            system: True=copy from source, None=none, or explicit.
 
         Returns:
-            New forked Branch
+            New forked Branch with lineage metadata.
         """
-        if isinstance(branch, (UUID, str)):
-            branch = self.conversations.get_progression(branch)
+        source = self.get_branch(branch)
 
-        forked = Branch(
-            session_id=self.id,
-            user=self.id,  # Branch user = session id
-            name=name or f"{branch.name}_fork",
-            capabilities=capabilities if capabilities is not None else branch.capabilities.copy(),
-            resources=resources if resources is not None else branch.resources.copy(),
+        forked = self.create_branch(
+            name=name or f"{source.name}_fork",
+            messages=source.order,
+            capabilities={*source.capabilities}
+            if capabilities is True
+            else (capabilities or set()),
+            resources={*source.resources} if resources is True else (resources or set()),
+            system=source.system_message if system is True else system,
         )
 
-        forked_system_id = None
-        for msg_id in branch:
-            original_msg = self.messages[msg_id]
-            cloned_msg = original_msg.clone(sender=sender)
-            self.conversations.add_item(cloned_msg)
-            forked.append(cloned_msg.id)
-
-            if branch.system_message is not None and msg_id == branch.system_message:
-                forked_system_id = cloned_msg.id
-
-        if forked_system_id is not None:
-            forked.system_message = forked_system_id
-
         forked.metadata["forked_from"] = {
-            "branch_id": str(branch.id),
-            "branch_name": branch.name,
-            "created_at": branch.created_at.isoformat(),
-            "message_count": len(branch),
+            "branch_id": str(source.id),
+            "branch_name": source.name,
+            "created_at": source.created_at.isoformat(),
+            "message_count": len(source),
         }
-
-        self.conversations.add_progression(forked)
         return forked
 
-    def set_branch_system(
-        self,
-        branch: Branch | UUID | str,
-        system_message: Message | UUID,
-    ) -> None:
-        """Set or change system message for a branch."""
-        if isinstance(branch, (UUID, str)):
-            branch = self.conversations.get_progression(branch)
-
-        if isinstance(system_message, Message):
-            if system_message.id not in self.messages:
-                self.conversations.add_item(system_message)
-            msg_id = system_message.id
-        else:
-            msg_id = system_message
-
-        branch.set_system_message(msg_id)
-
-    def get_branch_system(self, branch: Branch | UUID | str) -> Message | None:
-        """Get system message for a branch."""
-        if isinstance(branch, Branch):
-            branch = self.conversations.get_progression(branch.id)
-        else:
-            branch = self.conversations.get_progression(branch)
-
-        if branch.system_message is not None:
-            return self.messages[branch.system_message]
-        return None
+    # -------------------------------------------------------------------------
+    # Message Management
+    # -------------------------------------------------------------------------
 
     def add_message(
         self,
         message: Message,
-        *,
         branches: list[Branch | UUID | str] | Branch | UUID | str | None = None,
-        is_system: bool = False,
     ) -> None:
-        """Add message to session, optionally to specific branches.
+        """Add message to session and optionally to branches.
+
+        System messages (SystemContent) are added to items only,
+        then set via set_system_message on specified branches.
 
         Args:
-            message: Message to add
-            branches: Branch(es) to add message to (optional)
-            is_system: If True, set as system message for all branches
+            message: Message to add.
+            branches: Target branch(es).
         """
-        from .messages import SystemContent
-
-        # Auto-detect system message from content type
         if isinstance(message.content, SystemContent):
-            is_system = True
-
-        # Normalize branches to list
-        resolved_branches: list[Branch] = []
-        if branches is not None:
-            if not isinstance(branches, list):
-                branches = [branches]
-            for b in branches:
-                if isinstance(b, (UUID, str)):
-                    resolved_branches.append(self.conversations.get_progression(b))
-                else:
-                    resolved_branches.append(b)
-
-        # Add message to flow
-        if resolved_branches:
-            if is_system:
-                # For system messages, add to items only (not progressions)
-                # then use set_system_message which handles ordering
-                self.conversations.add_item(message)
-                for branch in resolved_branches:
-                    branch.set_system_message(message.id)
-            else:
-                self.conversations.add_item(message, progressions=resolved_branches)
-        else:
             self.conversations.add_item(message)
+            if branches is not None:
+                branch_list = [branches] if not isinstance(branches, list) else branches
+                for b in branch_list:
+                    self.get_branch(b).set_system_message(message)
+            return
 
-    # =========================================================================
-    # Unified Service Interface
-    # =========================================================================
+        self.conversations.add_item(message, progressions=branches)
+
+    def get_branch_system(self, branch: Branch | UUID | str) -> Message | None:
+        """Get system message for a branch.
+
+        Args:
+            branch: Branch identifier.
+
+        Returns:
+            System Message or None.
+        """
+        resolved = self.get_branch(branch)
+        if resolved.system_message is None:
+            return None
+        return self.messages.get(resolved.system_message)
+
+    def set_branch_system(self, branch: Branch | UUID | str, system: Message | UUID) -> None:
+        """Set system message for a branch.
+
+        Args:
+            branch: Branch identifier.
+            system: Message or UUID to set as system.
+        """
+        resolved = self.get_branch(branch)
+        if isinstance(system, Message):
+            if system.id not in self.messages:
+                self.conversations.add_item(system)
+            resolved.set_system_message(system.id)
+        else:
+            resolved.set_system_message(system)
+
+    # -------------------------------------------------------------------------
+    # Default Model Management
+    # -------------------------------------------------------------------------
+
+    def set_default_model(
+        self,
+        model: iModel | str,
+        operation: Literal["generate", "parse"] = "generate",
+    ) -> None:
+        """Set default model for an operation type.
+
+        Args:
+            model: iModel instance or registered name.
+            operation: "generate" or "parse".
+        """
+        name = model.name if isinstance(model, iModel) else model
+        self._default_backends[operation] = name
+        if isinstance(model, iModel) and not self.services.has(name):
+            self.services.register(model)
+        if self.default_branch is not None:
+            self.default_branch.resources.add(name)
+
+    # -------------------------------------------------------------------------
+    # Operations
+    # -------------------------------------------------------------------------
+
+    async def conduct(
+        self,
+        operation_type: str,
+        branch: Branch | UUID | str | None = None,
+        **kwargs,
+    ) -> Operation:
+        """Execute an operation on a branch.
+
+        Args:
+            operation_type: Operation name (operate, react, communicate, generate).
+            branch: Target branch (uses default if None).
+            **kwargs: Operation parameters.
+
+        Returns:
+            Invoked Operation (access result via op.response).
+
+        Raises:
+            RuntimeError: If no branch and no default set.
+            KeyError: If operation not registered.
+        """
+        resolved = self._resolve_branch(branch)
+        op = Operation(operation_type=operation_type, parameters=kwargs)
+        op.bind(self, resolved)
+        await op.invoke()
+        return op
+
+    async def flow(
+        self,
+        graph: Graph,
+        branch: Branch | UUID | str | None = None,
+        *,
+        context: dict | None = None,
+        max_concurrent: int | None = None,
+        stop_on_error: bool = True,
+        verbose: bool = False,
+    ) -> dict:
+        """Execute operation graph with dependency scheduling.
+
+        Args:
+            graph: Operation DAG from Builder.
+            branch: Default branch for operations (uses default if None).
+            context: Shared context dict.
+            max_concurrent: Concurrency limit (None=unlimited).
+            stop_on_error: Stop on first error.
+            verbose: Print progress.
+
+        Returns:
+            Dict mapping operation names to results.
+        """
+        from lionpride.operations.flow import flow as flow_func
+
+        return await flow_func(
+            session=self,
+            branch=self._resolve_branch(branch),
+            graph=graph,
+            context=context,
+            max_concurrent=max_concurrent,
+            stop_on_error=stop_on_error,
+            verbose=verbose,
+        )
 
     async def request(
         self,
@@ -339,37 +485,16 @@ class Session(Element):
         poll_interval: float | None = None,
         **kwargs,
     ) -> Calling:
-        """Unified service request interface.
-
-        Central entry point for all service interactions. Handles both
-        LLM endpoints and tool execution through the same interface.
+        """Direct service request (LLM or tool).
 
         Args:
-            service_name: Name of registered service (LLM or Tool)
-            poll_timeout: Max seconds to wait for completion (default: 10s)
-            poll_interval: Seconds between status checks (default: 0.1s)
-            **kwargs: Service-specific arguments
-                - For LLMs: model, messages, temperature, etc.
-                - For Tools: function arguments
+            service_name: Registered service name.
+            poll_timeout: Max wait seconds.
+            poll_interval: Poll interval seconds.
+            **kwargs: Service-specific args.
 
         Returns:
-            Calling with execution results:
-                - calling.execution.status (EventStatus)
-                - calling.execution.response.data (result data)
-                - calling.execution.error (if failed)
-
-        Example:
-            LLM request:
-                >>> calling = await session.request(
-                ...     "openai",
-                ...     model="gpt-4.1-mini",
-                ...     messages=[{"role": "user", "content": "Hello"}],
-                ... )
-                >>> result = calling.execution.response.data
-
-            Tool request:
-                >>> calling = await session.request("calculator", a=5, b=3)
-                >>> result = calling.execution.response.data  # 8
+            Calling with execution results.
         """
         service = self.services.get(service_name)
         return await service.invoke(
@@ -378,131 +503,27 @@ class Session(Element):
             **kwargs,
         )
 
-    # =========================================================================
-    # Unified Operation Interface
-    # =========================================================================
-
-    async def conduct(
-        self,
-        operation_type: str,
-        branch: Branch | UUID | str | None = None,
-        *,
-        imodel: Any = None,
-        **parameters,
-    ) -> Any:
-        """Unified operation interface - returns invoked Operation.
-
-        Central entry point for all operations (operate, react, communicate, generate).
-        Creates an Operation node, binds it, invokes it, and returns it.
-
-        Args:
-            operation_type: Operation type ("operate", "react", "communicate", "generate")
-            branch: Target branch (optional, uses default if None)
-            imodel: iModel to use (optional, falls back to default_imodel)
-            **parameters: Operation-specific parameters
-
-        Returns:
-            Operation: Invoked operation with:
-                - op.status: EventStatus (COMPLETED, FAILED, etc.)
-                - op.response: The operation result
-                - op.execution: Full execution details
-
-        Example:
-            # With default_imodel set
-            session = Session(default_imodel=my_model)
-            branch = session.create_branch()
-
-            # Structured output
-            op = await session.conduct("operate", branch,
-                instruction="Analyze this text",
-                response_model=AnalysisResult,
-            )
-            result = op.response  # The AnalysisResult instance
-
-            # ReAct with tools
-            op = await session.conduct("react", branch,
-                instruction="Find the answer",
-                tools=[SearchTool, CalculatorTool],
-            )
-            print(op.status)  # EventStatus.COMPLETED
-
-            # Simple chat
-            op = await session.conduct("communicate", branch,
-                instruction="Hello!",
-            )
-            print(op.response)  # "Hello! How can I help?"
-
-        Raises:
-            KeyError: If operation not registered
-            ValueError: If no imodel provided and no default_imodel set
-        """
-        from lionpride.operations.node import Operation
-
-        # Resolve imodel
-        resolved_imodel = imodel or self.default_imodel
-        if resolved_imodel is None:
-            raise ValueError(
-                f"Operation '{operation_type}' requires imodel. Either pass imodel= "
-                "or set default_imodel on Session."
-            )
-
-        # Resolve branch
-        if branch is None:
-            # Use default_branch or create one
-            if self.default_branch is not None:
-                branch = self.default_branch
-            else:
-                # No default set - create one (which auto-sets as default)
-                branch = self.create_branch(name="default")
-        elif isinstance(branch, (UUID, str)):
-            branch = self.conversations.get_progression(branch)
-
-        # Build parameters with resolved imodel
-        params = {"imodel": resolved_imodel, **parameters}
-
-        # Create Operation node
-        op = Operation(
-            operation_type=operation_type,
-            parameters=params,
-        )
-
-        # Bind to session/branch and invoke
-        op.bind(self, branch)
-        await op.invoke()
-
-        return op
-
-    def register_operation(
-        self,
-        name: str,
-        factory,
-        *,
-        override: bool = False,
-    ) -> None:
+    def register_operation(self, name: str, factory, *, override: bool = False) -> None:
         """Register custom operation factory.
 
-        Enables arbitrary workflow patterns including nested DAGs.
-
         Args:
-            name: Operation name for conduct() and Builder
-            factory: Async function (session, branch, params) -> result
-            override: Allow replacing existing operation
-
-        Example:
-            async def my_nested_dag(session, branch, params):
-                # Build inner graph
-                builder = Builder()
-                builder.add("step1", "communicate", {...})
-                builder.add("step2", "operate", {...}, depends_on=["step1"])
-                graph = builder.build()
-
-                # Execute nested flow
-                return await session.flow(graph, branch)
-
-            session.register_operation("nested_dag", my_nested_dag)
-            result = await session.conduct("nested_dag", branch, ...)
+            name: Operation name for conduct().
+            factory: Async (session, branch, params) -> result.
+            override: Allow replacing existing.
         """
         self.operations.register(name, factory, override=override)
+
+    # -------------------------------------------------------------------------
+    # Internal
+    # -------------------------------------------------------------------------
+
+    def _resolve_branch(self, branch: Branch | UUID | str | None) -> Branch:
+        """Resolve branch, falling back to default."""
+        if branch is not None:
+            return self.get_branch(branch)
+        if self.default_branch is not None:
+            return self.default_branch
+        raise RuntimeError("No branch provided and no default branch set")
 
     def __repr__(self) -> str:
         return (

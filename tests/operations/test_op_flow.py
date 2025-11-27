@@ -141,12 +141,10 @@ class TestFlowErrorHandling:
 
         assert "task1" in results
 
-    async def test_none_branch_uses_default(self, session_with_model):
-        """Test line 133: None branch fallback when default_branch not set."""
+    async def test_executor_with_none_branch(self, session_with_model):
+        """Test DependencyAwareExecutor handles None default_branch."""
         session, model = session_with_model
-        # Create branch without setting as default to test None fallback
-        _branch = session.create_branch(name="test", set_as_default=False)
-        assert session.default_branch is None  # Verify no default set
+        _branch = session.create_branch(name="test")
 
         builder = Builder()
         builder.add(
@@ -160,21 +158,18 @@ class TestFlowErrorHandling:
         )
         graph = builder.build()
 
-        # Create executor with None branch (no default_branch attribute on session)
-        # This tests the fallback path when default_branch is None
+        # Create executor with explicit None branch (tests fallback path)
         executor = DependencyAwareExecutor(
             session=session,
             graph=graph,
-            default_branch=None,  # This will trigger line 133
+            default_branch=None,  # Explicitly None
         )
 
-        # Since default_branch is None and getattr returns None,
-        # operation_branches will have None values
+        # Pre-allocate should handle None gracefully
         await executor._preallocate_branches()
 
-        # Verify branch pre-allocation handled None case
+        # When default_branch is None, operations get None
         for _op_id, allocated_branch in executor.operation_branches.items():
-            # When default_branch is None, it remains None
             assert allocated_branch is None
 
     async def test_verbose_branch_preallocation(self, session_with_model, capsys):
