@@ -141,7 +141,7 @@ async def _llm_reparse(
     poll_interval: float | None = None,
 ) -> dict[str, Any] | None:
     """Use LLM to reformat text into valid JSON."""
-    from .generate import generate_operation
+    from .generate import generate
 
     # Build instruction for reformatting
     instruction_text = (
@@ -167,7 +167,7 @@ async def _llm_reparse(
         imodel_kwargs=imodel_kwargs,
     )
 
-    result = await generate_operation(
+    result = await generate(
         session,
         branch,
         gen_params,

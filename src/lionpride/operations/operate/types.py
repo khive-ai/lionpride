@@ -171,7 +171,13 @@ class ActParams(Params):
 class CommunicateParams(Params):
     """Parameters for communicate operation (stateful chat).
 
-    Communicate = Generate + Parse + validation + message persistence.
+    Communicate = Generate + message persistence + Validate (via IPU).
+
+    Validation flow (when operable set):
+    1. operable.create_model(include=capabilities) → schema for LLM prompt
+    2. LLM returns response
+    3. adapter.parse_json() → dict
+    4. validator.validate(dict, operable, capabilities) → typed model
     """
 
     _config = ModelConfig(none_as_sentinel=True, empty_as_sentinel=True)
@@ -181,26 +187,23 @@ class CommunicateParams(Params):
     """Generate parameters."""
 
     parse: ParseParams = None
-    """Parse parameters (for structured output)."""
+    """Parse parameters."""
 
-    # Validation (communicate-specific)
+    # Validation (IPU pipeline)
     operable: Operable | None = None
-    """Operable for structured output validation."""
+    """Operable for structured output (defines schema + validation rules)."""
 
     capabilities: set[str] | None = None
-    """Capabilities (defaults to branch.capabilities)."""
+    """Capabilities - allowed fields (defaults to branch.capabilities)."""
 
-    max_retries: int = 0
-    """Retry attempts for validation failures."""
+    auto_fix: bool = True
+    """Auto-fix validation issues when possible."""
 
-    strict_validation: bool = False
+    strict_validation: bool = True
     """Raise on validation failure."""
 
     fuzzy_parse: bool = True
     """Enable fuzzy JSON parsing."""
-
-    return_as: Literal["text", "raw", "message", "model"] = "text"
-    """Output format."""
 
 
 @dataclass(frozen=True, slots=True)

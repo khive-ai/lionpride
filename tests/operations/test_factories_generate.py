@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from lionpride import Event, EventStatus
-from lionpride.operations.operate.generate import generate_operation
+from lionpride.operations.operate.generate import generate
 from lionpride.operations.operate.types import GenerateParams
 from lionpride.session import Session
 from lionpride.session.messages import Message
@@ -79,7 +79,7 @@ class TestGenerateValidation:
         params = GenerateParams(instruction="test")
 
         with pytest.raises(ValueError, match="generate requires 'imodel' parameter"):
-            await generate_operation(session, branch, params)
+            await generate(session, branch, params)
 
 
 class TestReturnAsVariants:
@@ -96,7 +96,7 @@ class TestReturnAsVariants:
             return_as="text",
         )
 
-        result = await generate_operation(session, branch, params)
+        result = await generate(session, branch, params)
 
         assert isinstance(result, str)
         assert result == "mock response text"
@@ -112,7 +112,7 @@ class TestReturnAsVariants:
             return_as="raw",
         )
 
-        result = await generate_operation(session, branch, params)
+        result = await generate(session, branch, params)
 
         assert isinstance(result, dict)
         assert "id" in result
@@ -129,7 +129,7 @@ class TestReturnAsVariants:
             return_as="message",
         )
 
-        result = await generate_operation(session, branch, params)
+        result = await generate(session, branch, params)
 
         assert isinstance(result, Message)
         # Verify content
@@ -150,7 +150,7 @@ class TestReturnAsVariants:
             return_as="calling",
         )
 
-        result = await generate_operation(session, branch, params)
+        result = await generate(session, branch, params)
 
         # Should return Calling object (Event subclass)
         assert isinstance(result, Event)
@@ -181,7 +181,7 @@ class TestStatelessBehavior:
             return_as="text",
         )
 
-        await generate_operation(session, branch, params)
+        await generate(session, branch, params)
 
         # Verify no messages were added
         final_count = len(session.messages[branch])
@@ -214,7 +214,7 @@ class TestErrorHandling:
         )
 
         with pytest.raises(RuntimeError, match="Generation failed"):
-            await generate_operation(session, branch, params)
+            await generate(session, branch, params)
 
     async def test_failed_invocation_without_error_message(self, session_with_model):
         """Test RuntimeError includes status when no error message."""
@@ -239,7 +239,7 @@ class TestErrorHandling:
         )
 
         with pytest.raises(RuntimeError, match=r"Generation failed.*status"):
-            await generate_operation(session, branch, params)
+            await generate(session, branch, params)
 
 
 class TestBranchResourceAccess:
@@ -256,7 +256,7 @@ class TestBranchResourceAccess:
         )
 
         with pytest.raises(ValueError, match="has no access to model"):
-            await generate_operation(session, branch, params)
+            await generate(session, branch, params)
 
 
 class TestParameterPassthrough:
@@ -274,7 +274,7 @@ class TestParameterPassthrough:
             imodel_kwargs={"temperature": 0.7, "max_tokens": 100},
         )
 
-        await generate_operation(session, branch, params)
+        await generate(session, branch, params)
 
         # Verify invoke was called with forwarded parameters
         model.invoke.assert_called_once()

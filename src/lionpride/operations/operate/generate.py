@@ -1,7 +1,7 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Generate - stateless LLM call helper.
+"""Generate - stateless LLM call.
 
 Lowest-level operation: just calls the model.
 No message persistence, no validation.
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from lionpride.services.types.backend import Calling
     from lionpride.session import Branch, Session
 
-__all__ = ("generate", "generate_operation", "handle_return")
+__all__ = ("generate", "handle_return")
 
 ReturnAs = Literal["text", "raw", "message", "calling"]
 
@@ -69,12 +69,12 @@ def handle_return(calling: Calling, return_as: ReturnAs) -> Any:
             raise ValueError(f"Unsupported return_as: {return_as}")
 
 
-async def generate(
+async def _generate(
     imodel: iModel,
     return_as: ReturnAs = "calling",
     **kwargs,
 ) -> Any:
-    """Stateless LLM call helper.
+    """Internal helper: direct imodel.invoke() wrapper.
 
     Args:
         imodel: Model to invoke
@@ -88,18 +88,33 @@ async def generate(
     return handle_return(calling, return_as)
 
 
-async def generate_operation(
+async def generate(
     session: Session,
     branch: Branch | str,
     params: GenerateParams,
     poll_timeout: float | None = None,
     poll_interval: float | None = None,
 ):
+    """Stateless LLM call via session/branch context.
+
+    Prepares messages from branch history, calls model, returns result.
+    Does NOT persist any messages - caller handles persistence.
+
+    Args:
+        session: Session for services
+        branch: Branch for message context
+        params: Generate parameters
+        poll_timeout: Timeout for model polling
+        poll_interval: Interval for model polling
+
+    Returns:
+        Result in format specified by params.return_as
+    """
     imodel_kw = params.imodel_kwargs or {}
     if not isinstance(imodel_kw, dict):
         raise ValueError(f"imodel_kwargs must be dict, got: {type(imodel_kw).__name__}")
     if "messages" in imodel_kw:
-        raise ValueError("generate_operation does not accept 'messages' in imodel_kwargs")
+        raise ValueError("generate does not accept 'messages' in imodel_kwargs")
 
     imodel = params.imodel or session.default_generate_model
     imodel = session.services.get(imodel, None)
@@ -112,41 +127,23 @@ async def generate_operation(
     if imodel.name not in b_.resources:
         raise ValueError(f"Branch '{b_.name}' has no access to model '{imodel.name}'")
 
-    # Log instruction message (no branch assignment - for audit only)
-    ins_msg = params.instruction_message
-    if ins_msg is not None:
-        session.add_message(ins_msg)
-
+    # Prepare messages from branch history + new instruction
     msgs = session.messages[b_]
     from lionpride.session.messages import prepare_messages_for_chat
 
     prepared_msgs = prepare_messages_for_chat(
         msgs,
-        new_instruction=ins_msg,
+        new_instruction=params.instruction_message,
         to_chat=True,
         structure_format=params.structure_format,
     )
 
-    # Call model
+    # Call model (stateless - no message persistence)
     calling = await imodel.invoke(
         messages=prepared_msgs,
         poll_interval=poll_interval,
         poll_timeout=poll_timeout,
         **imodel_kw,
     )
-
-    # Log assistant response (no branch assignment - for audit only)
-    if calling.execution.status.value == "completed":
-        response = calling.execution.response
-        assistant_msg = Message(
-            content=AssistantResponseContent.create(
-                assistant_response=response.data,
-            ),
-            metadata={
-                "raw_response": response.raw_response,
-                **response.metadata,
-            },
-        )
-        session.add_message(assistant_msg)
 
     return handle_return(calling, params.return_as)
