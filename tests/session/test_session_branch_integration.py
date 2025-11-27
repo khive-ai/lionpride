@@ -138,7 +138,7 @@ class TestBranchSystemMessages:
             recipient="user",
         )
 
-        branch = session.create_branch(name="main", system_message=sys_msg)
+        branch = session.create_branch(name="main", system=sys_msg)
 
         # Verify system message set
         system = session.get_branch_system(branch)
@@ -182,7 +182,7 @@ class TestBranchSystemMessages:
             recipient="user",
         )
 
-        branch = session.create_branch(name="main", system_message=sys_msg1)
+        branch = session.create_branch(name="main", system=sys_msg1)
 
         # Change system message
         session.set_branch_system(branch, sys_msg2)
@@ -201,7 +201,7 @@ class TestBranchSystemMessages:
             recipient="user",
         )
 
-        session.create_branch(name="main", system_message=sys_msg)
+        session.create_branch(name="main", system=sys_msg)
 
         # Retrieve by name
         system = session.get_branch_system("main")
@@ -253,14 +253,16 @@ class TestBranchForking:
             recipient="user",
         )
 
-        original = session.create_branch(name="original", system_message=sys_msg)
-        cloned = session.fork(original, name="cloned")
+        original = session.create_branch(name="original", system=sys_msg)
+        cloned = session.fork(original, name="cloned", system=True)
 
-        # Verify system message content preserved (but as NEW message with different ID)
+        # Verify system message UUID is copied (same message referenced)
         original_system = session.get_branch_system(original)
         cloned_system = session.get_branch_system(cloned)
-        assert original_system.id != cloned_system.id  # Cloned message has new ID
-        assert cloned_system.content.system_message == "System prompt"  # Content preserved
+        assert original_system is not None
+        assert cloned_system is not None
+        assert cloned_system.id == original_system.id  # Same message referenced
+        assert cloned_system.content.system_message == "System prompt"
 
     def test_fork_by_branch_reference(self):
         """Test forking branch via direct reference."""
@@ -282,8 +284,8 @@ class TestBranchForking:
         cloned_msgs = list(session.messages[cloned])
         assert len(cloned_msgs) == 1
 
-    def test_fork_with_sender_override(self):
-        """Test forking with sender override for messages."""
+    def test_fork_shares_message_uuids(self):
+        """Test forked branch shares same message UUIDs (not cloned)."""
         session = Session()
         original = session.create_branch(name="original")
 
@@ -294,17 +296,13 @@ class TestBranchForking:
         )
         session.conversations.add_item(msg, progressions=[original])
 
-        # Fork with different sender (affects message cloning, not Branch.user)
-        cloned = session.fork(original, name="cloned", sender="user2")
+        # Fork branch
+        forked = session.fork(original, name="forked")
 
-        # Verify branch created with same user as original (sender param is for Message.clone)
-        assert cloned.user == original.user
-
-        # Verify messages were cloned (independent IDs)
-        original_msgs = list(session.messages[original])
-        cloned_msgs = list(session.messages[cloned])
-        assert len(cloned_msgs) == 1
-        assert cloned_msgs[0].id != original_msgs[0].id  # Different message instance
+        # Verify forked branch has same message UUIDs
+        assert len(forked) == len(original)
+        assert list(forked.order) == list(original.order)
+        assert forked.user == session.id  # User is session id
 
 
 class TestMultiBranchWorkflows:
