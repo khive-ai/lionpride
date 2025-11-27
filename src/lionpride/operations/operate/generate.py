@@ -112,20 +112,41 @@ async def generate_operation(
     if imodel.name not in b_.resources:
         raise ValueError(f"Branch '{b_.name}' has no access to model '{imodel.name}'")
 
+    # Log instruction message (no branch assignment - for audit only)
+    ins_msg = params.instruction_message
+    if ins_msg is not None:
+        session.add_message(ins_msg)
+
     msgs = session.messages[b_]
     from lionpride.session.messages import prepare_messages_for_chat
 
     prepared_msgs = prepare_messages_for_chat(
         msgs,
-        new_instruction=params.instruction_message,
+        new_instruction=ins_msg,
         to_chat=True,
         structure_format=params.structure_format,
     )
-    return await generate(
-        imodel,
-        return_as=params.return_as,
+
+    # Call model
+    calling = await imodel.invoke(
         messages=prepared_msgs,
         poll_interval=poll_interval,
         poll_timeout=poll_timeout,
         **imodel_kw,
     )
+
+    # Log assistant response (no branch assignment - for audit only)
+    if calling.execution.status.value == "completed":
+        response = calling.execution.response
+        assistant_msg = Message(
+            content=AssistantResponseContent.create(
+                assistant_response=response.data,
+            ),
+            metadata={
+                "raw_response": response.raw_response,
+                **response.metadata,
+            },
+        )
+        session.add_message(assistant_msg)
+
+    return handle_return(calling, params.return_as)

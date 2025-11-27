@@ -42,6 +42,8 @@ class OperationRegistry:
     - react: Multi-step reasoning with tool calling
     - communicate: Stateful chat with optional structured output
     - generate: Stateless text generation
+    - parse: JSON extraction with LLM fallback
+    - interpret: Instruction refinement
 
     Usage:
         # Session creates registry automatically
@@ -70,13 +72,37 @@ class OperationRegistry:
         """Register default operations.
 
         Imports are deferred to avoid circular imports.
+        Wrappers convert dict params to typed Params objects.
         """
-        from .operate import communicate, generate, operate, react
+        from .operate import (
+            communicate,
+            generate_operation,
+            interpret,
+            operate,
+            parse,
+            react,
+        )
+        from .operate.types import GenerateParams, InterpretParams, ParseParams
+
+        # Wrappers to convert dict -> typed params
+        async def _generate_wrapper(session, branch, params: dict):
+            typed_params = GenerateParams(**params)
+            return await generate_operation(session, branch, typed_params)
+
+        async def _parse_wrapper(session, branch, params: dict):
+            typed_params = ParseParams(**params)
+            return await parse(session, branch, typed_params)
+
+        async def _interpret_wrapper(session, branch, params: dict):
+            typed_params = InterpretParams(**params)
+            return await interpret(session, branch, typed_params)
 
         self._factories["operate"] = operate
         self._factories["react"] = react
         self._factories["communicate"] = communicate
-        self._factories["generate"] = generate
+        self._factories["generate"] = _generate_wrapper
+        self._factories["parse"] = _parse_wrapper
+        self._factories["interpret"] = _interpret_wrapper
 
     def register(
         self,
