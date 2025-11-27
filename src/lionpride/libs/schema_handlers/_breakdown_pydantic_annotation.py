@@ -8,17 +8,27 @@ from pydantic import BaseModel
 _MODULE_PATTERN = re.compile(r"([a-zA-Z_][a-zA-Z0-9_]*\.)+([a-zA-Z_][a-zA-Z0-9_]*)")
 
 
-def _clean_type_repr(t: Any) -> str:
-    """Convert a type annotation to a clean string without module prefixes.
+# Pattern to extract type name from <class 'typename'>
+_CLASS_PATTERN = re.compile(r"<class '([^']+)'>")
 
-    Converts the type to string, then strips module prefixes from all
-    qualified names (e.g., '__main__.CodeModule' -> 'CodeModule').
+
+def _clean_type_repr(t: Any) -> str:
+    """Convert a type annotation to a clean Python-like string.
+
+    Handles:
+    - <class 'str'> -> "str"
+    - <class 'int'> -> "int"
+    - Module-qualified names -> just class name
     """
-    # Convert to string representation
     s = str(t) if not isinstance(t, str) else t
 
-    # Replace all module-qualified names with just the class name
-    # e.g., "__main__.Foo" -> "Foo", "lionagi.x.Element" -> "Element"
+    # Handle <class 'typename'> pattern
+    if match := _CLASS_PATTERN.match(s):
+        type_name = match.group(1)
+        # Strip module prefix if present (e.g., 'builtins.str' -> 'str')
+        return type_name.rsplit(".", 1)[-1]
+
+    # Replace module-qualified names with just the class name
     s = _MODULE_PATTERN.sub(r"\2", s)
 
     return s

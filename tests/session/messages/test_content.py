@@ -109,17 +109,17 @@ class TestSystemContent:
     def test_rendered_when_minimal_then_empty(self):
         """Test rendered with no fields returns empty string."""
         content = SystemContent.create()
-        assert content.rendered == ""
+        assert content.render() == ""
 
     def test_rendered_when_system_message_then_message(self):
         """Test rendered with only system_message returns message."""
         content = SystemContent.create(system_message="Test message")
-        assert content.rendered == "Test message"
+        assert content.render() == "Test message"
 
     def test_rendered_when_system_datetime_true_then_timestamp(self):
         """Test rendered with system_datetime=True includes ISO timestamp."""
         content = SystemContent.create(system_datetime=True)
-        rendered = content.rendered
+        rendered = content.render()
         assert "System Time:" in rendered
         assert "T" in rendered  # ISO format has 'T'
 
@@ -127,7 +127,7 @@ class TestSystemContent:
         """Test rendered with system_datetime as string uses custom timestamp."""
         timestamp = "2025-11-20T10:00:00Z"
         content = SystemContent.create(system_datetime=timestamp)
-        assert content.rendered == f"System Time: {timestamp}"
+        assert content.render() == f"System Time: {timestamp}"
 
     def test_rendered_when_datetime_factory_then_calls_factory(self):
         """Test rendered with datetime_factory calls the factory."""
@@ -136,14 +136,14 @@ class TestSystemContent:
             return "custom-timestamp"
 
         content = SystemContent.create(datetime_factory=factory)
-        assert "System Time: custom-timestamp" in content.rendered
+        assert "System Time: custom-timestamp" in content.render()
 
     def test_rendered_when_message_and_datetime_then_both(self):
         """Test rendered with both message and datetime includes both."""
         content = SystemContent.create(
             system_message="Test message", system_datetime="2025-11-20T10:00:00Z"
         )
-        rendered = content.rendered
+        rendered = content.render()
         assert "System Time: 2025-11-20T10:00:00Z" in rendered
         assert "Test message" in rendered
 
@@ -192,8 +192,8 @@ class TestInstructionContent:
 
     def test_create_when_response_model_then_set(self):
         """Test create with response_model sets the field."""
-        content = InstructionContent.create(response_model=SampleResponseModel)
-        assert content.response_model is SampleResponseModel
+        content = InstructionContent.create(request_model=SampleResponseModel)
+        assert content.request_model is SampleResponseModel
 
     def test_create_when_images_then_set(self):
         """Test create with images sets the field."""
@@ -209,20 +209,21 @@ class TestInstructionContent:
     def test_rendered_when_instruction_only_then_yaml(self):
         """Test rendered with only instruction returns YAML format."""
         content = InstructionContent.create(instruction="Test instruction")
-        rendered = content.rendered
+        rendered = content.render()
         assert isinstance(rendered, str)
         assert "Instruction:" in rendered
 
     def test_rendered_when_context_then_yaml_includes_context(self):
         """Test rendered with context includes context in YAML."""
         content = InstructionContent.create(instruction="Test", context=[{"key": "value"}])
-        rendered = content.rendered
+        rendered = content.render()
         assert "Context:" in rendered
 
-    def test_rendered_when_tool_schemas_pydantic_then_typescript(self):
-        """Test rendered with Pydantic tool schemas includes TypeScript schema."""
-        content = InstructionContent.create(instruction="Use tools", tool_schemas=[SampleToolModel])
-        rendered = content.rendered
+    def test_rendered_when_tool_schemas_string_then_included(self):
+        """Test rendered with string tool schemas includes them."""
+        tool_schema_str = "interface SampleToolModel { query: string; limit: number; }"
+        content = InstructionContent.create(instruction="Use tools", tool_schemas=[tool_schema_str])
+        rendered = content.render()
         assert "Tools:" in rendered
         assert "SampleToolModel" in rendered
 
@@ -231,18 +232,17 @@ class TestInstructionContent:
         content = InstructionContent.create(
             instruction="Use tools", tool_schemas=[sample_tool_dict]
         )
-        rendered = content.rendered
+        rendered = content.render()
         assert "Tools:" in rendered
         assert "search" in rendered
 
-    def test_rendered_when_response_model_then_includes_schema(self):
-        """Test rendered with response_model includes output types and format."""
+    def test_rendered_when_request_model_then_includes_schema(self):
+        """Test rendered with request_model includes response format."""
         content = InstructionContent.create(
-            instruction="Generate", response_model=SampleResponseModel
+            instruction="Generate", request_model=SampleResponseModel
         )
-        rendered = content.rendered
-        assert "Output Types:" in rendered
-        assert "ResponseFormat:" in rendered
+        rendered = content.render()
+        assert "## ResponseFormat" in rendered
         assert "MUST RETURN VALID JSON" in rendered
 
     def test_rendered_when_images_then_returns_list(self):
@@ -250,7 +250,7 @@ class TestInstructionContent:
         content = InstructionContent.create(
             instruction="Analyze", images=["https://example.com/image.png"]
         )
-        rendered = content.rendered
+        rendered = content.render()
         assert isinstance(rendered, list)
         assert any(block.get("type") == "text" for block in rendered)
         assert any(block.get("type") == "image_url" for block in rendered)
@@ -262,7 +262,7 @@ class TestInstructionContent:
             images=["https://example.com/image.png"],
             image_detail="high",
         )
-        rendered = content.rendered
+        rendered = content.render()
         assert isinstance(rendered, list)
         image_block = next(block for block in rendered if block.get("type") == "image_url")
         assert image_block["image_url"]["detail"] == "high"
@@ -410,12 +410,12 @@ class TestAssistantResponseContent:
     def test_rendered_when_unset_then_empty_string(self):
         """Test rendered with Unset assistant_response returns empty string."""
         content = AssistantResponseContent.create()
-        assert content.rendered == ""
+        assert content.render() == ""
 
     def test_rendered_when_set_then_returns_response(self):
         """Test rendered with set assistant_response returns the response."""
         content = AssistantResponseContent.create(assistant_response="Test response")
-        assert content.rendered == "Test response"
+        assert content.render() == "Test response"
 
     def test_from_dict_when_valid_then_creates(self):
         """Test from_dict with valid data creates instance."""
@@ -428,7 +428,7 @@ class TestAssistantResponseContent:
         data = {"assistant_response": None}
         content = AssistantResponseContent.from_dict(data)
         # Should handle None gracefully (sentinel behavior)
-        assert content.rendered == ""
+        assert content.render() == ""
 
 
 # =============================================================================
@@ -466,21 +466,21 @@ class TestActionRequestContent:
     def test_rendered_when_minimal_then_yaml_with_empty_args(self):
         """Test rendered with no function includes empty arguments."""
         content = ActionRequestContent.create()
-        rendered = content.rendered
+        rendered = content.render()
         # minimal_yaml of {"arguments": {}} produces "{}\n"
         assert rendered == "{}\n"
 
     def test_rendered_when_function_then_yaml_includes_function(self):
         """Test rendered with function includes function in YAML."""
         content = ActionRequestContent.create(function="search")
-        rendered = content.rendered
+        rendered = content.render()
         assert "function:" in rendered or "function: search" in rendered
 
     def test_rendered_when_arguments_then_yaml_includes_arguments(self):
         """Test rendered with arguments includes arguments in YAML."""
         args = {"query": "test", "limit": 10}
         content = ActionRequestContent.create(function="search", arguments=args)
-        rendered = content.rendered
+        rendered = content.render()
         assert "arguments:" in rendered
         assert "query" in rendered or "test" in rendered
 
@@ -536,21 +536,21 @@ class TestActionResponseContent:
     def test_rendered_when_success_then_includes_result(self):
         """Test rendered with success includes result in YAML."""
         content = ActionResponseContent.create(request_id="req-123", result={"data": "test"})
-        rendered = content.rendered
+        rendered = content.render()
         assert "success: true" in rendered or "success: True" in rendered
         assert "result:" in rendered or "data" in rendered
 
     def test_rendered_when_error_then_includes_error(self):
         """Test rendered with error includes error in YAML."""
         content = ActionResponseContent.create(request_id="req-123", error="Something failed")
-        rendered = content.rendered
+        rendered = content.render()
         assert "success: false" in rendered or "success: False" in rendered
         assert "error:" in rendered or "Something failed" in rendered
 
     def test_rendered_when_request_id_then_includes_id(self):
         """Test rendered includes request_id when set."""
         content = ActionResponseContent.create(request_id="req-123", result="ok")
-        rendered = content.rendered
+        rendered = content.render()
         assert "request_id:" in rendered or "req-123" in rendered
 
     def test_from_dict_when_success_then_creates(self):

@@ -61,7 +61,7 @@ class SystemContent(MessageContent):
         parts = []
         if not self._is_sentinel(self.system_datetime):
             timestamp = (
-                now_utc().isoformat(spec="seconds")
+                now_utc().isoformat(timespec="seconds")
                 if self.system_datetime is True
                 else self.system_datetime
             )
@@ -168,7 +168,7 @@ class InstructionContent(MessageContent):
             instruction=instruction,
             context=context,
             tool_schemas=tool_schemas,
-            response_model=request_model,
+            request_model=request_model,
             images=images,
             image_detail=image_detail,
         )
