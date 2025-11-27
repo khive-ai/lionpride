@@ -52,7 +52,7 @@ from lionpride.session.messages.content import (
     SystemContent,
 )
 from lionpride.session.messages.message import Message
-from lionpride.session.messages.utils import prepare_messages_for_chat
+from lionpride.session.messages.prepare_msg import prepare_messages_for_chat
 
 
 # Fixtures

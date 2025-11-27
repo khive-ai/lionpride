@@ -13,7 +13,7 @@ from lionpride.session.messages import (
     InstructionContent,
     Message,
 )
-from lionpride.session.messages.utils import prepare_messages_for_chat
+from lionpride.session.messages.prepare_msg import prepare_messages_for_chat
 from lionpride.types.spec_adapters.pydantic_field import PydanticSpecAdapter
 
 from .generate import generate

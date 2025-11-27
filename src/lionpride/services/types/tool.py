@@ -222,12 +222,15 @@ class Tool(ServiceBackend):
 
         # Priority 2: Use tool_schema (fallback)
         if self.tool_schema:
-            params = self.tool_schema.get("parameters", {})
             desc = self.tool_schema.get("description", "")
-
-            if params and params.get("properties"):
-                params_ts = schema_handlers.typescript_schema(params)
+            # Check for properties at top level (auto-generated) or inside parameters (OpenAI format)
+            if self.tool_schema.get("properties"):
+                params_ts = schema_handlers.typescript_schema(self.tool_schema)
                 return f"# {desc}\n{params_ts}" if desc else params_ts
+            elif params := self.tool_schema.get("parameters", {}):
+                if params.get("properties"):
+                    params_ts = schema_handlers.typescript_schema(params)
+                    return f"# {desc}\n{params_ts}" if desc else params_ts
 
             return f"# {desc}" if desc else ""
 

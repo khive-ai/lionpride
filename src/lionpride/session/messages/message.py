@@ -45,16 +45,6 @@ class Message(Node):
         """Auto-derive role from content type via ClassVar."""
         return self.content.role
 
-    @property
-    def chat_msg(self) -> dict[str, Any] | None:
-        """Format for chat API: {"role": "...", "content": "..."}"""
-        return self.content.chat_msg
-
-    @property
-    def rendered(self) -> str | list[dict[str, Any]]:
-        """Rendered content (delegates to content.rendered)."""
-        return self.content.rendered
-
     @field_validator("content", mode="before")
     @classmethod
     def _validate_content(cls, v: Any) -> MessageContent:
@@ -69,7 +59,7 @@ class Message(Node):
 
         # Infer content type from dict keys
         if any(
-            k in v for k in ("instruction", "context", "response_model", "tool_schemas", "images")
+            k in v for k in ("instruction", "context", "request_model", "tool_schemas", "images")
         ):
             return InstructionContent.create(**v)
         if "assistant_response" in v:
@@ -95,9 +85,7 @@ class Message(Node):
 
     def clone(self, *, sender: SenderRecipient | None = None) -> "Message":
         """Create copy with new ID and lineage tracking in metadata."""
-        current = self.to_dict()
-        current.pop("id", None)
-        current.pop("created_at", None)
+        current = self.to_dict(exclude={"id", "created_at"})
         metadata = current.get("metadata", {})
         metadata["clone_from"] = str(self.id)
         metadata["original_created_at"] = self.created_at.isoformat()

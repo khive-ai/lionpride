@@ -29,7 +29,7 @@ Target: 90%+ coverage for src/lionpride/session/messages/message.py
 
 ### Chat API Format (lines 48-53)
 - chat_msg property returns {"role": "...", "content": "..."}
-- Uses role.value and content.rendered
+- Uses role.value and content.render()
 - Returns None on exception (defensive)
 
 ### Immutability (lines 99-117)
@@ -206,10 +206,10 @@ def test_message_rejects_non_dict_non_content():
 # ===========================
 
 
-def test_chat_msg_format(instruction_content):
-    """Test chat_msg property returns correct format."""
+def test_to_chat_format(instruction_content):
+    """Test content.to_chat() returns correct format."""
     msg = Message(content=instruction_content)
-    chat_msg = msg.chat_msg
+    chat_msg = msg.content.to_chat()
 
     assert chat_msg is not None
     assert "role" in chat_msg
@@ -218,8 +218,8 @@ def test_chat_msg_format(instruction_content):
     assert isinstance(chat_msg["content"], str)
 
 
-def test_chat_msg_all_roles():
-    """Test chat_msg format for all role types."""
+def test_to_chat_all_roles():
+    """Test to_chat() format for all role types."""
     test_cases = [
         ({"system_message": "test"}, "system"),
         ({"instruction": "test"}, "user"),
@@ -230,22 +230,20 @@ def test_chat_msg_all_roles():
 
     for content_dict, expected_role in test_cases:
         msg = Message(content=content_dict)
-        chat_msg = msg.chat_msg
+        chat_msg = msg.content.to_chat()
         assert chat_msg["role"] == expected_role
 
 
-def test_chat_msg_defensive_none_on_exception():
-    """Test chat_msg returns None on exception (defensive)."""
-    # Create message with broken content that will fail on rendered
+def test_to_chat_defensive_none_on_exception():
+    """Test to_chat() returns None on exception (defensive)."""
     from dataclasses import dataclass
 
     from lionpride.session.messages.content import MessageContent
 
     @dataclass
     class BrokenContent(MessageContent):
-        @property
-        def rendered(self):
-            raise RuntimeError("Broken rendered")
+        def render(self, *args, **kwargs):
+            raise RuntimeError("Broken render")
 
         @classmethod
         def from_dict(cls, data):
@@ -256,7 +254,7 @@ def test_chat_msg_defensive_none_on_exception():
     object.__setattr__(msg, "content", BrokenContent())
 
     # Should return None instead of raising
-    assert msg.chat_msg is None
+    assert msg.content.to_chat() is None
 
 
 # ===========================
@@ -509,10 +507,10 @@ def test_message_with_empty_metadata():
     assert msg.metadata == {}
 
 
-def test_message_rendered_property(instruction_content):
-    """Test rendered property delegates to content."""
+def test_message_render_delegates_to_content(instruction_content):
+    """Test render() delegates to content."""
     msg = Message(content=instruction_content)
-    assert msg.rendered == instruction_content.rendered
+    assert msg.content.render() == instruction_content.render()
 
 
 def test_message_with_complex_instruction():
@@ -526,12 +524,12 @@ def test_message_with_complex_instruction():
     content = InstructionContent.create(
         instruction="Answer the question",
         context=["ctx1", "ctx2"],
-        response_model=OutputModel,
+        request_model=OutputModel,
     )
 
     msg = Message(content=content)
     assert msg.role == MessageRole.USER
-    assert "ResponseFormat" in msg.rendered  # Structured output section
+    assert "ResponseFormat" in msg.content.render()  # Structured output section
 
 
 def test_message_none_sender_recipient():

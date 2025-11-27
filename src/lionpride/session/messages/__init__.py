@@ -16,7 +16,7 @@ from .content import (
     SystemContent,
 )
 from .message import Message
-from .utils import prepare_messages_for_chat
+from .prepare_msg import prepare_messages_for_chat
 
 __all__ = (
     "ActionRequestContent",

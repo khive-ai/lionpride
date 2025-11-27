@@ -1,7 +1,7 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any
+from typing import Any, Literal
 
 from lionpride.core import Pile, Progression
 from lionpride.types import not_sentinel
@@ -37,6 +37,7 @@ def prepare_messages_for_chat(
     progression: Progression | None = None,
     new_instruction: Message | None = None,
     to_chat: bool = False,
+    structure_format: Literal["json", "lndl"] = "json",
 ) -> list[MessageContent] | list[dict[str, Any]]:
     """Prepare messages for chat API with intelligent content organization.
 
@@ -74,7 +75,7 @@ def prepare_messages_for_chat(
 
     first_msg = to_use[0]
     if isinstance(first_msg.content, SystemContent):
-        system_text = first_msg.content.rendered
+        system_text = first_msg.content.render()
         start_idx = 1
 
     # Phase 2: Process messages - collect action outputs for next instruction
@@ -89,7 +90,7 @@ def prepare_messages_for_chat(
 
         # ActionResponseContent: collect rendered output
         if isinstance(content, ActionResponseContent):
-            pending_actions.append(content.rendered)
+            pending_actions.append(content.render())
             continue
 
         # SystemContent in middle: skip
@@ -98,7 +99,7 @@ def prepare_messages_for_chat(
 
         # InstructionContent: embed pending action outputs
         if isinstance(content, InstructionContent):
-            updates = {"tool_schemas": None, "response_model": None}
+            updates = {"tool_schemas": None, "request_model": None}
             if pending_actions:
                 updates["context"] = _build_context(content, pending_actions)
                 pending_actions = []
@@ -148,5 +149,9 @@ def prepare_messages_for_chat(
         _use_msgs.append(new_instruction.content.with_updates(copy_containers="deep", **updates))
 
     if to_chat:
-        return [m.chat_msg for m in _use_msgs if not_sentinel(m.chat_msg, True, True)]
+        return [
+            m.to_chat(structure_format)
+            for m in _use_msgs
+            if not_sentinel(m.to_chat(structure_format), True, True)
+        ]
     return _use_msgs
