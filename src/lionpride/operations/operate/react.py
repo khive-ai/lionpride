@@ -259,7 +259,7 @@ Final answer: {{"reasoning": "...", "action_requests": [], "is_done": true, "fin
                 from lionpride.session.messages import ActionResponseContent, Message
 
                 for action_resp in action_responses:
-                    action_content = ActionResponseContent(
+                    action_content = ActionResponseContent.create(
                         request_id=action_resp.function,
                         result=action_resp.output,
                     )

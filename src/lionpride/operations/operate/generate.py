@@ -47,7 +47,7 @@ async def generate(
             return response.raw_response
         case "message":
             return Message(
-                content=AssistantResponseContent(
+                content=AssistantResponseContent.create(
                     assistant_response=response.data,
                 ),
                 metadata={

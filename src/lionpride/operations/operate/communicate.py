@@ -80,12 +80,12 @@ async def communicate(
     imodel = imodel_direct if imodel_direct else session.services.get(imodel_name)
 
     # Create initial instruction message
-    ins_content = InstructionContent(
+    ins_content = InstructionContent.create(
         instruction=instruction,
         context=context,
         images=images,
         image_detail=image_detail,
-        response_model=response_model,
+        request_model=response_model,
     )
     ins_msg = Message(
         content=ins_content,
@@ -118,7 +118,7 @@ async def communicate(
 
         # Create assistant message for persistence
         assistant_msg = Message(
-            content=AssistantResponseContent(assistant_response=response_text),
+            content=AssistantResponseContent.create(assistant_response=response_text),
             sender=imodel.name,
             recipient=branch.user or session.user or "user",
             metadata={"raw_response": raw_response, **metadata},
@@ -158,7 +158,7 @@ async def communicate(
                 f"Your previous response failed validation with error:\n{error}\n\n"
                 f"Please provide a valid response that matches the expected format."
             )
-            ins_content = InstructionContent(instruction=retry_instruction)
+            ins_content = InstructionContent.create(instruction=retry_instruction)
             ins_msg = Message(
                 content=ins_content,
                 sender=branch.user or session.user or "user",
