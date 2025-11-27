@@ -221,7 +221,7 @@ class TestBuilder:
         # Verify aggregation metadata
         agg_op = builder._nodes["summary"]
         assert agg_op.metadata.get("aggregation") is True
-        assert "aggregation_sources" in agg_op.parameters
+        assert "aggregation_sources" in agg_op.metadata
 
     def test_duplicate_name_error(self):
         """Test error on duplicate operation names."""
