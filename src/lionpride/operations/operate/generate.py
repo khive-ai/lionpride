@@ -17,7 +17,6 @@ from lionpride.types import is_sentinel
 from .types import GenerateParams
 
 if TYPE_CHECKING:
-    from lionpride.services.types import iModel
     from lionpride.services.types.backend import Calling
     from lionpride.session import Branch, Session
 
@@ -67,25 +66,6 @@ def handle_return(calling: Calling, return_as: ReturnAs) -> Any:
             )
         case _:
             raise ValueError(f"Unsupported return_as: {return_as}")
-
-
-async def _generate(
-    imodel: iModel,
-    return_as: ReturnAs = "calling",
-    **kwargs,
-) -> Any:
-    """Internal helper: direct imodel.invoke() wrapper.
-
-    Args:
-        imodel: Model to invoke
-        return_as: Output format (text|raw|message|calling)
-        **kwargs: Arguments passed to imodel.invoke()
-
-    Returns:
-        Result in format specified by return_as
-    """
-    calling = await imodel.invoke(**kwargs)
-    return handle_return(calling, return_as)
 
 
 async def generate(
