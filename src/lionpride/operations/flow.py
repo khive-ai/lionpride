@@ -177,7 +177,11 @@ class DependencyAwareExecutor:
                     )
 
     async def _preallocate_branches(self) -> None:
-        """Pre-allocate branches for all operations."""
+        """Pre-allocate branches for all operations.
+
+        Respects per-operation branch assignment via metadata["branch"].
+        Falls back to default_branch if no per-operation branch specified.
+        """
         # Resolve default branch
         default_branch = self._default_branch
         if isinstance(default_branch, str):
@@ -185,14 +189,53 @@ class DependencyAwareExecutor:
         elif default_branch is None:
             default_branch = getattr(self.session, "default_branch", None)
 
-        # For now, all operations use the same branch
-        # In future, support per-operation branch assignment
+        # Allocate branches per operation, respecting metadata["branch"] if set
         for node in self.graph.nodes:
             if isinstance(node, Operation):
-                self.operation_branches[node.id] = default_branch
+                # Check for per-operation branch assignment from builder
+                op_branch_ref = node.metadata.get("branch")
+                if op_branch_ref is not None:
+                    # Resolve the branch reference
+                    op_branch = self._resolve_operation_branch(op_branch_ref)
+                    if op_branch is not None:
+                        self.operation_branches[node.id] = op_branch
+                    else:
+                        # Could not resolve - fall back to default
+                        self.operation_branches[node.id] = default_branch
+                else:
+                    # No per-operation branch - use default
+                    self.operation_branches[node.id] = default_branch
 
         if self.verbose:
             print(f"Pre-allocated branches for {len(self.operation_branches)} operations")
+
+    def _resolve_operation_branch(self, branch_ref: Any) -> Branch | None:
+        """Resolve a branch reference from operation metadata.
+
+        Args:
+            branch_ref: UUID, string name, or Branch object
+
+        Returns:
+            Resolved Branch, or None if not found
+        """
+        from uuid import UUID
+
+        # If it's already a Branch-like object (has id attribute), use as-is
+        if hasattr(branch_ref, "id") and hasattr(branch_ref, "order"):
+            return branch_ref
+
+        # If it's a UUID, look up in session progressions
+        if isinstance(branch_ref, UUID):
+            return self.session.conversations.progressions.get(branch_ref)
+
+        # If it's a string, try to get progression by name
+        if isinstance(branch_ref, str):
+            try:
+                return self.session.conversations.get_progression(branch_ref)
+            except KeyError:
+                return None
+
+        return None
 
     async def _execute_operation(
         self,
