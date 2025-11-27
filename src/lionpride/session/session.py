@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import Field
 
 from lionpride.core import Element, Flow, Progression
 from lionpride.operations.registry import OperationRegistry
@@ -15,7 +15,7 @@ from lionpride.services import ServiceRegistry
 from .messages import Message, SenderRecipient
 
 if TYPE_CHECKING:
-    from lionpride.services.types import Calling, iModel
+    from lionpride.services.types import Calling
 
 __all__ = ("Branch", "Session")
 
@@ -23,42 +23,22 @@ __all__ = ("Branch", "Session")
 class Branch(Progression):
     """Named progression of messages within a session.
 
-    Attributes:
-        session_id: Parent Session UUID
-        user: User identifier
-        system_message: System message UUID (always at order[0] if set)
-        capabilities: Service capability names available to this branch
+    Branch is a Progression (ordered UUIDs) with session context:
+    - user: who is commanding this branch
+    - system_message: system message UUID at order[0]
+    - capabilities: structured output schemas allowed
+    - resources: backend services allowed
 
-    Note:
-        Branch holds an optional Session reference for convenience methods
-        (generate, operate, react). This reference is set automatically when
-        creating branches via Session.create_branch() or Session.fork().
+    Operations are invoked via Session.conduct(), not Branch methods.
     """
 
-    session_id: UUID = Field(..., description="Parent Session UUID")
+    session_id: UUID = Field(..., frozen=True, description="Parent Session UUID")
     user: str | UUID | None = Field(default=None, description="User identifier")
     system_message: UUID | None = Field(default=None, description="System message UUID")
-    capabilities: set[str] = Field(default_factory=set, description="Service capabilities")
-
-    # Private session reference for convenience methods
-    _session: Any = PrivateAttr(default=None)
-
-    def _bind_session(self, session: Session) -> Branch:
-        """Bind session reference for convenience methods.
-
-        Called automatically by Session.create_branch() and Session.fork().
-        """
-        self._session = session
-        return self
-
-    def _require_session(self) -> Session:
-        """Get bound session or raise error."""
-        if self._session is None:
-            raise RuntimeError(
-                "Branch not bound to session. Use session.create_branch() "
-                "or branch._bind_session(session) first."
-            )
-        return self._session
+    capabilities: set[str] = Field(
+        default_factory=set, description="Structured output schemas allowed"
+    )
+    resources: set[str] = Field(default_factory=set, description="Backend service names allowed")
 
     def set_system_message(self, message_id: UUID) -> None:
         """Set system message, ensuring it's at order[0]."""
@@ -70,220 +50,9 @@ class Branch(Progression):
         else:
             self.insert(0, message_id)
 
-    # =========================================================================
-    # Convenience methods (require bound session)
-    # =========================================================================
-
-    async def generate(
-        self,
-        *,
-        imodel: iModel,
-        return_as: str = "text",
-        **model_kwargs,
-    ) -> Any:
-        """Stateless text generation - thin wrapper around operations.generate.
-
-        Args:
-            imodel: iModel interface to use
-            return_as: "text" | "raw" | "message" (default: "text")
-            **model_kwargs: Passed to imodel.invoke() (messages, model, etc.)
-
-        Returns:
-            Based on return_as: text string, raw dict, or Message
-        """
-        from lionpride.operations.operate.generate import generate as generate_op
-
-        if imodel is None:
-            raise ValueError("generate requires 'imodel' parameter")
-
-        session = self._require_session()
-        return await generate_op(
-            session,
-            self,
-            {"imodel": imodel.name, "return_as": return_as, **model_kwargs},
-        )
-
-    async def communicate(
-        self,
-        instruction: str,
-        *,
-        imodel: iModel,
-        response_model: type[BaseModel] | None = None,
-        context: dict[str, Any] | None = None,
-        images: list[str] | None = None,
-        image_detail: str | None = None,
-        return_as: str = "text",
-        strict_validation: bool = False,
-        fuzzy_parse: bool = True,
-        **model_kwargs,
-    ) -> Any:
-        """Stateful chat - persists messages, optional structured output.
-
-        Args:
-            instruction: The instruction/prompt text
-            imodel: iModel interface to use
-            response_model: Optional Pydantic model for structured output
-            context: Optional context dict
-            images: Optional image URLs
-            image_detail: Optional image detail level
-            return_as: "text" | "raw" | "message" | "model" (default: "text")
-            strict_validation: If True, raise on validation failure
-            fuzzy_parse: Enable fuzzy JSON parsing (default: True)
-            **model_kwargs: Additional model parameters
-
-        Returns:
-            Based on return_as: text, raw dict, Message, or validated model
-        """
-        from lionpride.operations.operate import communicate as communicate_op
-
-        if imodel is None:
-            raise ValueError("communicate requires 'imodel' parameter")
-
-        session = self._require_session()
-        return await communicate_op(
-            session,
-            self,
-            {
-                "instruction": instruction,
-                "imodel": imodel.name,
-                "response_model": response_model,
-                "context": context,
-                "images": images,
-                "image_detail": image_detail,
-                "return_as": return_as,
-                "strict_validation": strict_validation,
-                "fuzzy_parse": fuzzy_parse,
-                **model_kwargs,
-            },
-        )
-
-    async def operate(
-        self,
-        instruction: str,
-        *,
-        imodel: iModel,
-        response_model: type[BaseModel] | None = None,
-        operative: Any = None,
-        context: dict[str, Any] | None = None,
-        tools: bool = False,
-        actions: bool = False,
-        reason: bool = False,
-        use_lndl: bool = False,
-        lndl_threshold: float = 0.85,
-        images: list[str] | None = None,
-        image_detail: str | None = None,
-        return_message: bool = False,
-        **model_kwargs,
-    ) -> Any:
-        """Operate with structured output (Pydantic model or LNDL).
-
-        Args:
-            instruction: The instruction/prompt text
-            imodel: iModel interface to use
-            response_model: Pydantic BaseModel for structured output
-            operative: Optional Operative instance
-            context: Optional context dict
-            tools: Include tool schemas in prompt
-            actions: Enable tool execution
-            reason: Include reasoning field in output
-            use_lndl: Use LNDL validation (fuzzy fallback)
-            lndl_threshold: Confidence threshold for LNDL (default 0.85)
-            images: Optional image URLs
-            image_detail: Optional image detail level
-            return_message: If True, return (result, Message) tuple
-            **model_kwargs: Additional model parameters (including model_name)
-
-        Returns:
-            Parsed response model, or (result, Message) if return_message=True
-        """
-        from lionpride.operations.operate.factory import operate as operate_op
-
-        session = self._require_session()
-        return await operate_op(
-            session,
-            self,
-            {
-                "instruction": instruction,
-                "imodel": imodel,
-                "response_model": response_model,
-                "operative": operative,
-                "context": context,
-                "tools": tools,
-                "actions": actions,
-                "reason": reason,
-                "use_lndl": use_lndl,
-                "lndl_threshold": lndl_threshold,
-                "images": images,
-                "image_detail": image_detail,
-                "return_message": return_message,
-                "model_kwargs": model_kwargs,
-            },
-        )
-
-    async def react(
-        self,
-        instruction: str,
-        *,
-        imodel: iModel,
-        tools: list[Any],
-        response_model: type[BaseModel] | None = None,
-        context: dict[str, Any] | None = None,
-        max_steps: int = 5,
-        reason: bool = True,
-        use_lndl: bool = False,
-        lndl_threshold: float = 0.85,
-        verbose: bool = False,
-        **model_kwargs,
-    ) -> Any:
-        """ReAct: Multi-step reasoning with tool calling.
-
-        Implements the Reason-Action loop:
-        1. LLM reasons about task and decides on action
-        2. If action requested, execute tool(s)
-        3. Feed results back to LLM
-        4. Repeat until LLM provides final answer or max_steps reached
-
-        Args:
-            instruction: The instruction/prompt text
-            imodel: iModel interface to use
-            tools: List of tools available for this task
-            response_model: Optional Pydantic model for final structured output
-            context: Optional context dict
-            max_steps: Maximum reasoning steps (default 5)
-            reason: Include reasoning in each step (default True)
-            use_lndl: Use LNDL validation
-            lndl_threshold: Confidence threshold for LNDL
-            verbose: Print step-by-step execution
-            **model_kwargs: Additional model parameters (including model_name)
-
-        Returns:
-            Final response (structured if response_model provided)
-        """
-        from lionpride.operations.operate.react import react as react_op
-
-        session = self._require_session()
-        return await react_op(
-            session,
-            self,
-            {
-                "instruction": instruction,
-                "imodel": imodel,
-                "tools": tools,
-                "response_model": response_model,
-                "context": context,
-                "max_steps": max_steps,
-                "reason": reason,
-                "use_lndl": use_lndl,
-                "lndl_threshold": lndl_threshold,
-                "verbose": verbose,
-                "model_kwargs": model_kwargs,
-            },
-        )
-
     def __repr__(self) -> str:
         name_str = f" name='{self.name}'" if self.name else ""
-        bound_str = " bound" if self._session is not None else ""
-        return f"Branch(messages={len(self)}, session={self.session_id}{name_str}{bound_str})"
+        return f"Branch(messages={len(self)}, session={self.session_id}{name_str})"
 
 
 class Session(Element):
@@ -383,17 +152,16 @@ class Session(Element):
         name: str | None = None,
         system_message: Message | UUID | None = None,
         capabilities: set[str] | None = None,
+        resources: set[str] | None = None,
         set_as_default: bool | None = None,
     ) -> Branch:
         """Create new branch for isolated conversation threads.
 
-        The branch is automatically bound to this session, enabling
-        convenience methods like branch.generate(), branch.operate(), etc.
-
         Args:
             name: Optional branch name (auto-generated if None)
             system_message: Optional system message to set
-            capabilities: Optional capabilities set
+            capabilities: Structured output schemas allowed
+            resources: Backend service names allowed
             set_as_default: If True, set as default branch. If None (default),
                            auto-sets as default if this is the first branch.
 
@@ -407,13 +175,11 @@ class Session(Element):
         branch_name = name or f"branch_{len(self.branches)}"
         branch = Branch(
             session_id=self.id,
-            user=self.id,
+            user=self.id,  # Branch user = session id
             name=branch_name,
             capabilities=capabilities or set(),
+            resources=resources or set(),
         )
-
-        # Auto-bind session reference for convenience methods
-        branch._bind_session(self)
 
         if system_message is not None:
             if isinstance(system_message, Message):
@@ -438,24 +204,32 @@ class Session(Element):
         name: str | None = None,
         sender: SenderRecipient | None = None,
         capabilities: set[str] | None = None,
+        resources: set[str] | None = None,
     ) -> Branch:
         """Fork branch to create divergent conversation path.
 
         Creates a new branch with cloned messages for independent exploration.
-        The forked branch is automatically bound to this session.
+
+        Args:
+            branch: Source branch to fork from
+            name: Name for forked branch (auto-generated if None)
+            sender: Optional sender for cloned messages
+            capabilities: Structured output schemas (None = copy from source)
+            resources: Backend services (None = copy from source)
+
+        Returns:
+            New forked Branch
         """
         if isinstance(branch, (UUID, str)):
             branch = self.conversations.get_progression(branch)
 
         forked = Branch(
             session_id=self.id,
-            user=branch.user,
+            user=self.id,  # Branch user = session id
             name=name or f"{branch.name}_fork",
-            capabilities=capabilities or branch.capabilities.copy(),
+            capabilities=capabilities if capabilities is not None else branch.capabilities.copy(),
+            resources=resources if resources is not None else branch.resources.copy(),
         )
-
-        # Auto-bind session reference for convenience methods
-        forked._bind_session(self)
 
         forked_system_id = None
         for msg_id in branch:
@@ -697,6 +471,38 @@ class Session(Element):
         await op.invoke()
 
         return op
+
+    def register_operation(
+        self,
+        name: str,
+        factory,
+        *,
+        override: bool = False,
+    ) -> None:
+        """Register custom operation factory.
+
+        Enables arbitrary workflow patterns including nested DAGs.
+
+        Args:
+            name: Operation name for conduct() and Builder
+            factory: Async function (session, branch, params) -> result
+            override: Allow replacing existing operation
+
+        Example:
+            async def my_nested_dag(session, branch, params):
+                # Build inner graph
+                builder = Builder()
+                builder.add("step1", "communicate", {...})
+                builder.add("step2", "operate", {...}, depends_on=["step1"])
+                graph = builder.build()
+
+                # Execute nested flow
+                return await session.flow(graph, branch)
+
+            session.register_operation("nested_dag", my_nested_dag)
+            result = await session.conduct("nested_dag", branch, ...)
+        """
+        self.operations.register(name, factory, override=override)
 
     def __repr__(self) -> str:
         return (
