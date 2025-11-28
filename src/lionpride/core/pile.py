@@ -320,34 +320,46 @@ class Pile(Element, PydapterAdaptable, PydapterAsyncAdaptable, Generic[T]):
 
     # ==================== Set-like Operations ====================
 
+    @synchronized
     def include(self, item: T) -> bool:
-        """Include item in pile (idempotent).
+        """Include item in pile (idempotent, thread-safe).
 
         Returns:
             True if item IS in pile (membership guaranteed).
             False only if validation fails.
             Use pattern: `if pile.include(x): ...` guarantees x is in pile.
         """
-        with contextlib.suppress(Exception):
-            if item.id not in self._items:
-                self.add(item)
+        if item.id in self._items:
             return True
-        return False
+        try:
+            self._validate_type(item)
+            self._items[item.id] = item
+            self._progression.append(item.id)
+            return True
+        except Exception:
+            return False
 
+    @synchronized
     def exclude(self, item: UUID | str | Element) -> bool:
-        """Exclude item from pile (idempotent).
+        """Exclude item from pile (idempotent, thread-safe).
 
         Returns:
             True if item IS NOT in pile (absence guaranteed).
             False only if ID coercion fails.
             Use pattern: `if pile.exclude(x): ...` guarantees x is not in pile.
         """
-        with contextlib.suppress(Exception):
+        try:
             uid = self._coerce_id(item)
-            if uid in self._items:
-                self.remove(uid)
+        except Exception:
+            return False
+        if uid not in self._items:
             return True
-        return False
+        self._items.pop(uid, None)
+        try:
+            self._progression.remove(uid)
+        except ValueError:
+            pass  # Already removed from progression
+        return True
 
     # ==================== Rich __getitem__ (Type Dispatch) ====================
 

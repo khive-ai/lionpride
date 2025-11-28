@@ -563,3 +563,194 @@ class TestIntermediateResponseOptions:
                 "pct": 100,
                 "status": "complete",
             }
+
+    async def test_react_missing_communicate_params(self, session_with_model):
+        """Test missing communicate params raises ValueError (line 193)."""
+        from lionpride.operations.operate.react import react
+
+        session, model = session_with_model
+        branch = session.create_branch(name="test", resources={model.name})
+
+        # OperateParams with no communicate
+        params = ReactParams(
+            operate=OperateParams(),  # communicate is sentinel
+        )
+
+        with pytest.raises(ValueError, match=r"react requires 'operate\.communicate' params"):
+            await react(session, branch, params)
+
+    async def test_react_missing_generate_params(self, session_with_model):
+        """Test missing generate params raises ValueError (line 195)."""
+        from lionpride.operations.operate.react import react
+
+        session, model = session_with_model
+        branch = session.create_branch(name="test", resources={model.name})
+
+        # CommunicateParams with no generate
+        params = ReactParams(
+            operate=OperateParams(
+                communicate=CommunicateParams(),  # generate is sentinel
+            ),
+        )
+
+        with pytest.raises(
+            ValueError, match=r"react requires 'operate\.communicate\.generate' params"
+        ):
+            await react(session, branch, params)
+
+    async def test_react_model_name_from_imodel_attribute(self, session_with_model):
+        """Test model_name extracted from imodel.name attribute (line 213)."""
+        from lionpride.operations.operate.react import react
+
+        session, model = session_with_model
+        branch = session.create_branch(name="test", resources={model.name})
+
+        # Mock operate to complete quickly
+        with patch("lionpride.operations.operate.factory.operate") as mock_operate:
+            mock_result = MagicMock()
+            mock_result.is_done = True
+            mock_result.reasoning = "done"
+            mock_result.action_requests = None
+            mock_operate.return_value = mock_result
+
+            # Do NOT provide model_name in imodel_kwargs - use imodel.name instead
+            params = _make_react_params(
+                instruction="Test",
+                imodel=model,
+                imodel_kwargs={},  # No model_name - will use imodel.name
+            )
+
+            result = await react(session, branch, params)
+
+            assert result.completed is True
+            # Verify operate was called with model from imodel.name
+            mock_operate.assert_called()
+
+    async def test_react_verbose_with_intermediate_options(self, session_with_model, caplog):
+        """Test verbose logging with intermediate_response_options (line 237)."""
+        from lionpride.operations.operate.react import react
+
+        session, model = session_with_model
+        branch = session.create_branch(name="test", resources={model.name})
+
+        class Progress(BaseModel):
+            pct: int
+
+        with patch("lionpride.operations.operate.factory.operate") as mock_operate:
+            mock_result = MagicMock()
+            mock_result.is_done = True
+            mock_result.reasoning = "Done"
+            mock_result.action_requests = None
+            mock_result.action_responses = None
+            mock_result.intermediate_response_options = None
+            mock_operate.return_value = mock_result
+
+            params = ReactParams(
+                operate=OperateParams(
+                    communicate=CommunicateParams(
+                        generate=GenerateParams(
+                            instruction="Test",
+                            imodel=model,
+                            imodel_kwargs={"model_name": "gpt-4"},
+                        ),
+                        parse=ParseParams(),
+                    ),
+                    actions=True,
+                    reason=True,
+                ),
+                max_steps=5,
+                intermediate_response_options=[Progress],
+                return_trace=True,  # verbose=True
+            )
+
+            with caplog.at_level(logging.INFO, logger="lionpride.operations.operate.react"):
+                result = await react(session, branch, params)
+
+            assert result.completed is True
+            # Check that Operable build logging occurred
+            assert any(
+                "Built step Operable with intermediate options" in record.message
+                for record in caplog.records
+            )
+
+    async def test_react_verbose_action_responses_logging(self, session_with_model, caplog):
+        """Test verbose logging for action responses (line 308)."""
+        from lionpride.operations.operate.react import react
+        from lionpride.rules import ActionResponse
+
+        session, model = session_with_model
+        branch = session.create_branch(name="test", resources={model.name})
+
+        with patch("lionpride.operations.operate.factory.operate") as mock_operate:
+            mock_result = MagicMock()
+            mock_result.is_done = True
+            mock_result.reasoning = "Done with actions"
+            mock_result.action_requests = None
+            mock_result.action_responses = [
+                ActionResponse(function="test_tool", arguments={}, output="tool output result")
+            ]
+            mock_operate.return_value = mock_result
+
+            params = _make_react_params(
+                instruction="Test",
+                imodel=model,
+                imodel_kwargs={"model_name": "gpt-4"},
+                return_trace=True,  # verbose=True
+            )
+
+            with caplog.at_level(logging.INFO, logger="lionpride.operations.operate.react"):
+                result = await react(session, branch, params)
+
+            assert result.completed is True
+            # Check that tool response logging occurred
+            assert any("Tool test_tool:" in record.message for record in caplog.records)
+
+    async def test_react_intermediate_options_as_dict(self, session_with_model):
+        """Test intermediate_response_options as dict (lines 317-318)."""
+        from lionpride.operations.operate.react import react
+
+        session, model = session_with_model
+        branch = session.create_branch(name="test", resources={model.name})
+
+        class Progress(BaseModel):
+            pct: int
+
+        with patch("lionpride.operations.operate.factory.operate") as mock_operate:
+            mock_result = MagicMock()
+            mock_result.is_done = True
+            mock_result.reasoning = "Done"
+            mock_result.action_requests = None
+            mock_result.action_responses = None
+            # Return intermediate_response_options as a plain dict (not a model)
+            mock_result.intermediate_response_options = {
+                "progress": {"pct": 50},
+                "status": "in_progress",
+                "empty_field": None,  # Should be filtered out
+            }
+            mock_operate.return_value = mock_result
+
+            params = ReactParams(
+                operate=OperateParams(
+                    communicate=CommunicateParams(
+                        generate=GenerateParams(
+                            instruction="Test",
+                            imodel=model,
+                            imodel_kwargs={"model_name": "gpt-4"},
+                        ),
+                        parse=ParseParams(),
+                    ),
+                    actions=True,
+                    reason=True,
+                ),
+                max_steps=5,
+                intermediate_response_options=[Progress],
+            )
+
+            result = await react(session, branch, params)
+
+            assert result.completed is True
+            # Dict intermediate options should be captured (with None values filtered)
+            assert result.steps[0].intermediate_options == {
+                "progress": {"pct": 50},
+                "status": "in_progress",
+            }

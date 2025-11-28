@@ -830,6 +830,44 @@ class TestOperable:
 
         assert adapter_class is PydanticSpecAdapter
 
+    def test_create_model_pydantic_import_error_mocked(self):
+        """
+        Test ImportError handling when Pydantic import fails (mocked).
+
+        **Pattern**: Dependency failure simulation via mocking.
+
+        **Scenario**: Simulate Pydantic not being installed by mocking the import.
+
+        **Expected Behavior**:
+        - ImportError raised with helpful message
+        - Message includes "PydanticSpecAdapter requires Pydantic"
+
+        **Coverage**: operable.py lines 47-48 (ImportError handling)
+        """
+        import sys
+
+        from lionpride.types.operable import get_adapter
+
+        # Clear the cache to force fresh import attempt
+        get_adapter.cache_clear()
+
+        # Mock the import to fail
+        original_import = builtins.__import__
+
+        def mock_import(name, *args, **kwargs):
+            if "pydantic_field" in name or name == "lionpride.types.spec_adapters.pydantic_field":
+                raise ImportError("Mocked import error")
+            return original_import(name, *args, **kwargs)
+
+        with (
+            patch.object(builtins, "__import__", side_effect=mock_import),
+            pytest.raises(ImportError, match="PydanticSpecAdapter requires Pydantic"),
+        ):
+            get_adapter("pydantic")
+
+        # Clear cache again and verify normal operation restored
+        get_adapter.cache_clear()
+
     def test_create_model_unsupported_adapter(self):
         """
         create_model() raises ValueError for unsupported adapter names

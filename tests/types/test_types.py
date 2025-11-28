@@ -1458,3 +1458,116 @@ def test_meta_eq_not_meta():
 
     result = meta.__eq__(None)
     assert result is NotImplemented
+
+
+# ============================================================================
+# Test Params with default_factory and private fields
+# ============================================================================
+
+
+@dataclass(slots=True, frozen=True, init=False)
+class MyParamsWithFactory(Params):
+    """Test params class with default_factory."""
+
+    items: list = field(default_factory=list)
+    name: str = Unset
+
+
+def test_params_default_factory():
+    """
+    Params uses default_factory when field not provided in kwargs.
+
+    **Pattern**: Factory-based default for mutable containers.
+
+    **Scenario**: Params subclass has a field with default_factory:
+    ```python
+    @dataclass(slots=True, frozen=True, init=False)
+    class MyParams(Params):
+        items: list = field(default_factory=list)
+    ```
+
+    **Expected Behavior**:
+    - When field not in kwargs, factory is called
+    - Each instance gets fresh list (not shared)
+    - Factory result set via object.__setattr__ (frozen dataclass)
+
+    **Coverage**: base.py lines 84-85 (default_factory branch)
+    """
+    # Create without providing 'items' - should use factory
+    params = MyParamsWithFactory(name="test")
+    assert params.name == "test"
+    assert params.items == []
+    assert isinstance(params.items, list)
+
+    # Create another instance - should get fresh list
+    params2 = MyParamsWithFactory(name="test2")
+    assert params2.items == []
+    assert params.items is not params2.items  # Different instances
+
+
+@dataclass(slots=True, frozen=True, init=False)
+class MyParamsWithPrivateField(Params):
+    """Test params class with private-named field (starts with _)."""
+
+    _internal: str = Unset
+    public: str = Unset
+
+
+def test_params_skips_private_fields_in_defaults():
+    """
+    Params.__init__ skips fields starting with underscore during default application.
+
+    **Pattern**: Private field convention handling.
+
+    **Scenario**: Params subclass has a field starting with "_":
+    ```python
+    class MyParams(Params):
+        _internal: str = Unset
+        public: str = Unset
+    ```
+
+    **Expected Behavior**:
+    - Fields starting with "_" are skipped in default application loop
+    - They are still settable via kwargs
+    - allowed() excludes them (line 118 check)
+
+    **Coverage**: base.py line 79 (continue for private fields)
+    """
+    # Create without providing _internal
+    params = MyParamsWithPrivateField(public="hello")
+    assert params.public == "hello"
+    # _internal should not be in allowed() due to private naming
+    assert "_internal" not in MyParamsWithPrivateField.allowed()
+    assert "public" in MyParamsWithPrivateField.allowed()
+
+
+@dataclass(slots=True, frozen=True, init=False)
+class MyParamsPrefillUnset(Params):
+    """Test params class with prefill_unset=True and Undefined default."""
+
+    _config: ClassVar[ModelConfig] = ModelConfig(prefill_unset=True)
+    field_with_undefined: str = Undefined
+
+
+def test_params_prefill_unset():
+    """
+    Params._validate prefills Undefined fields with Unset when configured.
+
+    **Pattern**: Automatic sentinel normalization.
+
+    **Scenario**: Params with prefill_unset=True and field defaulting to Undefined:
+    ```python
+    class MyParams(Params):
+        _config = ModelConfig(prefill_unset=True)
+        field: str = Undefined
+    ```
+
+    **Expected Behavior**:
+    - Field with Undefined is automatically set to Unset
+    - Simplifies partial update logic (one sentinel check instead of two)
+
+    **Coverage**: base.py line 128 (prefill_unset branch)
+    """
+    params = MyParamsPrefillUnset()
+    # Field should be prefilled from Undefined to Unset
+    assert params.field_with_undefined is Unset

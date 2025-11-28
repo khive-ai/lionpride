@@ -1666,6 +1666,8 @@ schema-gen = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "aiosqlite" },
+    { name = "asyncpg" },
     { name = "hypothesis" },
     { name = "ipykernel" },
     { name = "ipywidgets" },
@@ -1682,6 +1684,7 @@ dev = [
     { name = "pytest-timeout" },
     { name = "pytest-xdist" },
     { name = "ruff" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "testcontainers", extra = ["minio"] },
     { name = "trio" },
 ]
@@ -1711,6 +1714,8 @@ provides-extras = ["schema-gen", "mcp", "log-sqlite", "log-postgres", "log-s3", 
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "aiosqlite", specifier = ">=0.19.0" },
+    { name = "asyncpg", specifier = ">=0.29.0" },
     { name = "hypothesis", specifier = ">=6.142.4" },
     { name = "ipykernel", specifier = ">=7.1.0" },
     { name = "ipywidgets", specifier = ">=8.1.7" },
@@ -1727,6 +1732,7 @@ dev = [
     { name = "pytest-timeout", specifier = ">=2.3.1" },
     { name = "pytest-xdist", specifier = ">=3.5.0" },
     { name = "ruff", specifier = ">=0.14.2" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.0" },
     { name = "testcontainers", extras = ["postgres"], specifier = ">=3.7.0" },
     { name = "testcontainers", extras = ["postgres", "minio"], specifier = ">=4.0.0" },
     { name = "trio", specifier = ">=0.31.0" },

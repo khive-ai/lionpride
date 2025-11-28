@@ -10,6 +10,7 @@ from .libs import (
 )
 from .operations import Builder
 from .protocols import implements
+from .services import ServiceRegistry
 from .services.types import Endpoint, Tool, iModel
 from .session import Branch, Message, Session
 from .types import (

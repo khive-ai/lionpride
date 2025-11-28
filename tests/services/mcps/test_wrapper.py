@@ -230,6 +230,14 @@ class TestGetClient:
 # _create_client Tests
 # =============================================================================
 
+# Check if fastmcp is available for patching
+try:
+    import fastmcp
+
+    HAS_FASTMCP = True
+except ImportError:
+    HAS_FASTMCP = False
+
 
 class TestCreateClient:
     """Test _create_client method."""
@@ -254,6 +262,7 @@ class TestCreateClient:
         ):
             await MCPConnectionPool._create_client({"url": "http://localhost:8000"})
 
+    @pytest.mark.skipif(not HAS_FASTMCP, reason="fastmcp not installed")
     async def test_create_client_url_connection(self):
         """Test _create_client creates URL-based connection."""
         mock_client = AsyncMock()
@@ -266,6 +275,7 @@ class TestCreateClient:
             mock_client.__aenter__.assert_called_once()
             assert client is mock_client
 
+    @pytest.mark.skipif(not HAS_FASTMCP, reason="fastmcp not installed")
     async def test_create_client_command_connection_basic(self):
         """Test _create_client creates command-based connection."""
         mock_transport = Mock()
@@ -292,11 +302,13 @@ class TestCreateClient:
             MockClient.assert_called_once_with(mock_transport)
             mock_client.__aenter__.assert_called_once()
 
+    @pytest.mark.skipif(not HAS_FASTMCP, reason="fastmcp not installed")
     async def test_create_client_command_invalid_args(self):
         """Test _create_client raises ValueError for non-list args."""
         with pytest.raises(ValueError, match="Config 'args' must be a list"):
             await MCPConnectionPool._create_client({"command": "python", "args": "not a list"})
 
+    @pytest.mark.skipif(not HAS_FASTMCP, reason="fastmcp not installed")
     async def test_create_client_command_with_env_vars(self):
         """Test _create_client merges environment variables."""
         mock_transport = Mock()
@@ -319,6 +331,7 @@ class TestCreateClient:
             assert env["CUSTOM_VAR"] == "custom"
             assert env["LOG_LEVEL"] == "ERROR"  # Default suppression
 
+    @pytest.mark.skipif(not HAS_FASTMCP, reason="fastmcp not installed")
     async def test_create_client_command_debug_mode(self):
         """Test _create_client doesn't suppress logs in debug mode."""
         mock_transport = Mock()
@@ -339,6 +352,7 @@ class TestCreateClient:
             # Should not have default suppression vars when debug=True
             assert "LOG_LEVEL" not in env or env.get("LOG_LEVEL") != "ERROR"
 
+    @pytest.mark.skipif(not HAS_FASTMCP, reason="fastmcp not installed")
     async def test_create_client_command_mcp_debug_env(self):
         """Test _create_client respects MCP_DEBUG environment variable."""
         mock_transport = Mock()

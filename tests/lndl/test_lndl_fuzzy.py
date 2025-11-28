@@ -1222,3 +1222,97 @@ class TestResponseModelAlias:
         assert result.summary == "Good code"
         assert "count" in result.fields
         assert result.count == 5
+
+
+class TestFieldBasedSpecsStrictMode:
+    """Test strict mode validation for field-based (non-model) specs.
+
+    Coverage: fuzzy.py lines 278, 300 (expected_fields = list(active_spec_names))
+    """
+
+    def test_strict_mode_field_based_lvar_field_not_found(self):
+        """Test strict mode raises error for wrong field in field-based specs.
+
+        Coverage: fuzzy.py line 278 (field-based spec field validation)
+
+        When specs are field-based (not Pydantic models), the expected_fields
+        are the active_spec_names, not model fields.
+        """
+        from lionpride.lndl.errors import MissingFieldError
+        from lionpride.lndl.fuzzy import parse_lndl_fuzzy
+
+        # Field-based specs (not Pydantic model)
+        operable = Operable(
+            [
+                Spec(str, name="summary"),
+                Spec(int, name="count"),
+            ],
+            name="CodeReview",
+        )
+
+        # LLM uses wrong field name that doesn't match any spec name
+        lndl_text = """\
+        <lvar CodeReview.wrong_field s>Value</lvar>
+
+        OUT{summary: [s]}
+        """
+
+        # Strict mode should raise error for wrong field
+        with pytest.raises(MissingFieldError, match=r"Field.*not found"):
+            parse_lndl_fuzzy(lndl_text, operable, threshold=1.0)
+
+    def test_strict_mode_field_based_lact_field_not_found(self):
+        """Test strict mode raises error for wrong action field in field-based specs.
+
+        Coverage: fuzzy.py line 300 (field-based spec action field validation)
+
+        When using namespaced actions with field-based specs, the expected_fields
+        are the active_spec_names.
+        """
+        from lionpride.lndl.errors import MissingFieldError
+        from lionpride.lndl.fuzzy import parse_lndl_fuzzy
+
+        # Field-based specs (not Pydantic model)
+        operable = Operable(
+            [
+                Spec(str, name="summary"),
+                Spec(int, name="count"),
+            ],
+            name="CodeReview",
+        )
+
+        # LLM uses wrong action field name
+        lndl_text = """\
+        <lact CodeReview.wrong_field a>generate()</lact>
+
+        OUT{summary: [a]}
+        """
+
+        # Strict mode should raise error for wrong action field
+        with pytest.raises(MissingFieldError, match=r"Action field.*not found"):
+            parse_lndl_fuzzy(lndl_text, operable, threshold=1.0)
+
+    def test_strict_mode_field_based_valid_field_succeeds(self):
+        """Test strict mode succeeds with valid field in field-based specs."""
+        from lionpride.lndl.fuzzy import parse_lndl_fuzzy
+
+        # Field-based specs - use only one spec to avoid required field issues
+        operable = Operable(
+            [
+                Spec(str, name="summary"),
+            ],
+            name="CodeReview",
+        )
+
+        # Valid field name matching spec name
+        lndl_text = """\
+        <lvar CodeReview.summary s>Good summary</lvar>
+
+        OUT{summary: [s]}
+        """
+
+        # Should succeed with exact match
+        result = parse_lndl_fuzzy(lndl_text, operable, threshold=1.0)
+
+        assert "summary" in result.fields
+        assert result.summary == "Good summary"

@@ -1379,6 +1379,98 @@ class TestSpec:
         with pytest.raises((AttributeError, TypeError)):  # Frozen dataclass errors
             spec.base_type = int
 
+    def test_annotation_without_base_type(self):
+        """
+        annotation returns Any when base_type is None/sentinel.
+
+        **Pattern**: Graceful handling of untyped Spec.
+
+        **Scenario**: Create Spec without explicit base_type:
+        ```python
+        spec = Spec(name="untyped_field")
+        spec.annotation  # Any (not None, not error)
+        ```
+
+        **Expected Behavior**:
+        - Returns `typing.Any` when base_type is sentinel
+        - Enables untyped/dynamic field definitions
+        - No exception raised
+
+        **Design Rationale**:
+        Sometimes fields don't have a specific type (dynamic, any-typed).
+        Returning `Any` allows these specs to work with type checkers.
+
+        **Coverage**: spec.py line 286
+        """
+        from typing import Any as TypingAny
+
+        # Create Spec without base_type (defaults to None, treated as sentinel)
+        spec = Spec(name="untyped")
+        assert spec.annotation == TypingAny
+
+    def test_annotated_nullable(self):
+        """
+        annotated() generates Union[type, None] for nullable Specs.
+
+        **Pattern**: Annotated type with nullable modifier.
+
+        **Scenario**: Create nullable Spec and call annotated():
+        ```python
+        spec = Spec(str, name="field", nullable=True)
+        annotated = spec.annotated()  # Annotated[str | None, Meta(...)]
+        ```
+
+        **Expected Behavior**:
+        - Returns Annotated type with union including None
+        - Metadata preserved in annotation
+        - Can be used with Pydantic/other frameworks
+
+        **Coverage**: spec.py line 313 (nullable union in annotated())
+        """
+        from typing import get_args, get_origin
+
+        spec = Spec(str, name="field", nullable=True)
+        result = spec.annotated()
+
+        # Check it's an Annotated type
+        from typing import Annotated
+
+        assert get_origin(result) is Annotated
+
+        # Get the args - first should be the Union type (str | None)
+        args = get_args(result)
+        assert len(args) >= 1
+
+        # The first arg should be the union type
+        union_type = args[0]
+        # Check it contains str and NoneType
+        union_args = get_args(union_type)
+        assert str in union_args
+        assert type(None) in union_args
+
+    def test_annotated_without_metadata(self):
+        """
+        annotated() returns plain type when no metadata present.
+
+        **Pattern**: Minimal annotation for type-only Specs.
+
+        **Scenario**: Spec with base_type but no metadata:
+        ```python
+        spec = Spec(str)  # No name, no metadata
+        spec.annotated()  # str (not Annotated[str])
+        ```
+
+        **Expected Behavior**:
+        - Returns plain type when metadata is empty
+        - No unnecessary Annotated wrapper
+
+        **Coverage**: spec.py line 327 (else branch in annotated())
+        """
+        spec = Spec(str)  # No name, no metadata
+        result = spec.annotated()
+        # Should return str directly (not wrapped in Annotated)
+        assert result == str
+
     @pytest.mark.anyio
     async def test_acreate_default_value_async_factory(self):
         """Test acreate_default_value() executes async factory.
@@ -1476,3 +1568,10 @@ class TestSpec:
         finally:
             # Restore original cache size
             spec_module._MAX_CACHE_SIZE = original_max_size
+
+    # NOTE: spec.py lines 321-325 (Python 3.13+ AttributeError fallback)
+    # This is version-specific compatibility code that cannot be tested on Python 3.11.
+    # The try block (Annotated.__class_getitem__) always succeeds on Python 3.11/3.12.
+    # The except block (operator.getitem fallback) is only reached on Python 3.13+
+    # where __class_getitem__ was removed. This code will be naturally covered
+    # when running tests on Python 3.13+.

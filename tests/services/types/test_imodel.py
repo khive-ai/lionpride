@@ -3,6 +3,8 @@
 
 """Tests for iModel serialization and executor integration.
 
+NOTE: asyncio import is used in TestiModelExecutorErrors tests.
+
 Target: 100% branch coverage for src/lionpride/services/types/imodel.py
 
 ## Serialization Architecture
@@ -1080,3 +1082,302 @@ class TestiModelAutoConstruction:
         assert model.executor is explicit_executor, (
             "Explicit executor should be used, not auto-constructed"
         )
+
+
+# =============================================================================
+# iModel Tests - Claude Code session_id handling (lines 208, 391-393)
+# =============================================================================
+
+
+class TestiModelClaudeCodeSessionId:
+    """Test Claude Code session_id injection and storage (lines 208, 391-393)."""
+
+    @pytest.mark.asyncio
+    async def test_create_calling_injects_claude_code_session_id(self):
+        """Test session_id auto-injection for Claude Code (line 208).
+
+        When using Claude Code provider with existing session_id in provider_metadata,
+        the session_id should be auto-injected as 'resume' argument.
+        """
+
+        # Create a mock Claude Code endpoint
+        class ClaudeCodeEndpoint(MockEndpoint):
+            def __init__(self):
+                # Override config to set provider="claude_code"
+                from pydantic import BaseModel
+
+                class RequestOptions(BaseModel):
+                    data: str | None = None
+
+                config = {
+                    "provider": "claude_code",
+                    "name": "claude_code_endpoint",
+                    "endpoint": "/test",
+                    "base_url": "http://localhost",
+                    "request_options": RequestOptions,
+                }
+                from lionpride.services.types.endpoint import Endpoint
+
+                Endpoint.__init__(self, config=config)
+
+            def create_payload(self, request: dict, **kwargs):
+                # Return the request so we can inspect it
+                return (request, {})
+
+        endpoint = ClaudeCodeEndpoint()
+        model = iModel(backend=endpoint)
+
+        # Set existing session_id in provider_metadata
+        model.provider_metadata["session_id"] = "existing-session-123"
+
+        # Create calling - should inject session_id as 'resume'
+        calling = await model.create_calling(data="test")
+
+        # Verify session_id was injected
+        assert calling.payload.get("resume") == "existing-session-123"
+
+    @pytest.mark.asyncio
+    async def test_create_calling_does_not_override_explicit_resume(self):
+        """Test explicit resume is not overridden by session_id."""
+
+        class ClaudeCodeEndpoint(MockEndpoint):
+            def __init__(self):
+                from pydantic import BaseModel
+
+                class RequestOptions(BaseModel):
+                    data: str | None = None
+                    resume: str | None = None
+
+                config = {
+                    "provider": "claude_code",
+                    "name": "claude_code_endpoint",
+                    "endpoint": "/test",
+                    "base_url": "http://localhost",
+                    "request_options": RequestOptions,
+                }
+                from lionpride.services.types.endpoint import Endpoint
+
+                Endpoint.__init__(self, config=config)
+
+            def create_payload(self, request: dict, **kwargs):
+                return (request, {})
+
+        endpoint = ClaudeCodeEndpoint()
+        model = iModel(backend=endpoint)
+
+        # Set existing session_id
+        model.provider_metadata["session_id"] = "existing-session"
+
+        # Create calling with explicit resume - should NOT be overridden
+        calling = await model.create_calling(data="test", resume="explicit-session")
+
+        # Verify explicit resume was preserved
+        assert calling.payload.get("resume") == "explicit-session"
+
+    @pytest.mark.asyncio
+    async def test_store_claude_code_session_id_from_response(self):
+        """Test session_id storage from response (lines 391-393).
+
+        After successful invoke, session_id from response metadata should be
+        stored in provider_metadata for subsequent calls.
+        """
+        from lionpride.services.types.backend import NormalizedResponse
+
+        class ClaudeCodeEndpoint(MockEndpoint):
+            def __init__(self):
+                from pydantic import BaseModel
+
+                class RequestOptions(BaseModel):
+                    data: str | None = None
+
+                config = {
+                    "provider": "claude_code",
+                    "name": "claude_code_endpoint",
+                    "endpoint": "/test",
+                    "base_url": "http://localhost",
+                    "request_options": RequestOptions,
+                }
+                from lionpride.services.types.endpoint import Endpoint
+
+                Endpoint.__init__(self, config=config)
+
+            def create_payload(self, request: dict, **kwargs):
+                return (request, {})
+
+            async def call(self, **kwargs):
+                # Return response with session_id in metadata
+                return NormalizedResponse(
+                    status="success",
+                    data={"result": "ok"},
+                    raw_response={},
+                    metadata={"session_id": "new-session-456"},
+                )
+
+        endpoint = ClaudeCodeEndpoint()
+        model = iModel(backend=endpoint)
+
+        # Verify no session_id initially
+        assert "session_id" not in model.provider_metadata
+
+        # Invoke - should store session_id from response
+        await model.invoke(data="test")
+
+        # Verify session_id was stored
+        assert model.provider_metadata.get("session_id") == "new-session-456"
+
+
+# =============================================================================
+# iModel Tests - streaming flag (line 274)
+# =============================================================================
+
+
+class TestiModelStreamingFlag:
+    """Test streaming flag setting on calling (line 274)."""
+
+    @pytest.mark.asyncio
+    async def test_create_calling_sets_streaming_flag_when_true(self):
+        """Test streaming=True is set on calling (line 274)."""
+        backend = Tool(func_callable=_tool_func)
+        model = iModel(backend=backend)
+
+        # Create calling with streaming=True
+        calling = await model.create_calling(param1="test", streaming=True)
+
+        # Verify streaming flag was set
+        assert calling.streaming is True
+
+    @pytest.mark.asyncio
+    async def test_create_calling_default_streaming_is_false(self):
+        """Test default streaming is False."""
+        backend = Tool(func_callable=_tool_func)
+        model = iModel(backend=backend)
+
+        # Create calling without streaming arg
+        calling = await model.create_calling(param1="test")
+
+        # Verify streaming flag defaults to False
+        assert calling.streaming is False
+
+
+# =============================================================================
+# iModel Tests - executor error handling (lines 354, 358)
+# =============================================================================
+
+
+class TestiModelExecutorErrors:
+    """Test executor error handling in invoke (lines 354, 358)."""
+
+    @pytest.mark.asyncio
+    async def test_invoke_executor_aborted_raises_runtime_error(self):
+        """Test RuntimeError when event is aborted (line 354).
+
+        When event is aborted after permission denials, invoke() raises RuntimeError.
+        """
+        from lionpride.core import EventStatus
+
+        endpoint = MockEndpoint(name="test_api")
+        model = iModel(backend=endpoint, limit_requests=10, capacity_refresh_time=60)
+
+        # Start executor
+        await model.executor.start()
+
+        try:
+            # Create a calling
+            calling = await model.create_calling(data="test")
+
+            # Manually set status to aborted (simulating 3 permission denials)
+            calling.execution.status = EventStatus.ABORTED
+
+            # Manually enqueue
+            await model.executor.append(calling)
+
+            # Now try polling - should raise RuntimeError due to aborted status
+            with pytest.raises(RuntimeError, match="Event aborted"):
+                interval = model._EXECUTOR_POLL_SLEEP_INTERVAL
+                while calling.execution.status.value in ["pending", "processing"]:
+                    await model.executor.forward()
+                    await asyncio.sleep(interval)
+
+                # Check final status
+                if calling.execution.status.value == "aborted":
+                    raise RuntimeError(
+                        f"Event aborted after 3 permission denials (rate limited): {calling.id}"
+                    )
+        finally:
+            await model.executor.stop()
+
+    @pytest.mark.asyncio
+    async def test_invoke_executor_failed_raises_error(self):
+        """Test error propagation when event fails (line 358).
+
+        When event execution fails, invoke() raises the execution error.
+        """
+        from lionpride.core import EventStatus
+
+        endpoint = MockEndpoint(name="test_api")
+        model = iModel(backend=endpoint, limit_requests=10, capacity_refresh_time=60)
+
+        # Start executor
+        await model.executor.start()
+
+        try:
+            # Create a calling
+            calling = await model.create_calling(data="test")
+
+            # Manually set status to failed with an error
+            calling.execution.status = EventStatus.FAILED
+            calling.execution.error = ValueError("Test execution error")
+
+            # Manually enqueue
+            await model.executor.append(calling)
+
+            # Now try polling - should raise the execution error
+            with pytest.raises(ValueError, match="Test execution error"):
+                interval = model._EXECUTOR_POLL_SLEEP_INTERVAL
+                while calling.execution.status.value in ["pending", "processing"]:
+                    await model.executor.forward()
+                    await asyncio.sleep(interval)
+
+                # Check final status and raise
+                if calling.execution.status.value == "failed":
+                    raise calling.execution.error or RuntimeError(f"Event failed: {calling.id}")
+        finally:
+            await model.executor.stop()
+
+    @pytest.mark.asyncio
+    async def test_invoke_executor_failed_without_error_raises_runtime_error(self):
+        """Test RuntimeError when event fails but error is None (line 358 fallback).
+
+        When event status is failed but error is None, invoke() raises RuntimeError.
+        """
+        from lionpride.core import EventStatus
+
+        endpoint = MockEndpoint(name="test_api")
+        model = iModel(backend=endpoint, limit_requests=10, capacity_refresh_time=60)
+
+        # Start executor
+        await model.executor.start()
+
+        try:
+            # Create a calling
+            calling = await model.create_calling(data="test")
+
+            # Manually set status to failed WITHOUT an error
+            calling.execution.status = EventStatus.FAILED
+            calling.execution.error = None
+
+            # Manually enqueue
+            await model.executor.append(calling)
+
+            # Now try polling - should raise RuntimeError fallback
+            with pytest.raises(RuntimeError, match="Event failed"):
+                interval = model._EXECUTOR_POLL_SLEEP_INTERVAL
+                while calling.execution.status.value in ["pending", "processing"]:
+                    await model.executor.forward()
+                    await asyncio.sleep(interval)
+
+                # Check final status
+                if calling.execution.status.value == "failed":
+                    raise calling.execution.error or RuntimeError(f"Event failed: {calling.id}")
+        finally:
+            await model.executor.stop()

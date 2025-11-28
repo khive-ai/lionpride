@@ -810,3 +810,401 @@ class TestLogStoreAdapterBroadcasterIntegration:
         # Filter by type and until in past - should get nothing
         logs = store.filter(log_type=LogType.INFO, until=now - timedelta(hours=1))
         assert len(logs) == 0
+
+
+class TestLogCreateInvalidContent:
+    """Tests for Log.create with invalid content types."""
+
+    def test_log_create_with_invalid_content_type(self):
+        """Log.create should handle invalid content types gracefully."""
+        # Pass an invalid type (not Element or dict)
+        invalid_content = "just a string"
+        log = Log.create(invalid_content, log_type=LogType.WARNING)
+
+        # Should create a log with error data
+        assert log.log_type == LogType.WARNING
+        assert log.data == {"error": "Invalid content type"}
+
+    def test_log_create_with_none(self):
+        """Log.create should handle None content."""
+        log = Log.create(None, log_type=LogType.ERROR)
+
+        assert log.log_type == LogType.ERROR
+        assert log.data == {"error": "Invalid content type"}
+
+    def test_log_create_with_list(self):
+        """Log.create should handle list content (invalid type)."""
+        log = Log.create([1, 2, 3], log_type=LogType.INFO)
+
+        assert log.log_type == LogType.INFO
+        assert log.data == {"error": "Invalid content type"}
+
+
+class TestLogStoreDumpEdgeCases:
+    """Tests for LogStore dump edge cases."""
+
+    def test_dump_empty_store(self):
+        """dump should return 0 when store is empty."""
+        store = LogStore(auto_save_on_exit=False)
+
+        assert len(store) == 0
+        count = store.dump()
+
+        assert count == 0
+
+    def test_dump_json_serialization_error(self):
+        """dump should handle JSON serialization errors gracefully."""
+        import json
+
+        store = LogStore(auto_save_on_exit=False)
+        log = Log(log_type=LogType.INFO, message="test")
+        store._logs.include(log)
+
+        # Patch json.dump to raise the specific error
+        original_json_dump = json.dump
+
+        def mock_json_dump(*args, **kwargs):
+            raise TypeError("Object of type X is not JSON serializable")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "logs.json"
+            try:
+                json.dump = mock_json_dump
+                # This should trigger the JSON serialization error handling
+                count = store.dump(path=path, clear=True)
+
+                # Should return 0 and clear logs due to JSON error
+                assert count == 0
+                assert len(store) == 0
+            finally:
+                json.dump = original_json_dump
+
+    def test_dump_json_serialization_error_no_clear(self):
+        """dump with clear=False should not clear on JSON error."""
+        import json
+
+        store = LogStore(auto_save_on_exit=False)
+        log = Log(log_type=LogType.INFO, message="test")
+        store._logs.include(log)
+
+        # Patch json.dump to raise the specific error
+        original_json_dump = json.dump
+
+        def mock_json_dump(*args, **kwargs):
+            raise TypeError("Object of type X is not JSON serializable")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "logs.json"
+            try:
+                json.dump = mock_json_dump
+                count = store.dump(path=path, clear=False)
+
+                # Should return 0 but NOT clear logs (clear=False)
+                assert count == 0
+                assert len(store) == 1
+            finally:
+                json.dump = original_json_dump
+
+    def test_dump_other_exception_raises(self):
+        """dump should re-raise non-JSON exceptions."""
+        store = LogStore(auto_save_on_exit=False)
+        log = Log(log_type=LogType.INFO, message="test")
+        store._logs.include(log)
+
+        # Monkey-patch to raise a different error
+        def raise_io_error():
+            raise OSError("Disk full")
+
+        original_to_list = store.to_list
+        store.to_list = raise_io_error
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "logs.json"
+            with pytest.raises(IOError, match="Disk full"):
+                store.dump(path=path)
+
+        store.to_list = original_to_list
+
+
+class TestLogStoreAddCapacityFailure:
+    """Tests for LogStore add() when auto-dump fails."""
+
+    def test_add_auto_dump_failure(self):
+        """add should continue even if auto-dump fails."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = LogStoreConfig(
+                capacity=2,
+                persist_dir=tmpdir,
+                auto_save_on_exit=False,
+                clear_after_dump=True,
+            )
+            store = LogStore(config=config)
+
+            # Monkey-patch dump to raise an exception
+            original_dump = store.dump
+            store.dump = lambda clear=True: (_ for _ in ()).throw(OSError("Write failed"))
+
+            # Add logs up to capacity
+            store._logs.include(Log(log_type=LogType.INFO, message="msg1"))
+            store._logs.include(Log(log_type=LogType.INFO, message="msg2"))
+
+            # This should trigger auto-dump which fails, but log should still be added
+            # Need to call add directly to trigger the capacity check
+            new_log = Log(log_type=LogType.INFO, message="msg3")
+            store.add(new_log)
+
+            # Log should be added despite dump failure
+            assert len(store) == 3
+
+            # Restore
+            store.dump = original_dump
+
+
+class TestLogStoreCreatePath:
+    """Tests for LogStore path creation methods."""
+
+    def test_create_path_with_file_prefix(self):
+        """_create_path should include file_prefix."""
+        config = LogStoreConfig(
+            persist_dir="/tmp/test",
+            file_prefix="myapp",
+            use_timestamp=True,
+            auto_save_on_exit=False,
+        )
+        store = LogStore(config=config)
+
+        path = store._create_path()
+
+        # Path should contain the prefix
+        assert "myapp" in path.name
+        assert path.suffix == ".json"
+
+    def test_create_path_no_prefix_no_timestamp(self):
+        """_create_path should fallback to 'logs' when no prefix and no timestamp."""
+        config = LogStoreConfig(
+            persist_dir="/tmp/test",
+            file_prefix=None,
+            use_timestamp=False,
+            auto_save_on_exit=False,
+        )
+        store = LogStore(config=config)
+
+        path = store._create_path()
+
+        # Path should be just 'logs.json'
+        assert path.name == "logs.json"
+
+    def test_create_path_only_timestamp(self):
+        """_create_path with only timestamp should work."""
+        config = LogStoreConfig(
+            persist_dir="/tmp/test",
+            file_prefix=None,
+            use_timestamp=True,
+            auto_save_on_exit=False,
+        )
+        store = LogStore(config=config)
+
+        path = store._create_path()
+
+        # Path should contain timestamp (format: YYYYMMDD_HHMMSS)
+        assert path.suffix == ".json"
+        # The filename should be timestamp only
+        assert "_" in path.stem  # timestamp has underscore
+
+
+class TestLogStoreAsyncCreatePath:
+    """Tests for LogStore async path creation."""
+
+    @pytest.mark.asyncio
+    async def test_acreate_path_basic(self):
+        """_acreate_path should create path asynchronously."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = LogStoreConfig(
+                persist_dir=tmpdir,
+                file_prefix=None,
+                use_timestamp=True,
+                auto_save_on_exit=False,
+            )
+            store = LogStore(config=config)
+
+            path = await store._acreate_path()
+
+            # Path should be valid
+            assert path.parent == Path(tmpdir)
+            assert path.suffix == ".json"
+
+    @pytest.mark.asyncio
+    async def test_acreate_path_with_prefix(self):
+        """_acreate_path should include file_prefix."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = LogStoreConfig(
+                persist_dir=tmpdir,
+                file_prefix="myprefix",
+                use_timestamp=True,
+                auto_save_on_exit=False,
+            )
+            store = LogStore(config=config)
+
+            path = await store._acreate_path()
+
+            assert "myprefix" in str(path.name)
+            assert path.suffix == ".json"
+
+    @pytest.mark.asyncio
+    async def test_acreate_path_no_prefix(self):
+        """_acreate_path with no prefix should use 'logs'."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = LogStoreConfig(
+                persist_dir=tmpdir,
+                file_prefix=None,
+                use_timestamp=False,
+                auto_save_on_exit=False,
+            )
+            store = LogStore(config=config)
+
+            path = await store._acreate_path()
+
+            # Should fallback to 'logs'
+            assert "logs" in str(path.name)
+
+
+class TestLogStoreSaveAtExit:
+    """Tests for LogStore _save_at_exit method."""
+
+    def test_save_at_exit_with_logs(self):
+        """_save_at_exit should dump logs when present."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = LogStoreConfig(
+                persist_dir=tmpdir,
+                auto_save_on_exit=False,  # We'll call manually
+                clear_after_dump=True,
+            )
+            store = LogStore(config=config)
+            store.log_info(message="test")
+
+            assert len(store) == 1
+
+            # Call _save_at_exit directly
+            store._save_at_exit()
+
+            # Should have dumped and cleared
+            assert len(store) == 0
+
+            # Check file was created
+            files = list(Path(tmpdir).glob("*.json"))
+            assert len(files) == 1
+
+    def test_save_at_exit_empty_store(self):
+        """_save_at_exit should do nothing when store is empty."""
+        store = LogStore(auto_save_on_exit=False)
+
+        # This should not raise
+        store._save_at_exit()
+
+        assert len(store) == 0
+
+    def test_save_at_exit_json_error(self):
+        """_save_at_exit should handle JSON serialization errors."""
+        store = LogStore(auto_save_on_exit=False)
+        store.log_info(message="test")
+
+        # Monkey-patch dump to simulate JSON serialization error
+        def raise_json_error(clear=True):
+            raise TypeError("Object of type X is not JSON serializable")
+
+        store.dump = raise_json_error
+
+        # Should not raise, just log the error
+        store._save_at_exit()
+
+    def test_save_at_exit_other_error(self):
+        """_save_at_exit should handle other exceptions."""
+        store = LogStore(auto_save_on_exit=False)
+        store.log_info(message="test")
+
+        # Monkey-patch dump to raise a different error
+        def raise_other_error(clear=True):
+            raise OSError("Disk error")
+
+        store.dump = raise_other_error
+
+        # Should not raise, just log the error
+        store._save_at_exit()
+
+
+class TestLogStoreAutoSaveOnExit:
+    """Tests for LogStore auto_save_on_exit feature."""
+
+    def test_auto_save_on_exit_registers_atexit(self):
+        """LogStore with auto_save_on_exit=True should register atexit handler."""
+        import atexit
+
+        # Track registered functions
+        registered_funcs = []
+        original_register = atexit.register
+
+        def mock_register(func):
+            registered_funcs.append(func)
+            return original_register(func)
+
+        atexit.register = mock_register
+
+        try:
+            store = LogStore(auto_save_on_exit=True)
+            # Should have registered _save_at_exit
+            assert any(
+                getattr(f, "__name__", "") == "_save_at_exit" or f == store._save_at_exit
+                for f in registered_funcs
+            )
+        finally:
+            atexit.register = original_register
+            # Clean up by unregistering the handler
+            try:
+                atexit.unregister(store._save_at_exit)
+            except Exception:
+                pass
+
+
+class TestLogStoreAflushPartialFailure:
+    """Tests for aflush partial failure handling."""
+
+    @pytest.mark.asyncio
+    async def test_aflush_adapter_returns_zero_no_clear(self):
+        """aflush should not clear logs if adapter returns 0."""
+
+        class FailingAdapter:
+            async def write(self, logs: list[Log]) -> int:
+                return 0  # Simulates failure
+
+        store = LogStore(auto_save_on_exit=False)
+        store.set_adapter(FailingAdapter())
+
+        store.log_info(message="test")
+        assert len(store) == 1
+
+        results = await store.aflush(clear=True)
+
+        # Adapter failed (returned 0), so should not clear
+        assert results["adapter"] == 0
+        assert len(store) == 1  # Logs should NOT be cleared
+
+    @pytest.mark.asyncio
+    async def test_aflush_broadcaster_partial_failure_no_clear(self):
+        """aflush should not clear logs if any broadcaster subscriber fails."""
+
+        class PartialFailureBroadcaster:
+            async def broadcast(self, logs: list[Log]) -> dict[str, int]:
+                return {"sub1": len(logs), "sub2": 0}  # sub2 failed
+
+        store = LogStore(auto_save_on_exit=False)
+        store.set_broadcaster(PartialFailureBroadcaster())
+
+        store.log_info(message="test")
+        assert len(store) == 1
+
+        results = await store.aflush(clear=True)
+
+        # One subscriber failed (returned 0), so should not clear
+        assert results["broadcaster"]["sub1"] == 1
+        assert results["broadcaster"]["sub2"] == 0
+        assert len(store) == 1  # Logs should NOT be cleared

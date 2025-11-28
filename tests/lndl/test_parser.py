@@ -696,3 +696,52 @@ class TestParserEdgeCases:
         # Parser should skip unknown value and move on
         # Field might be missing or empty
         assert program.out_block is not None
+
+
+class TestParserCoverageEdgeCases:
+    """Additional edge case tests for 100% parser.py coverage.
+
+    Coverage targets:
+    - Line 498: break after skip_newlines() in OUT{} field loop
+    - Line 526: break after skip_newlines() in array reference loop
+    """
+
+    def test_out_block_newline_before_close_exact_coverage(self, parse_lndl_ast):
+        """Test OUT{} break after newlines before close (line 498).
+
+        This explicitly tests the case where:
+        1. We enter the while loop (OUT_CLOSE not matched initially)
+        2. skip_newlines() is called
+        3. Now OUT_CLOSE IS matched, so we break (line 498)
+        """
+        # Single newline case - forces the break path
+        text = "OUT{\n}"
+        program = parse_lndl_ast(text)
+        assert program.out_block is not None
+        assert program.out_block.fields == {}
+
+    def test_out_block_array_newline_before_close_exact_coverage(self, parse_lndl_ast):
+        """Test array break after newlines before ] (line 526).
+
+        This explicitly tests the case where:
+        1. We enter the array while loop (RBRACKET not matched initially)
+        2. skip_newlines() is called
+        3. Now RBRACKET IS matched, so we break (line 526)
+        """
+        # Single newline case - forces the break path
+        text = "OUT{refs: [\n]}"
+        program = parse_lndl_ast(text)
+        assert program.out_block is not None
+        assert program.out_block.fields["refs"] == []
+
+    def test_out_block_field_with_newlines_around_colon(self, parse_lndl_ast):
+        """Test field parsing with newlines around colon."""
+        text = "OUT{field\n:\n[ref]}"
+        program = parse_lndl_ast(text)
+        assert program.out_block.fields["field"] == ["ref"]
+
+    def test_out_block_array_with_refs_and_trailing_newline(self, parse_lndl_ast):
+        """Test array with refs followed by newlines then close."""
+        text = "OUT{field: [ref1, ref2\n\n]}"
+        program = parse_lndl_ast(text)
+        assert program.out_block.fields["field"] == ["ref1", "ref2"]

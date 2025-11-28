@@ -913,3 +913,118 @@ async def test_registry_internal_call_when_hook_phase_missing_chunk_type_then_ra
             None,
             SimpleTestEvent,
         )
+
+
+# =============================================================================
+# HookRegistry Tests - CancelledError handling (lines 242, 261, 279)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_registry_pre_invocation_when_cancelled_then_returns_tuple():
+    """Test pre_invocation when task is cancelled (line 242).
+
+    When a hook raises CancelledError, pre_invocation should return:
+    ((Undefined, exception), True, EventStatus.CANCELLED)
+    """
+    import asyncio
+
+    from lionpride.types import Undefined
+
+    async def cancelling_hook(evt, **kw):
+        """Hook that raises CancelledError."""
+        raise asyncio.CancelledError("Task cancelled")
+
+    registry = HookRegistry(hooks={HookPhase.PreInvocation: cancelling_hook})
+    event = SimpleTestEvent()
+
+    result, should_exit, status = await registry.pre_invocation(event)
+
+    # Result should be a tuple (Undefined, exception)
+    assert isinstance(result, tuple)
+    assert result[0] is Undefined
+    assert isinstance(result[1], asyncio.CancelledError)
+    assert should_exit is True
+    assert status == EventStatus.CANCELLED
+
+
+@pytest.mark.asyncio
+async def test_registry_post_invocation_when_cancelled_then_returns_tuple():
+    """Test post_invocation when task is cancelled (line 261).
+
+    When a hook raises CancelledError, post_invocation should return:
+    ((Undefined, exception), True, EventStatus.CANCELLED)
+    """
+    import asyncio
+
+    from lionpride.types import Undefined
+
+    async def cancelling_hook(evt, **kw):
+        """Hook that raises CancelledError."""
+        raise asyncio.CancelledError("Task cancelled")
+
+    registry = HookRegistry(hooks={HookPhase.PostInvocation: cancelling_hook})
+    event = SimpleTestEvent()
+
+    result, should_exit, status = await registry.post_invocation(event)
+
+    # Result should be a tuple (Undefined, exception)
+    assert isinstance(result, tuple)
+    assert result[0] is Undefined
+    assert isinstance(result[1], asyncio.CancelledError)
+    assert should_exit is True
+    assert status == EventStatus.CANCELLED
+
+
+@pytest.mark.asyncio
+async def test_registry_handle_streaming_chunk_when_cancelled_then_returns_tuple():
+    """Test handle_streaming_chunk when task is cancelled (line 279).
+
+    When a stream handler raises CancelledError, handle_streaming_chunk should return:
+    ((Undefined, exception), True, EventStatus.CANCELLED)
+    """
+    import asyncio
+
+    from lionpride.types import Undefined
+
+    async def cancelling_handler(evt, chunk_type, chunk, **kw):
+        """Handler that raises CancelledError."""
+        raise asyncio.CancelledError("Stream cancelled")
+
+    registry = HookRegistry(stream_handlers={"text": cancelling_handler})
+
+    result, should_exit, status = await registry.handle_streaming_chunk("text", "data")
+
+    # Result should be a tuple (Undefined, exception)
+    assert isinstance(result, tuple)
+    assert result[0] is Undefined
+    assert isinstance(result[1], asyncio.CancelledError)
+    assert should_exit is True
+    assert status == EventStatus.CANCELLED
+
+
+@pytest.mark.asyncio
+async def test_registry_pre_event_create_when_cancelled_then_returns_tuple():
+    """Test pre_event_create when task is cancelled.
+
+    Complements the pre_invocation, post_invocation, and handle_streaming_chunk
+    cancellation tests. Verifies consistent behavior across all hook phases.
+    """
+    import asyncio
+
+    from lionpride.types import Undefined
+
+    async def cancelling_hook(event_type, **kw):
+        """Hook that raises CancelledError."""
+        raise asyncio.CancelledError("Task cancelled")
+
+    registry = HookRegistry(hooks={HookPhase.PreEventCreate: cancelling_hook})
+
+    result, should_exit, status = await registry.pre_event_create(SimpleTestEvent)
+
+    # Result should be a tuple (Undefined, exception)
+    assert isinstance(result, tuple)
+    assert result[0] is Undefined
+    assert isinstance(result[1], asyncio.CancelledError)
+    assert should_exit is True
+    assert status == EventStatus.CANCELLED

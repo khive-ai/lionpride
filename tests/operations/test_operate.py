@@ -515,3 +515,247 @@ class TestFactoryCoverage:
 
         result = await operate(session, branch, params)
         assert result is not None
+
+
+class TestFactoryUncoveredLines:
+    """Tests for specific uncovered lines in factory.py.
+
+    These tests cover:
+    - Line 65: Missing imodel with no session.default_generate_model
+    - Lines 121-122: return_message=True path capturing assistant_msg
+    - Lines 126-127: Action execution through operate flow
+    - Line 136: Final return with return_message=True
+    """
+
+    @pytest.fixture
+    def mock_model_local(self):
+        """Create a mock iModel for testing without API calls."""
+        from lionpride.services.providers.oai_chat import OAIChatEndpoint
+        from lionpride.services.types.imodel import iModel
+
+        endpoint = OAIChatEndpoint(config=None, name="mock_model", api_key="mock-key")
+        model = iModel(backend=endpoint)
+
+        async def mock_invoke(**kwargs):
+            class MockCalling(Event):
+                def __init__(self):
+                    super().__init__()
+                    self.status = EventStatus.COMPLETED
+                    self.execution.response = MockNormalizedResponse()
+
+            return MockCalling()
+
+        object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_invoke))
+        return model
+
+    @pytest.fixture
+    def session_with_model_local(self, mock_model_local):
+        """Create session with registered mock model."""
+        session = Session()
+        session.services.register(mock_model_local, update=True)
+        return session, mock_model_local
+
+    def test_missing_imodel_and_no_default_generate_model(self):
+        """Test line 65: operate raises when imodel is missing and no default_generate_model."""
+        import asyncio
+
+        from lionpride.operations.operate.factory import operate
+
+        # Session without default_generate_model
+        session = Session()  # No default_generate_model
+        branch = session.create_branch()
+
+        params = OperateParams(
+            communicate=CommunicateParams(
+                generate=GenerateParams(
+                    # No imodel specified
+                    instruction="Test",
+                    request_model=SimpleModel,
+                ),
+            ),
+        )
+
+        with pytest.raises(
+            ValueError,
+            match=r"operate requires 'imodel' in communicate\.generate or session\.default_generate_model",
+        ):
+            asyncio.run(operate(session, branch, params))
+
+    @pytest.mark.asyncio
+    async def test_return_message_with_successful_validation(self, session_with_model_local):
+        """Test lines 121-122 and 136: return_message=True returns (result, assistant_msg)."""
+        from lionpride.operations.operate.factory import operate
+
+        session, model = session_with_model_local
+        branch = session.create_branch(
+            name="test", capabilities={"simplemodel"}, resources={model.name}
+        )
+
+        class SimpleModel(BaseModel):
+            value: str
+
+        # Mock to return valid JSON wrapped in spec name
+        async def mock_json_invoke(**kwargs):
+            class MockCalling(Event):
+                def __init__(self):
+                    super().__init__()
+                    self.status = EventStatus.COMPLETED
+                    self.execution.response = MockNormalizedResponse(
+                        data='{"simplemodel": {"value": "test_value"}}'
+                    )
+
+            return MockCalling()
+
+        object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_json_invoke))
+
+        params = OperateParams(
+            communicate=CommunicateParams(
+                generate=GenerateParams(
+                    imodel=model,
+                    instruction="Test instruction",
+                    request_model=SimpleModel,
+                    imodel_kwargs={"model_name": "gpt-4"},
+                ),
+                parse=ParseParams(),
+                strict_validation=False,
+            ),
+            return_message=True,
+        )
+
+        result = await operate(session, branch, params)
+
+        # Should return (result, assistant_msg) tuple
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        model_result, assistant_msg = result
+        # Verify model result
+        assert hasattr(model_result, "simplemodel")
+        assert model_result.simplemodel.value == "test_value"
+        # Verify assistant_msg is a Message (covers lines 121-122 and 136)
+        assert assistant_msg is not None
+
+    @pytest.mark.asyncio
+    async def test_operate_with_actions_through_full_flow(self, session_with_model_local):
+        """Test lines 126-127: Action execution through full operate flow."""
+        from lionpride.operations.operate.factory import operate
+        from lionpride.services import iModel
+        from lionpride.services.types.tool import Tool, ToolConfig
+
+        session, model = session_with_model_local
+        branch = session.create_branch(
+            name="test",
+            capabilities={"responsemodel", "action_requests"},
+            resources={model.name},
+        )
+
+        # Register a tool for action execution
+        async def add_numbers(a: int, b: int) -> int:
+            return a + b
+
+        tool = Tool(
+            func_callable=add_numbers, config=ToolConfig(name="add_numbers", provider="tool")
+        )
+        session.services.register(iModel(backend=tool))
+
+        class ResponseModel(BaseModel):
+            answer: str
+
+        # Mock to return response with action_requests
+        async def mock_json_invoke(**kwargs):
+            class MockCalling(Event):
+                def __init__(self):
+                    super().__init__()
+                    self.status = EventStatus.COMPLETED
+                    self.execution.response = MockNormalizedResponse(
+                        data='{"responsemodel": {"answer": "will compute"}, "action_requests": [{"function": "add_numbers", "arguments": {"a": 5, "b": 3}}]}'
+                    )
+
+            return MockCalling()
+
+        object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_json_invoke))
+
+        params = OperateParams(
+            communicate=CommunicateParams(
+                generate=GenerateParams(
+                    imodel=model,
+                    instruction="Compute",
+                    request_model=ResponseModel,
+                    imodel_kwargs={"model_name": "gpt-4"},
+                ),
+                parse=ParseParams(),
+                strict_validation=False,
+            ),
+            actions=True,  # Enable action execution
+        )
+
+        result = await operate(session, branch, params)
+
+        # Verify action was executed (covers lines 126-127)
+        assert hasattr(result, "action_responses")
+        assert result.action_responses is not None
+        assert len(result.action_responses) == 1
+        assert result.action_responses[0].output == 8  # 5 + 3
+
+    @pytest.mark.asyncio
+    async def test_operate_with_actions_and_return_message(self, session_with_model_local):
+        """Test combined actions + return_message path for full coverage."""
+        from lionpride.operations.operate.factory import operate
+        from lionpride.services import iModel
+        from lionpride.services.types.tool import Tool, ToolConfig
+
+        session, model = session_with_model_local
+        branch = session.create_branch(
+            name="test",
+            capabilities={"responsemodel", "action_requests"},
+            resources={model.name},
+        )
+
+        # Register tool
+        async def multiply(x: int, y: int) -> int:
+            return x * y
+
+        tool = Tool(func_callable=multiply, config=ToolConfig(name="multiply", provider="tool"))
+        session.services.register(iModel(backend=tool))
+
+        class ResponseModel(BaseModel):
+            answer: str
+
+        # Mock response with action_requests
+        async def mock_json_invoke(**kwargs):
+            class MockCalling(Event):
+                def __init__(self):
+                    super().__init__()
+                    self.status = EventStatus.COMPLETED
+                    self.execution.response = MockNormalizedResponse(
+                        data='{"responsemodel": {"answer": "computing"}, "action_requests": [{"function": "multiply", "arguments": {"x": 4, "y": 7}}]}'
+                    )
+
+            return MockCalling()
+
+        object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_json_invoke))
+
+        params = OperateParams(
+            communicate=CommunicateParams(
+                generate=GenerateParams(
+                    imodel=model,
+                    instruction="Compute",
+                    request_model=ResponseModel,
+                    imodel_kwargs={"model_name": "gpt-4"},
+                ),
+                parse=ParseParams(),
+                strict_validation=False,
+            ),
+            actions=True,
+            return_message=True,
+        )
+
+        result = await operate(session, branch, params)
+
+        # Should return tuple with action result
+        assert isinstance(result, tuple)
+        model_result, assistant_msg = result
+        # Verify action was executed
+        assert hasattr(model_result, "action_responses")
+        assert model_result.action_responses[0].output == 28  # 4 * 7
+        # Verify message was captured
+        assert assistant_msg is not None

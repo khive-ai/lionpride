@@ -586,3 +586,129 @@ class TestRateLimitedProcessorSerialization:
 # Integration tests would go here but require mocking APICalling events
 # and setting up full processor/executor lifecycle. These are better
 # tested in E2E tests with real iModel usage.
+
+
+class TestRateLimitedExecutorStart:
+    """Test RateLimitedExecutor.start() replenisher task creation (lines 256-258)."""
+
+    @pytest.mark.asyncio
+    async def test_start_creates_replenisher_task_when_missing(self):
+        """Test start() creates replenisher task when processor doesn't have one (lines 256-258).
+
+        When executor.start() is called and processor exists but has no replenisher task,
+        it should create one. This covers the branch at lines 256-258:
+
+            if (
+                self.processor
+                and isinstance(self.processor, RateLimitedProcessor)
+                and not self.processor._replenisher_task
+            ):
+                self.processor._replenisher_task = asyncio.create_task(...)
+        """
+        request_bucket = TokenBucket(RateLimitConfig(capacity=10, refill_rate=1))
+
+        processor_config = {
+            "queue_capacity": 10,
+            "capacity_refresh_time": 1.0,
+            "request_bucket": request_bucket,
+            "replenishment_interval": 0.1,  # Fast for testing
+        }
+
+        executor = RateLimitedExecutor(processor_config=processor_config)
+
+        try:
+            # First start - creates processor and replenisher task via parent start()
+            await executor.start()
+            assert executor.processor is not None
+            assert executor.processor._replenisher_task is not None
+
+            first_task = executor.processor._replenisher_task
+
+            # Stop the executor (cancels replenisher task)
+            await executor.stop()
+
+            # Manually clear the task to simulate missing task scenario
+            executor.processor._replenisher_task = None
+
+            # Second start - should create replenisher task via lines 256-258
+            await executor.start()
+
+            # Verify new replenisher task was created
+            assert executor.processor._replenisher_task is not None
+            assert executor.processor._replenisher_task is not first_task
+            assert not executor.processor._replenisher_task.done()
+
+        finally:
+            await executor.stop()
+
+    @pytest.mark.asyncio
+    async def test_start_skips_replenisher_when_already_exists(self):
+        """Test start() does NOT create replenisher task when one already exists.
+
+        This is the negative case for lines 256-258 - when processor._replenisher_task
+        already exists, no new task should be created.
+        """
+        request_bucket = TokenBucket(RateLimitConfig(capacity=10, refill_rate=1))
+
+        processor_config = {
+            "queue_capacity": 10,
+            "capacity_refresh_time": 1.0,
+            "request_bucket": request_bucket,
+            "replenishment_interval": 0.1,
+        }
+
+        executor = RateLimitedExecutor(processor_config=processor_config)
+
+        try:
+            # First start
+            await executor.start()
+            first_task = executor.processor._replenisher_task
+
+            # Second start (without stopping) - should NOT create new task
+            await executor.start()
+            second_task = executor.processor._replenisher_task
+
+            # Same task should be preserved
+            assert second_task is first_task
+
+        finally:
+            await executor.stop()
+
+    @pytest.mark.asyncio
+    async def test_start_creates_replenisher_via_executor_start(self):
+        """Test start() creates replenisher task via executor.start() code path.
+
+        This specifically covers lines 256-258 in RateLimitedExecutor.start():
+        - Line 256: import asyncio
+        - Line 257-258: self.processor._replenisher_task = asyncio.create_task(...)
+
+        The key is to ensure the processor exists but has no _replenisher_task,
+        then call start() which should create the task via lines 256-258.
+        """
+        # Create executor without initially starting replenisher
+        # The RateLimitedProcessor.create() would normally start it,
+        # but going through RateLimitedExecutor() bypasses that path
+        processor_config = {
+            "queue_capacity": 10,
+            "capacity_refresh_time": 1.0,
+            "replenishment_interval": 0.1,
+            # Add a bucket so there's something to replenish
+            "request_bucket": TokenBucket(RateLimitConfig(capacity=10, refill_rate=1)),
+        }
+
+        executor = RateLimitedExecutor(processor_config=processor_config)
+
+        # Before start, processor should not exist
+        assert executor.processor is None
+
+        try:
+            # First start - creates processor and replenisher task
+            await executor.start()
+
+            # Verify processor was created with replenisher task
+            assert executor.processor is not None
+            assert executor.processor._replenisher_task is not None
+            assert not executor.processor._replenisher_task.done()
+
+        finally:
+            await executor.stop()
