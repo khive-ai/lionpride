@@ -145,6 +145,13 @@ def validate_stream_handlers(kw):
 
 
 class HookRegistry:
+    """Registry for hook callbacks at event lifecycle phases.
+
+    Hook phases: PreEventCreate, PreInvocation, PostInvocation, ErrorHandling.
+    Handlers can return values, raise exceptions to cancel/abort, or pass through.
+    Stream handlers process chunks during streaming execution.
+    """
+
     def __init__(
         self,
         hooks: dict[HookPhase, Callable] | None = None,
@@ -201,18 +208,7 @@ class HookRegistry:
     async def pre_event_create(
         self, event_type: type[E], /, exit: bool = False, **kw
     ) -> tuple[E | Exception | None, bool, EventStatus]:
-        """Hook to be called before an event is created.
-
-        Typically used to modify or validate the event creation parameters.
-
-        The hook function takes an event type and any additional keyword arguments.
-        It can:
-            - return an instance of the event type
-            - return None if no event should be created during handling, event will be
-                created in corresponding default manner
-            - raise an exception if this event should be cancelled
-                (status: cancelled, reason: f"pre-event-create hook aborted this event: {e}")
-        """
+        """Call hook before event creation. Returns event, None, or raises to cancel."""
         try:
             res = await self._call(
                 HookPhase.PreEventCreate,
@@ -231,14 +227,7 @@ class HookRegistry:
     async def pre_invocation(
         self, event: E, /, exit: bool = False, **kw
     ) -> tuple[Any, bool, EventStatus]:
-        """Hook to be called when an event is dequeued and right before it is invoked.
-
-        Typically used to check permissions.
-
-        The hook function takes the content of the event as a dictionary.
-        It can either raise an exception to abort the event invocation or pass to continue (status: cancelled).
-        It cannot modify the event itself, and won't be able to access the event instance.
-        """
+        """Call hook before event invocation. Raise to cancel."""
         try:
             res = await self._call(
                 HookPhase.PreInvocation,
@@ -257,10 +246,7 @@ class HookRegistry:
     async def post_invocation(
         self, event: E, /, exit: bool = False, **kw
     ) -> tuple[None | Exception, bool, EventStatus]:
-        """Hook to be called right after event finished its execution.
-        It can either raise an exception to abort the event invocation or pass to continue (status: aborted).
-        It cannot modify the event itself, and won't be able to access the event instance.
-        """
+        """Call hook after event execution. Raise to abort."""
         try:
             res = await self._call(
                 HookPhase.PostInvocation,
@@ -279,13 +265,7 @@ class HookRegistry:
     async def handle_streaming_chunk(
         self, chunk_type: str | type, chunk: Any, /, exit: bool = False, **kw
     ) -> tuple[Any, bool, EventStatus | None]:
-        """Hook to be called to consume streaming chunks.
-
-        Typically used for logging or stream event abortion.
-
-        The handler function signature should be: `async def handler(chunk: Any) -> None`
-        It can either raise an exception to mark the event invocation as "failed" or pass to continue (status: aborted).
-        """
+        """Process streaming chunk. Raise to abort stream."""
         try:
             res = await self._call_stream_handler(
                 chunk_type,

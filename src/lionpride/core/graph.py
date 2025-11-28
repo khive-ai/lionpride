@@ -106,6 +106,9 @@ class Graph(Element, PydapterAdaptable, PydapterAsyncAdaptable):
 
     Adjacency lists (_out_edges, _in_edges) provide O(1) node/edge queries.
     Supports cycle detection, topological sort, pathfinding.
+
+    Thread-safe: All mutation methods use @synchronized with RLock for atomic
+    operations across Pile and adjacency dict updates. Safe for Python 3.13+ nogil.
     """
 
     nodes: Pile[Node] = Field(
@@ -177,23 +180,14 @@ class Graph(Element, PydapterAdaptable, PydapterAsyncAdaptable):
 
     @synchronized
     def add_node(self, node: Node) -> None:
-        """Add node to graph. Raises ExistsError if already exists.
-
-        Thread-safe: Uses @synchronized to ensure atomic operation across
-        nodes.add() and adjacency dict initialization.
-        """
+        """Add node to graph. Raises ExistsError if already exists."""
         self.nodes.add(node)
         self._out_edges[node.id] = set()
         self._in_edges[node.id] = set()
 
     @synchronized
     def remove_node(self, node_id: UUID | Node) -> Node:
-        """Remove node and all connected edges. Raises NotFoundError if not found.
-
-        Thread-safe: Uses @synchronized with RLock to allow nested calls to
-        remove_edge(). Ensures atomic operation across edge removal, dict
-        cleanup, and node removal.
-        """
+        """Remove node and all connected edges. Raises NotFoundError if not found."""
         nid = self._coerce_id(node_id)
 
         # Verify node exists before removing edges
@@ -216,12 +210,7 @@ class Graph(Element, PydapterAdaptable, PydapterAsyncAdaptable):
 
     @synchronized
     def add_edge(self, edge: Edge) -> None:
-        """Add edge to graph. Raises NotFoundError if head/tail missing, ExistsError if already exists.
-
-        Thread-safe: Uses @synchronized to ensure atomic operation across
-        edges.add() and adjacency list updates. Critical for Rust port and
-        Python 3.13+ nogil where GIL won't protect dict operations.
-        """
+        """Add edge to graph. Raises NotFoundError if head/tail missing, ExistsError if exists."""
         if edge.head not in self.nodes:
             raise NotFoundError(f"Head node {edge.head} not in graph")
         if edge.tail not in self.nodes:
@@ -233,12 +222,7 @@ class Graph(Element, PydapterAdaptable, PydapterAsyncAdaptable):
 
     @synchronized
     def remove_edge(self, edge_id: UUID | Edge) -> Edge:
-        """Remove edge from graph. Raises NotFoundError if not found.
-
-        Thread-safe: Uses @synchronized to ensure atomic operation across
-        adjacency dict updates and edges.remove(). RLock allows nested calls
-        from remove_node().
-        """
+        """Remove edge from graph. Raises NotFoundError if not found."""
         eid = self._coerce_id(edge_id)
         edge = self._check_edge_exists(eid)
 

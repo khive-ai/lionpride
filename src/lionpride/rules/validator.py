@@ -28,33 +28,7 @@ __all__ = ("Validator",)
 
 
 class Validator:
-    """Validation engine using rule system.
-
-    Validates data spec-by-spec using auto-assigned Rules based on Spec.base_type.
-    This is the core of IPU's validation → structure → usefulness pipeline.
-
-    Flow:
-        1. Operable.create_model(request_specs) → RequestModel for LLM
-        2. LLM returns raw response
-        3. Validator.validate_operable(raw_data, operable) → validated dict
-           - For each Spec: get Rule from base_type → validate → fix
-        4. Operable.create_model(output_specs) → OutputModel
-        5. OutputModel.model_validate(validated) → final structured output
-
-    Usage:
-        validator = Validator()
-
-        # Validate raw LLM response against operable specs
-        validated = await validator.validate_operable(
-            data={"confidence": "0.95", "output": 42},
-            operable=my_operable,
-            auto_fix=True
-        )
-
-        # Create output model and validate
-        OutputModel = operable.create_model()
-        result = OutputModel.model_validate(validated)
-    """
+    """Validates data spec-by-spec using auto-assigned Rules from Spec.base_type."""
 
     def __init__(
         self,

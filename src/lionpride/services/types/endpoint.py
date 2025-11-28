@@ -521,23 +521,7 @@ class APICalling(Calling):
 
     @property
     def required_tokens(self) -> int | None:
-        """Calculate token usage for this request (for rate limiting).
-
-        Uses provider-specific token calculation based on request payload.
-        Returns None if backend doesn't require token tracking.
-
-        Edge case behavior (F2):
-        - Empty messages: Returns None (can't estimate)
-        - Missing fields: Returns None (unknown structure)
-        - Unknown payload format: Returns None (fallback)
-
-        When None is returned, token rate limiting is skipped (only request
-        limit enforced). This is intentional to support mixed workloads and
-        prevent false denials for non-standard payloads.
-
-        Returns:
-            Estimated token usage or None (if can't estimate or not required)
-        """
+        """Estimate tokens for rate limiting. None skips token tracking."""
         # Check if backend requires token tracking
         if (
             hasattr(self.backend.config, "requires_tokens")

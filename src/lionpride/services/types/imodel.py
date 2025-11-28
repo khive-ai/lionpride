@@ -90,29 +90,13 @@ class iModel(Element):  # noqa: N801
     ):
         """Initialize with ServiceBackend or auto-match from provider.
 
-        Args:
-            backend: ServiceBackend instance (Tool, Endpoint, Action). If None, use provider matching.
-            provider: Provider name for auto-matching (anthropic, openai, groq, openrouter, nvidia_nim)
-            endpoint: Endpoint path for auto-matching (default: "chat/completions")
-            rate_limiter: Optional TokenBucket for simple blocking rate limiting
-            executor: Optional Executor for event-driven processing (overrides auto-construction)
-            hook_registry: Optional HookRegistry for invocation lifecycle hooks
-            queue_capacity: Max events per batch for executor (default: 100)
-            capacity_refresh_time: Seconds before capacity reset (default: 60)
-            limit_requests: Max requests per capacity_refresh_time (triggers executor auto-construction)
-            limit_tokens: Max tokens per capacity_refresh_time (triggers executor auto-construction)
-            **kwargs: Additional kwargs passed to match_endpoint or Element
-
-        Note:
-            If limit_requests or limit_tokens is provided without explicit executor,
-            an executor will be auto-constructed with RateLimitedProcessor.
+        Provide backend directly OR provider string for auto-matching.
+        If limit_requests/limit_tokens set without executor, auto-constructs
+        RateLimitedExecutor.
 
         Example:
-            >>> # Manual backend
             >>> model = iModel(backend=AnthropicMessagesEndpoint())
-            >>> # Auto-match from provider
-            >>> model = iModel(provider="anthropic", endpoint="messages", limit_requests=50)
-            >>> model = iModel(provider="openai")  # Defaults to chat/completions
+            >>> model = iModel(provider="anthropic", limit_requests=50)
         """
         # Auto-match endpoint if backend not provided (lionagi v0 pattern)
         if backend is None:
