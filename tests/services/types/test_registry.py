@@ -140,6 +140,48 @@ class TestRegistryBasicOperations:
         with pytest.raises(KeyError, match="not found"):
             registry.get("nonexistent")
 
+    def test_get_with_default(self):
+        """Test get returns default when service not found (line 140)."""
+        registry = ServiceRegistry()
+
+        result = registry.get("nonexistent", default=None)
+
+        assert result is None
+
+    def test_get_with_default_custom_value(self):
+        """Test get returns custom default value when service not found."""
+        registry = ServiceRegistry()
+        sentinel = object()
+
+        result = registry.get("nonexistent", default=sentinel)
+
+        assert result is sentinel
+
+    def test_get_by_uuid(self):
+        """Test get by UUID directly (line 135)."""
+        registry = ServiceRegistry()
+        backend = MockBackend(config={"provider": "test", "name": "my_service"})
+        model = iModel(backend=backend)
+        registry.register(model)
+
+        # Get by UUID directly
+        retrieved = registry.get(model.id)
+
+        assert retrieved is model
+        assert retrieved.name == "my_service"
+
+    def test_get_with_imodel_passthrough(self):
+        """Test get with iModel returns same instance (line 136-137)."""
+        registry = ServiceRegistry()
+        backend = MockBackend(config={"provider": "test", "name": "my_service"})
+        model = iModel(backend=backend)
+        registry.register(model)
+
+        # Pass iModel directly - should return same instance
+        retrieved = registry.get(model)
+
+        assert retrieved is model
+
     def test_unregister(self):
         """Test unregister removes service."""
         registry = ServiceRegistry()
@@ -644,3 +686,105 @@ class TestRegistryMCPIntegration:
 
             assert result["server1"] == ["tool1"]
             assert result["server2"] == []  # Failed, empty list
+
+
+# =============================================================================
+# Tool Schema Tests (lines 206-232)
+# =============================================================================
+
+
+class TestRegistryToolSchemas:
+    """Test get_tool_schemas method (lines 206-232)."""
+
+    def test_get_tool_schemas_all_tools(self):
+        """Test get_tool_schemas with no tool_names returns all Tool schemas."""
+        from lionpride.services.types.tool import Tool
+
+        registry = ServiceRegistry()
+
+        # Create real Tool backends
+        def my_func(x: str) -> str:
+            return x
+
+        tool = Tool(func_callable=my_func)
+        model = iModel(backend=tool)
+        registry.register(model)
+
+        schemas = registry.get_tool_schemas()
+
+        assert len(schemas) == 1
+        assert schemas[0]["type"] == "object"
+        assert "properties" in schemas[0]
+
+    def test_get_tool_schemas_specific_tools(self):
+        """Test get_tool_schemas with specific tool_names."""
+        from lionpride.services.types.tool import Tool
+
+        registry = ServiceRegistry()
+
+        def func1(x: str) -> str:
+            return x
+
+        def func2(y: int) -> int:
+            return y
+
+        tool1 = Tool(func_callable=func1)
+        tool2 = Tool(func_callable=func2)
+        registry.register(iModel(backend=tool1))
+        registry.register(iModel(backend=tool2))
+
+        # Get only func1
+        schemas = registry.get_tool_schemas(tool_names=["func1"])
+
+        assert len(schemas) == 1
+
+    def test_get_tool_schemas_missing_tool_raises(self):
+        """Test get_tool_schemas raises KeyError for missing tool."""
+        registry = ServiceRegistry()
+
+        with pytest.raises(KeyError, match="not found"):
+            registry.get_tool_schemas(tool_names=["nonexistent"])
+
+    def test_get_tool_schemas_non_tool_backend_raises(self):
+        """Test get_tool_schemas raises TypeError for non-Tool backend."""
+        registry = ServiceRegistry()
+
+        # Register a non-Tool backend (MockBackend)
+        backend = MockBackend(config={"provider": "test", "name": "not_a_tool"})
+        registry.register(iModel(backend=backend))
+
+        with pytest.raises(TypeError, match="does not have Tool backend"):
+            registry.get_tool_schemas(tool_names=["not_a_tool"])
+
+    def test_get_tool_schemas_empty_when_no_tools(self):
+        """Test get_tool_schemas returns empty list when no Tool backends."""
+        registry = ServiceRegistry()
+
+        # Register non-Tool backend only
+        backend = MockBackend(config={"provider": "test", "name": "service"})
+        registry.register(iModel(backend=backend))
+
+        schemas = registry.get_tool_schemas()
+
+        assert schemas == []
+
+    def test_get_tool_schemas_skips_none_schema(self):
+        """Test get_tool_schemas skips tools with None schema."""
+        from lionpride.services.types.tool import Tool
+
+        registry = ServiceRegistry()
+
+        def my_func(x: str) -> str:
+            return x
+
+        tool = Tool(func_callable=my_func)
+        # Manually set tool_schema to None (edge case)
+        object.__setattr__(tool, "tool_schema", None)
+
+        model = iModel(backend=tool)
+        registry.register(model)
+
+        schemas = registry.get_tool_schemas()
+
+        # Should return empty - tool_schema is None
+        assert schemas == []

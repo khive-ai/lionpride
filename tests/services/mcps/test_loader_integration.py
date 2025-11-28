@@ -20,9 +20,18 @@ import pytest
 from lionpride.services.mcps.loader import load_mcp_tools
 from lionpride.services.types import ServiceRegistry
 
-# Skip integration tests if uvx not available
+# Check if fastmcp is available
+try:
+    import fastmcp
+
+    HAS_FASTMCP = True
+except ImportError:
+    HAS_FASTMCP = False
+
+# Skip integration tests if uvx not available or fastmcp not installed
 pytestmark = pytest.mark.skipif(
-    not shutil.which("uvx"), reason="uvx not available - required for MCP fetch server"
+    not shutil.which("uvx") or not HAS_FASTMCP,
+    reason="uvx not available or fastmcp not installed - required for MCP tests",
 )
 
 

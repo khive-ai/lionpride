@@ -244,6 +244,55 @@ def test_sentinel_boolean_falsy():
     assert bool(Unset) is False
 
 
+def test_singleton_type_abstract_methods():
+    """
+    SingletonType base class raises NotImplementedError for __bool__ and __repr__.
+
+    **Pattern**: Abstract method enforcement in base class.
+
+    **Scenario**: Direct use of SingletonType base class:
+    ```python
+    from lionpride.types._sentinel import SingletonType
+
+    instance = SingletonType()
+    bool(instance)  # NotImplementedError
+    repr(instance)  # NotImplementedError
+    ```
+
+    **Expected Behavior**:
+    - __bool__ raises NotImplementedError
+    - __repr__ raises NotImplementedError
+    - Enforces that subclasses must implement these methods
+
+    **Design Rationale**:
+    SingletonType is an abstract base for sentinel singletons.
+    Subclasses (UndefinedType, UnsetType) must define their own behavior.
+    This prevents accidental use of incomplete subclasses.
+
+    **Coverage**: _sentinel.py lines 51, 54
+    """
+    import pytest
+
+    from lionpride.types._sentinel import SingletonType
+
+    # Create a subclass that doesn't override abstract methods
+    class IncompleteSentinel(SingletonType):
+        """A sentinel that doesn't implement required methods."""
+
+        __slots__ = ()
+
+    # Get the singleton instance
+    instance = IncompleteSentinel()
+
+    # __bool__ should raise NotImplementedError
+    with pytest.raises(NotImplementedError):
+        bool(instance)
+
+    # __repr__ should raise NotImplementedError
+    with pytest.raises(NotImplementedError):
+        repr(instance)
+
+
 def test_sentinel_repr_str():
     """Sentinels should have clean repr/str."""
     assert repr(Undefined) == "Undefined"

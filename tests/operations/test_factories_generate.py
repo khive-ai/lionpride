@@ -281,3 +281,69 @@ class TestParameterPassthrough:
         call_kwargs = model.invoke.call_args.kwargs
         assert call_kwargs["temperature"] == 0.7
         assert call_kwargs["max_tokens"] == 100
+
+
+class TestHandleReturnEdgeCases:
+    """Test handle_return() edge cases for 100% coverage."""
+
+    def test_invalid_return_as_raises_value_error(self):
+        """Test handle_return raises ValueError for unsupported return_as.
+
+        Coverage: generate.py lines 67-68 (match default case)
+        """
+        from lionpride.operations.operate.generate import handle_return
+
+        # Create a mock completed calling
+        class MockCalling(Event):
+            def __init__(self):
+                super().__init__()
+                self.status = EventStatus.COMPLETED
+                self.execution.response = MockNormalizedResponse()
+
+        calling = MockCalling()
+
+        # Call handle_return with invalid return_as (bypass Literal type check)
+        with pytest.raises(ValueError, match="Unsupported return_as"):
+            handle_return(calling, "invalid_type")  # type: ignore
+
+
+class TestImodelKwargsValidation:
+    """Test imodel_kwargs validation for 100% coverage."""
+
+    async def test_imodel_kwargs_non_dict_raises_error(self, session_with_model):
+        """Test that non-dict imodel_kwargs raises ValueError.
+
+        Coverage: generate.py line 95
+        """
+        session, _ = session_with_model
+        branch = session.create_branch(name="test", resources={"mock_model"})
+
+        # Create params with non-dict imodel_kwargs (bypass type checking)
+        from dataclasses import replace
+
+        params = GenerateParams(
+            imodel="mock_model",
+            instruction="test",
+        )
+        # Force set imodel_kwargs to a list (normally blocked by type system)
+        object.__setattr__(params, "imodel_kwargs", ["not", "a", "dict"])
+
+        with pytest.raises(ValueError, match="imodel_kwargs must be dict"):
+            await generate(session, branch, params)
+
+    async def test_imodel_kwargs_with_messages_key_raises_error(self, session_with_model):
+        """Test that 'messages' key in imodel_kwargs raises ValueError.
+
+        Coverage: generate.py line 97
+        """
+        session, _ = session_with_model
+        branch = session.create_branch(name="test", resources={"mock_model"})
+
+        params = GenerateParams(
+            imodel="mock_model",
+            instruction="test",
+            imodel_kwargs={"messages": [{"role": "user", "content": "test"}]},
+        )
+
+        with pytest.raises(ValueError, match="does not accept 'messages'"):
+            await generate(session, branch, params)

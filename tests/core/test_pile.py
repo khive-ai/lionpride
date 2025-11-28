@@ -2301,3 +2301,48 @@ def test_pile_from_dict_runtime_extract_types(simple_items):
 
     assert len(restored) == 2
     assert restored.item_type == {Element}  # extract_types normalizes to set
+
+
+def test_pile_exclude_progression_already_removed():
+    """Test exclude when uid already removed from progression.
+
+    Coverage: pile.py lines 360-361 (except ValueError: pass)
+
+    Edge Case:
+        Item in _items but already removed from _progression.
+        This can happen in concurrent scenarios or internal state inconsistency.
+
+    Scenario:
+        1. Create pile with items
+        2. Directly manipulate _progression to remove UUID (simulate state inconsistency)
+        3. Call exclude() - should handle missing progression entry gracefully
+        4. Verify exclude still removes from _items and returns True
+
+    Expected:
+        - exclude() returns True (absence guaranteed)
+        - Item removed from _items
+        - No ValueError raised (caught internally)
+    """
+    pile = Pile()
+    item = TestElement(value=42)
+    pile.add(item)
+
+    # Verify item is in both _items and _progression
+    assert item.id in pile._items
+    assert item.id in pile._progression
+
+    # Directly remove from progression to simulate state inconsistency
+    # (This simulates a race condition or internal state corruption scenario)
+    pile._progression.remove(item.id)
+
+    # Now item is in _items but NOT in _progression
+    assert item.id in pile._items
+    assert item.id not in pile._progression
+
+    # exclude() should handle this gracefully (lines 360-361: except ValueError: pass)
+    result = pile.exclude(item.id)
+
+    # Should return True (absence guaranteed) and remove from _items
+    assert result is True
+    assert item.id not in pile._items
+    assert len(pile) == 0

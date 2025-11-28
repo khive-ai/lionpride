@@ -732,6 +732,156 @@ class TestSessionInitializationEdgeCases:
         assert "services=" in repr_str
 
 
+class TestBranchRepr:
+    """Test Branch __repr__ method."""
+
+    def test_branch_repr_with_name(self):
+        """Test Branch.__repr__() includes name when set.
+
+        Covers lines 75-76: Branch.__repr__ with name_str.
+        """
+        session = Session()
+        branch = session.create_branch(name="my_test_branch")
+
+        repr_str = repr(branch)
+        assert "Branch(" in repr_str
+        assert "messages=" in repr_str
+        assert f"session={str(session.id)[:8]}" in repr_str
+        assert "name='my_test_branch'" in repr_str
+
+    def test_branch_repr_without_name(self):
+        """Test Branch.__repr__() without name.
+
+        Edge case: Branch with empty/None name should not show name in repr.
+        """
+        session = Session()
+        # Create branch - name is auto-generated, but test with explicit empty-ish name
+        branch = Branch(session_id=session.id, name="", order=[])
+        session.conversations.add_progression(branch)
+
+        repr_str = repr(branch)
+        assert "Branch(" in repr_str
+        assert "messages=0" in repr_str
+        # Empty name should not show name= part
+        assert "name=" not in repr_str
+
+
+class TestSessionInitWithBranchInstance:
+    """Test Session initialization with Branch instance as default_branch."""
+
+    def test_session_init_with_branch_instance_and_capabilities(self):
+        """Test Session init with Branch instance as default_branch.
+
+        Covers lines 163-167: Branch instance handling with resources/capabilities.
+        """
+        from uuid import uuid4
+
+        # Create a Branch instance (needs a session_id, we'll use a placeholder)
+        temp_session_id = uuid4()
+        branch = Branch(
+            session_id=temp_session_id,
+            name="precreated_branch",
+            order=[],
+            capabilities={"existing_cap"},
+            resources={"existing_res"},
+        )
+
+        # Create session with this branch as default, passing default_capabilities
+        session = Session(
+            default_branch=branch,
+            default_capabilities={"new_cap1", "new_cap2"},
+        )
+
+        # Verify branch is in session
+        assert session.default_branch is not None
+        assert session.default_branch.id == branch.id
+        assert session.default_branch.name == "precreated_branch"
+
+        # Verify capabilities were updated (merged)
+        assert "existing_cap" in session.default_branch.capabilities
+        assert "new_cap1" in session.default_branch.capabilities
+        assert "new_cap2" in session.default_branch.capabilities
+
+    def test_session_init_with_branch_instance_no_capabilities(self):
+        """Test Session init with Branch instance but no default_capabilities.
+
+        Edge case: Branch instance without extra capabilities being passed.
+        """
+        from uuid import uuid4
+
+        temp_session_id = uuid4()
+        branch = Branch(
+            session_id=temp_session_id,
+            name="simple_branch",
+            order=[],
+        )
+
+        session = Session(default_branch=branch)
+
+        assert session.default_branch is not None
+        assert session.default_branch.id == branch.id
+
+
+class TestCreateBranchInvalidSystem:
+    """Test create_branch with invalid system parameter types."""
+
+    def test_create_branch_with_invalid_system_type_raises(self):
+        """Test create_branch raises ValueError for invalid system type.
+
+        Covers line 244: system must be Message or UUID.
+        """
+        session = Session()
+
+        # Pass something that's not a Message or UUID (e.g., a string that's not a valid UUID)
+        with pytest.raises(ValueError, match="system must be Message or UUID"):
+            session.create_branch(name="bad", system="not_a_uuid_or_message")
+
+    def test_create_branch_with_int_system_raises(self):
+        """Test create_branch raises ValueError for int system.
+
+        Edge case: Integer passed as system.
+        """
+        session = Session()
+
+        with pytest.raises(ValueError, match="system must be Message or UUID"):
+            session.create_branch(name="bad", system=12345)
+
+    def test_create_branch_with_dict_system_raises(self):
+        """Test create_branch raises ValueError for dict system.
+
+        Edge case: Dict passed as system.
+        """
+        session = Session()
+
+        with pytest.raises(ValueError, match="system must be Message or UUID"):
+            session.create_branch(name="bad", system={"not": "valid"})
+
+
+class TestSetBranchSystemWithUUID:
+    """Test set_branch_system with UUID (not Message instance)."""
+
+    def test_set_branch_system_with_uuid_already_in_session(self):
+        """Test set_branch_system with UUID for message already in session.
+
+        Covers line 391: else branch when system is UUID.
+        """
+        session = Session()
+        branch = session.create_branch(name="main")
+
+        # Add system message to session first
+        sys_msg = Message(content=SystemContent(system_message="Test system"))
+        session.conversations.add_item(sys_msg)
+
+        # Now set branch system using UUID (not Message instance)
+        session.set_branch_system(branch, sys_msg.id)
+
+        # Verify it was set correctly
+        assert branch.system_message == sys_msg.id
+        retrieved = session.get_branch_system(branch)
+        assert retrieved is not None
+        assert retrieved.id == sys_msg.id
+
+
 class TestBranchSystemMessageReplacement:
     """Test system message replacement behavior."""
 
@@ -777,3 +927,362 @@ class TestBranchSystemMessageReplacement:
         # Now it's in session
         assert sys_msg.id in session.messages
         assert branch.system_message == sys_msg.id
+
+
+class TestSessionInitWithDefaultModels:
+    """Test Session initialization with default_generate_model and default_parse_model."""
+
+    def test_session_init_with_default_generate_model_imodel(self):
+        """Test Session init with default_generate_model as iModel.
+
+        Covers lines 154-158: iModel registration during init.
+        """
+        from lionpride.services.providers.oai_chat import OAIChatEndpoint
+        from lionpride.services.types.imodel import iModel
+
+        # Create iModel
+        endpoint = OAIChatEndpoint(config=None, name="init_gen_model", api_key="test")
+        model = iModel(backend=endpoint)
+
+        # Create session with model
+        session = Session(default_generate_model=model)
+
+        # Verify model was registered
+        assert session.services.has("init_gen_model")
+        assert session._default_backends["generate"] == "init_gen_model"
+        assert session.default_generate_model is not None
+        assert session.default_generate_model.name == "init_gen_model"
+
+    def test_session_init_with_default_parse_model_imodel(self):
+        """Test Session init with default_parse_model as iModel.
+
+        Covers lines 154-158 (for parse) and lines 209-210 (default_parse_model property).
+        """
+        from lionpride.services.providers.oai_chat import OAIChatEndpoint
+        from lionpride.services.types.imodel import iModel
+
+        # Create iModel
+        endpoint = OAIChatEndpoint(config=None, name="init_parse_model", api_key="test")
+        model = iModel(backend=endpoint)
+
+        # Create session with parse model
+        session = Session(default_parse_model=model)
+
+        # Verify model was registered
+        assert session.services.has("init_parse_model")
+        assert session._default_backends["parse"] == "init_parse_model"
+
+        # Test default_parse_model property (lines 209-210)
+        assert session.default_parse_model is not None
+        assert session.default_parse_model.name == "init_parse_model"
+
+    def test_session_init_with_both_default_models(self):
+        """Test Session init with both default_generate_model and default_parse_model.
+
+        Edge case: Both models registered during init.
+        """
+        from lionpride.services.providers.oai_chat import OAIChatEndpoint
+        from lionpride.services.types.imodel import iModel
+
+        gen_endpoint = OAIChatEndpoint(config=None, name="gen_model", api_key="test")
+        gen_model = iModel(backend=gen_endpoint)
+
+        parse_endpoint = OAIChatEndpoint(config=None, name="parse_model", api_key="test")
+        parse_model = iModel(backend=parse_endpoint)
+
+        session = Session(
+            default_generate_model=gen_model,
+            default_parse_model=parse_model,
+        )
+
+        # Verify both registered
+        assert session.services.has("gen_model")
+        assert session.services.has("parse_model")
+        assert session.default_generate_model.name == "gen_model"
+        assert session.default_parse_model.name == "parse_model"
+
+    def test_session_init_with_default_model_string(self):
+        """Test Session init with default_generate_model as string name.
+
+        Edge case: String name (not iModel) - model not auto-registered.
+        """
+        session = Session(default_generate_model="nonexistent_model")
+
+        # Name stored but model not registered
+        assert session._default_backends["generate"] == "nonexistent_model"
+        # Property returns None because model not registered
+        assert session.default_generate_model is None
+
+    def test_default_parse_model_returns_none_when_not_set(self):
+        """Test default_parse_model property returns None when not configured.
+
+        Edge case: Access property when no parse model set.
+        """
+        session = Session()
+
+        assert session.default_parse_model is None
+
+
+class TestSetDefaultModelWithIModel:
+    """Test set_default_model with iModel instance."""
+
+    def test_set_default_model_registers_unregistered_imodel(self):
+        """Test set_default_model registers iModel if not already registered.
+
+        Covers line 411: iModel auto-registration in set_default_model.
+        """
+        from lionpride.services.providers.oai_chat import OAIChatEndpoint
+        from lionpride.services.types.imodel import iModel
+
+        # Create session with default branch
+        session = Session(default_branch="main")
+
+        # Create an iModel that's NOT yet registered
+        endpoint = OAIChatEndpoint(config=None, name="unregistered_model", api_key="test")
+        model = iModel(backend=endpoint)
+
+        # Verify model is not in services
+        assert not session.services.has("unregistered_model")
+
+        # Call set_default_model with iModel instance
+        session.set_default_model(model, operation="generate")
+
+        # Verify model was auto-registered
+        assert session.services.has("unregistered_model")
+        assert session._default_backends["generate"] == "unregistered_model"
+        assert "unregistered_model" in session.default_branch.resources
+
+
+class TestSessionRegisterOperation:
+    """Test session.register_operation method."""
+
+    def test_register_operation_basic(self):
+        """Test register_operation adds custom operation to registry.
+
+        Covers line 514: session.register_operation delegates to operations.register.
+        """
+        session = Session()
+
+        async def custom_op(session, branch, params):
+            return "custom_result"
+
+        # Register custom operation
+        session.register_operation("my_custom_op", custom_op)
+
+        # Verify it's registered
+        assert session.operations.has("my_custom_op")
+
+    def test_register_operation_with_override(self):
+        """Test register_operation with override=True.
+
+        Edge case: Override an existing operation.
+        """
+        session = Session()
+
+        async def op_v1(session, branch, params):
+            return "v1"
+
+        async def op_v2(session, branch, params):
+            return "v2"
+
+        session.register_operation("versioned_op", op_v1)
+
+        # Override should work
+        session.register_operation("versioned_op", op_v2, override=True)
+
+        # Verify the new version is registered
+        assert session.operations.get("versioned_op") is op_v2
+
+    def test_register_operation_without_override_raises(self):
+        """Test register_operation without override raises for duplicate.
+
+        Edge case: Attempting to register duplicate without override flag.
+        """
+        session = Session()
+
+        async def op1(session, branch, params):
+            return "first"
+
+        async def op2(session, branch, params):
+            return "second"
+
+        session.register_operation("dup_op", op1)
+
+        # Should raise ValueError
+        with pytest.raises(ValueError, match="already registered"):
+            session.register_operation("dup_op", op2)
+
+
+class TestSessionFlowMethod:
+    """Test session.flow() method."""
+
+    @pytest.mark.asyncio
+    async def test_session_flow_executes_graph(self):
+        """Test session.flow() executes operation graph.
+
+        Covers lines 468-470: session.flow imports and delegates to flow function.
+        """
+        from lionpride import Graph
+        from lionpride.operations.node import create_operation
+
+        session = Session()
+        branch = session.create_branch(name="main")
+
+        # Create simple custom operation
+        execution_log = []
+
+        async def tracking_op(session, branch, params):
+            execution_log.append(params.get("name", "unnamed"))
+            return f"result_{params.get('name', 'unnamed')}"
+
+        session.register_operation("tracking_op", tracking_op)
+
+        # Create operation nodes
+        op1 = create_operation(operation="tracking_op", parameters={"name": "task1"})
+        op1.metadata["name"] = "task1"
+        op2 = create_operation(operation="tracking_op", parameters={"name": "task2"})
+        op2.metadata["name"] = "task2"
+
+        graph = Graph()
+        graph.add_node(op1)
+        graph.add_node(op2)
+
+        # Execute via session.flow()
+        results = await session.flow(graph, branch)
+
+        # Verify execution
+        assert "task1" in results
+        assert "task2" in results
+        assert len(execution_log) == 2
+
+    @pytest.mark.asyncio
+    async def test_session_flow_uses_default_branch(self):
+        """Test session.flow() uses default branch when not specified.
+
+        Edge case: Flow with branch=None uses session's default branch.
+        """
+        from lionpride import Graph
+        from lionpride.operations.node import create_operation
+
+        session = Session(default_branch="default")
+
+        executed_branch = None
+
+        async def branch_tracker(session, branch, params):
+            nonlocal executed_branch
+            executed_branch = branch
+            return "done"
+
+        session.register_operation("branch_tracker", branch_tracker)
+
+        op = create_operation(operation="branch_tracker", parameters={})
+        op.metadata["name"] = "test"
+
+        graph = Graph()
+        graph.add_node(op)
+
+        # Call flow without branch argument
+        await session.flow(graph)
+
+        # Should use default branch
+        assert executed_branch is not None
+        assert executed_branch.name == "default"
+
+
+class TestSessionRequestMethod:
+    """Test session.request() method."""
+
+    @pytest.mark.asyncio
+    async def test_session_request_invokes_service(self):
+        """Test session.request() invokes a registered service.
+
+        Covers lines 499-500: session.request gets service and invokes.
+        """
+        from dataclasses import dataclass
+        from unittest.mock import AsyncMock
+
+        from lionpride import Event, EventStatus
+        from lionpride.services.providers.oai_chat import OAIChatEndpoint
+        from lionpride.services.types.imodel import iModel
+
+        # Create mock model
+        endpoint = OAIChatEndpoint(config=None, name="request_test_model", api_key="test")
+        model = iModel(backend=endpoint)
+
+        @dataclass
+        class MockResponse:
+            data: str = "mock response"
+
+        # Mock the invoke method
+        async def mock_invoke(**kwargs):
+            class MockCalling(Event):
+                def __init__(self):
+                    super().__init__()
+                    self.status = EventStatus.COMPLETED
+                    self.execution.response = MockResponse()
+
+            return MockCalling()
+
+        object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_invoke))
+
+        # Create session and register model
+        session = Session()
+        session.services.register(model)
+
+        # Call request
+        calling = await session.request("request_test_model", model_name="gpt-4")
+
+        # Verify the service was invoked
+        assert calling is not None
+        assert calling.status == EventStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_session_request_with_poll_params(self):
+        """Test session.request() passes poll parameters to service.
+
+        Edge case: poll_timeout and poll_interval are forwarded.
+        """
+        from dataclasses import dataclass
+        from unittest.mock import AsyncMock
+
+        from lionpride import Event, EventStatus
+        from lionpride.services.providers.oai_chat import OAIChatEndpoint
+        from lionpride.services.types.imodel import iModel
+
+        endpoint = OAIChatEndpoint(config=None, name="poll_test_model", api_key="test")
+        model = iModel(backend=endpoint)
+
+        @dataclass
+        class MockResponse:
+            data: str = "mock"
+
+        captured_kwargs = {}
+
+        async def mock_invoke(**kwargs):
+            captured_kwargs.update(kwargs)
+
+            class MockCalling(Event):
+                def __init__(self):
+                    super().__init__()
+                    self.status = EventStatus.COMPLETED
+                    self.execution.response = MockResponse()
+
+            return MockCalling()
+
+        object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_invoke))
+
+        session = Session()
+        session.services.register(model)
+
+        # Call with poll parameters
+        await session.request(
+            "poll_test_model",
+            poll_timeout=60.0,
+            poll_interval=0.5,
+            custom_param="test",
+        )
+
+        # Verify parameters were passed
+        assert captured_kwargs.get("poll_timeout") == 60.0
+        assert captured_kwargs.get("poll_interval") == 0.5
+        assert captured_kwargs.get("custom_param") == "test"

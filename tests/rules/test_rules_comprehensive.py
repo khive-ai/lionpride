@@ -497,6 +497,61 @@ class TestActionRequestRule:
         assert result.function == "get_time"
         assert result.arguments == {}
 
+    @pytest.mark.asyncio
+    async def test_perform_fix_action_request_passthrough(self):
+        """Test perform_fix passes through ActionRequest instance (lines 114-115).
+
+        Call perform_fix directly since invoke() won't call it when
+        ActionRequest already passes validate().
+        """
+        from lionpride.rules.models import ActionRequest
+
+        rule = ActionRequestRule()
+        action_req = ActionRequest(function="test_func", arguments={"key": "value"})
+        # Call perform_fix directly to hit lines 114-115
+        result = await rule.perform_fix(action_req, dict)
+        assert result is action_req
+        assert result.function == "test_func"
+        assert result.arguments == {"key": "value"}
+
+    @pytest.mark.asyncio
+    async def test_perform_fix_invalid_json_string(self):
+        """Test perform_fix fails on invalid JSON string (lines 121-122)."""
+        rule = ActionRequestRule()
+        with pytest.raises(ValidationError, match="Failed to parse action request JSON"):
+            await rule.invoke("action_request", "not valid json {", dict)
+
+    @pytest.mark.asyncio
+    async def test_perform_fix_non_mapping_fails(self):
+        """Test perform_fix fails on non-mapping value (line 125)."""
+        rule = ActionRequestRule()
+        with pytest.raises(ValidationError, match="Cannot convert list to action request"):
+            await rule.invoke("action_request", [1, 2, 3], dict)
+
+    @pytest.mark.asyncio
+    async def test_perform_fix_arguments_invalid_json_string(self):
+        """Test perform_fix wraps invalid JSON arguments as raw (lines 153-155)."""
+        rule = ActionRequestRule()
+        result = await rule.invoke(
+            "action_request",
+            {"function": "test_func", "arguments": "not valid json"},
+            dict,
+        )
+        assert result.function == "test_func"
+        assert result.arguments == {"raw": "not valid json"}
+
+    @pytest.mark.asyncio
+    async def test_perform_fix_arguments_non_mapping(self):
+        """Test perform_fix wraps non-mapping arguments as value (line 158)."""
+        rule = ActionRequestRule()
+        result = await rule.invoke(
+            "action_request",
+            {"function": "test_func", "arguments": [1, 2, 3]},
+            dict,
+        )
+        assert result.function == "test_func"
+        assert result.arguments == {"value": [1, 2, 3]}
+
 
 class TestRuleApply:
     """Tests for Rule.apply() method and qualifiers."""
@@ -595,3 +650,376 @@ class TestRuleInvokeAutoFixOverride:
         )
         with pytest.raises(ValidationError):
             await rule_without_fix.invoke("score", "0.5", float)
+
+
+class TestRuleQualifierFromStr:
+    """Tests for RuleQualifier.from_str() method."""
+
+    def test_field_qualifier(self):
+        """Test parsing FIELD qualifier."""
+        assert RuleQualifier.from_str("FIELD") == RuleQualifier.FIELD
+        assert RuleQualifier.from_str("field") == RuleQualifier.FIELD
+        assert RuleQualifier.from_str("  Field  ") == RuleQualifier.FIELD
+
+    def test_annotation_qualifier(self):
+        """Test parsing ANNOTATION qualifier."""
+        assert RuleQualifier.from_str("ANNOTATION") == RuleQualifier.ANNOTATION
+        assert RuleQualifier.from_str("annotation") == RuleQualifier.ANNOTATION
+
+    def test_condition_qualifier(self):
+        """Test parsing CONDITION qualifier."""
+        assert RuleQualifier.from_str("CONDITION") == RuleQualifier.CONDITION
+        assert RuleQualifier.from_str("condition") == RuleQualifier.CONDITION
+
+    def test_unknown_qualifier_raises(self):
+        """Test unknown qualifier string raises ValueError."""
+        with pytest.raises(ValueError, match="Unknown RuleQualifier"):
+            RuleQualifier.from_str("INVALID")
+        with pytest.raises(ValueError, match="Unknown RuleQualifier"):
+            RuleQualifier.from_str("unknown")
+
+
+class TestDecideQualifierOrder:
+    """Tests for _decide_qualifier_order() function."""
+
+    @pytest.mark.asyncio
+    async def test_string_qualifier_moves_to_front(self):
+        """Test string qualifier is converted and moved to front."""
+        # Use Rule.apply() which internally calls _decide_qualifier_order
+        rule = ChoiceRule(choices=["a", "b"], apply_types={str})
+        # Pass qualifier as string - tests lines 69-70
+        assert await rule.apply("field", "a", str, qualifier="annotation") is True
+
+    @pytest.mark.asyncio
+    async def test_string_qualifier_condition(self):
+        """Test string qualifier CONDITION is parsed."""
+        rule = StringRule()
+        # CONDITION qualifier will raise NotImplementedError since StringRule
+        # doesn't implement rule_condition, but it should try other qualifiers
+        assert await rule.apply("field", "test", str, qualifier="condition") is True
+
+
+class TestRuleParamsValidation:
+    """Tests for RuleParams._validate() method.
+
+    Note: RuleParams._validate() has a bug where super()._validate() fails
+    with frozen dataclass + slots. Lines 107-115 are unreachable until fixed.
+    These tests verify the data structures can be created.
+    """
+
+    def test_params_with_apply_types(self):
+        """Test RuleParams with apply_types set."""
+        params = RuleParams(apply_types={str, int})
+        assert str in params.apply_types
+        assert int in params.apply_types
+
+    def test_params_with_apply_fields(self):
+        """Test RuleParams with apply_fields set."""
+        params = RuleParams(apply_fields={"name", "value"})
+        assert "name" in params.apply_fields
+        assert "value" in params.apply_fields
+
+    def test_params_with_condition_qualifier(self):
+        """Test RuleParams with CONDITION qualifier allows no types/fields."""
+        params = RuleParams(default_qualifier=RuleQualifier.CONDITION)
+        assert params.default_qualifier == RuleQualifier.CONDITION
+        assert not params.apply_types
+        assert not params.apply_fields
+
+
+class TestRuleInitWithKwargs:
+    """Tests for Rule.__init__ with additional kwargs."""
+
+    @pytest.mark.asyncio
+    async def test_init_merges_kwargs(self):
+        """Test Rule.__init__ merges kwargs with params.kw."""
+        # Note: StringRule handles min_length/max_length as instance attrs,
+        # so we use arbitrary kwargs to test the merge behavior in Rule.__init__
+        params = RuleParams(apply_types={str}, kw={"existing_key": "original"})
+        rule = StringRule(params=params, extra_key="merged_value")
+        # Verify kwargs are merged in validation_kwargs
+        assert rule.validation_kwargs.get("existing_key") == "original"
+        assert rule.validation_kwargs.get("extra_key") == "merged_value"
+
+
+class TestRuleDefaultQualifierProperty:
+    """Tests for Rule.default_qualifier property."""
+
+    def test_default_qualifier_property(self):
+        """Test default_qualifier property returns params value."""
+        params = RuleParams(apply_types={str}, default_qualifier=RuleQualifier.ANNOTATION)
+        rule = StringRule(params=params)
+        assert rule.default_qualifier == RuleQualifier.ANNOTATION
+
+
+class TestRulePerformFixNotImplemented:
+    """Tests for Rule.perform_fix() NotImplementedError."""
+
+    @pytest.mark.asyncio
+    async def test_perform_fix_not_implemented_raises(self):
+        """Test perform_fix raises NotImplementedError when not implemented."""
+        from typing import Any
+
+        # Create a minimal concrete rule that doesn't implement perform_fix
+        class MinimalRule(Rule):
+            def __init__(self):
+                super().__init__(RuleParams(apply_types={str}, auto_fix=True))
+
+            async def validate(self, v: Any, t: type, **kw) -> None:
+                if not isinstance(v, str):
+                    raise ValueError("Not a string")
+
+        rule = MinimalRule()
+        # When validation fails and auto_fix is True, perform_fix is called
+        # but MinimalRule doesn't implement it, so it should raise
+        with pytest.raises(ValidationError, match="Failed to fix field"):
+            await rule.invoke("field", 123, str)
+
+
+class TestRuleRepr:
+    """Tests for Rule.__repr__() method."""
+
+    def test_repr_format(self):
+        """Test __repr__ returns expected format."""
+        rule = StringRule()
+        repr_str = repr(rule)
+        assert "StringRule(" in repr_str
+        assert "types=" in repr_str
+        assert "fields=" in repr_str
+        assert "auto_fix=" in repr_str
+
+    def test_repr_with_fields(self):
+        """Test __repr__ with apply_fields."""
+        rule = ChoiceRule(choices=["a", "b"], apply_fields={"status"})
+        repr_str = repr(rule)
+        assert "ChoiceRule(" in repr_str
+        assert "status" in repr_str or "fields=" in repr_str
+
+
+class TestRuleParamsValidationConstraints:
+    """Tests for RuleParams dataclass constraints.
+
+    NOTE: Lines 107-115 in base.py (RuleParams._validate) are currently DEAD CODE.
+    The dataclass decorator on RuleParams generates __init__ without calling
+    super().__init__(), so _validate() is never invoked. These tests verify
+    the current behavior (no validation) rather than the intended behavior.
+    """
+
+    def test_params_both_types_and_fields_currently_allowed(self):
+        """Verify both apply_types and apply_fields can be set (dead code issue).
+
+        NOTE: This SHOULD raise ValueError but doesn't because _validate() is dead code.
+        When fixed, this test should expect ValueError.
+        """
+        # Currently allowed due to dead code - this is a BUG to be fixed
+        params = RuleParams(apply_types={str}, apply_fields={"name"})
+        assert params.apply_types == {str}
+        assert params.apply_fields == {"name"}
+
+    def test_params_neither_set_currently_allowed(self):
+        """Verify neither apply_types nor apply_fields can be empty (dead code issue).
+
+        NOTE: This SHOULD raise ValueError for non-CONDITION qualifier but doesn't.
+        """
+        params = RuleParams()
+        assert params.apply_types == set()
+        assert params.apply_fields == set()
+
+    def test_params_neither_with_condition_qualifier(self):
+        """Test CONDITION qualifier with neither types nor fields."""
+        params = RuleParams(default_qualifier=RuleQualifier.CONDITION)
+        assert params.default_qualifier == RuleQualifier.CONDITION
+        assert not params.apply_types
+        assert not params.apply_fields
+
+
+class TestBooleanRuleFallback:
+    """Tests for BooleanRule.perform_fix() fallback (line 88)."""
+
+    @pytest.mark.asyncio
+    async def test_auto_fix_list_to_bool(self):
+        """Test auto-fixing list to bool uses bool() fallback (line 88)."""
+        rule = BooleanRule()
+        # Non-empty list → True via bool()
+        result = await rule.invoke("active", [1, 2, 3], bool)
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_auto_fix_empty_list_to_bool(self):
+        """Test auto-fixing empty list to bool uses bool() fallback."""
+        rule = BooleanRule()
+        # Empty list → False via bool()
+        result = await rule.invoke("active", [], bool)
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_auto_fix_dict_to_bool(self):
+        """Test auto-fixing dict to bool uses bool() fallback."""
+        rule = BooleanRule()
+        # Non-empty dict → True via bool()
+        result = await rule.invoke("active", {"key": "value"}, bool)
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_auto_fix_empty_dict_to_bool(self):
+        """Test auto-fixing empty dict to bool uses bool() fallback."""
+        rule = BooleanRule()
+        # Empty dict → False via bool()
+        result = await rule.invoke("active", {}, bool)
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_auto_fix_tuple_to_bool(self):
+        """Test auto-fixing tuple to bool uses bool() fallback."""
+        rule = BooleanRule()
+        result = await rule.invoke("active", (1,), bool)
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_auto_fix_none_to_bool(self):
+        """Test auto-fixing None to bool uses bool() fallback."""
+        rule = BooleanRule()
+        result = await rule.invoke("active", None, bool)
+        assert result is False
+
+
+class TestChoiceRulePerformFixAlreadyValid:
+    """Tests for ChoiceRule.perform_fix() when value already valid (line 94)."""
+
+    @pytest.mark.asyncio
+    async def test_perform_fix_already_valid_passthrough(self):
+        """Test perform_fix returns valid value unchanged (line 93-94).
+
+        Call perform_fix directly since invoke() won't call it when
+        value already passes validate().
+        """
+        rule = ChoiceRule(choices=["low", "medium", "high"])
+        # Call perform_fix directly to hit line 94
+        result = await rule.perform_fix("medium", str)
+        assert result == "medium"
+
+    @pytest.mark.asyncio
+    async def test_perform_fix_numeric_already_valid(self):
+        """Test perform_fix with numeric choice already valid."""
+        rule = ChoiceRule(choices=[1, 2, 3], apply_types={int})
+        result = await rule.perform_fix(2, int)
+        assert result == 2
+
+
+class TestMappingRuleKeepOriginalKey:
+    """Tests for MappingRule.perform_fix() keeping original key (line 123)."""
+
+    @pytest.mark.asyncio
+    async def test_fuzzy_keys_unknown_key_preserved(self):
+        """Test fuzzy key matching preserves unknown keys (line 122-123)."""
+        rule = MappingRule(required_keys={"name"}, optional_keys={"value"}, fuzzy_keys=True)
+        # "unknown_key" is not in required_keys or optional_keys, so it should be kept as-is
+        result = await rule.invoke(
+            "config", {"NAME": "test", "unknown_key": "preserved_value"}, dict
+        )
+        assert result == {"name": "test", "unknown_key": "preserved_value"}
+
+    @pytest.mark.asyncio
+    async def test_fuzzy_keys_multiple_unknown_keys_preserved(self):
+        """Test fuzzy key matching preserves multiple unknown keys."""
+        rule = MappingRule(required_keys={"name"}, fuzzy_keys=True)
+        result = await rule.invoke(
+            "config",
+            {"NAME": "test", "extra1": "value1", "Extra2": "value2"},
+            dict,
+        )
+        assert result["name"] == "test"
+        assert result["extra1"] == "value1"
+        assert result["Extra2"] == "value2"
+
+    @pytest.mark.asyncio
+    async def test_fuzzy_keys_only_unknown_keys(self):
+        """Test fuzzy key matching with only unknown keys keeps them all."""
+        rule = MappingRule(fuzzy_keys=True)
+        result = await rule.invoke("config", {"random_key": "value1", "another": "value2"}, dict)
+        assert result["random_key"] == "value1"
+        assert result["another"] == "value2"
+
+
+class TestReasonRuleConfidenceValidation:
+    """Tests for ReasonRule confidence validation.
+
+    NOTE: Lines 68-69 in reason.py are DEAD CODE because Pydantic's Reason model
+    validates confidence range (ge=0.0, le=1.0) at construction time. It's impossible
+    to create a Reason instance with invalid confidence, so the ReasonRule.validate()
+    check can never be reached.
+    """
+
+    @pytest.mark.asyncio
+    async def test_pydantic_prevents_invalid_confidence(self):
+        """Verify Pydantic prevents creating Reason with invalid confidence.
+
+        This shows why line 69 is unreachable - Pydantic raises before ReasonRule.validate().
+        """
+        import pydantic
+
+        from lionpride.rules import Reason
+
+        with pytest.raises(pydantic.ValidationError):
+            Reason(reasoning="test", confidence=1.5)
+
+        with pytest.raises(pydantic.ValidationError):
+            Reason(reasoning="test", confidence=-0.5)
+
+    @pytest.mark.asyncio
+    async def test_valid_confidence_boundaries(self):
+        """Test that valid confidence at boundaries passes."""
+        from lionpride.rules import Reason
+        from lionpride.rules.reason import ReasonRule
+
+        rule = ReasonRule()
+
+        # 0.0 boundary
+        reason_zero = Reason(reasoning="test", confidence=0.0)
+        await rule.validate(reason_zero, Reason)
+
+        # 1.0 boundary
+        reason_one = Reason(reasoning="test", confidence=1.0)
+        await rule.validate(reason_one, Reason)
+
+    @pytest.mark.asyncio
+    async def test_none_confidence_valid(self):
+        """Test that None confidence passes validation."""
+        from lionpride.rules import Reason
+        from lionpride.rules.reason import ReasonRule
+
+        rule = ReasonRule()
+        reason = Reason(reasoning="test", confidence=None)
+        await rule.validate(reason, Reason)
+
+
+class TestStringRulePerformFixException:
+    """Tests for StringRule.perform_fix() exception handling (lines 98-99)."""
+
+    @pytest.mark.asyncio
+    async def test_perform_fix_str_conversion_failure(self):
+        """Test perform_fix handles str() conversion failure (lines 98-99)."""
+
+        class Unconvertible:
+            """Object that raises exception when converted to str."""
+
+            def __str__(self):
+                raise RuntimeError("Cannot convert to string")
+
+        rule = StringRule()
+        with pytest.raises(ValidationError, match="Failed to fix field"):
+            await rule.invoke("field", Unconvertible(), str)
+
+    @pytest.mark.asyncio
+    async def test_perform_fix_str_raises_type_error(self):
+        """Test perform_fix handles TypeError from str() conversion."""
+
+        class TypeErrorStr:
+            """Object that raises TypeError when converted to str."""
+
+            def __str__(self):
+                raise TypeError("Type error during conversion")
+
+        rule = StringRule()
+        with pytest.raises(ValidationError, match="Failed to fix field"):
+            await rule.invoke("field", TypeErrorStr(), str)

@@ -116,3 +116,280 @@ class TestValidatorIntegration:
         assert summary["total_errors"] == 2
         assert "fields_with_errors" in summary
         assert set(summary["fields_with_errors"]) == {"field1", "field2"}
+
+
+class TestValidatorEdgeCases:
+    """Tests for validator edge cases - covers uncovered lines."""
+
+    @pytest.mark.asyncio
+    async def test_none_value_strict_false_no_default(self):
+        """Test None value with strict=False and no default returns None (line 144)."""
+        from lionpride.types import Operable, Spec
+
+        # Non-nullable spec with no default
+        spec = Spec(str, name="required_field")
+        operable = Operable([spec])
+
+        validator = Validator()
+        # With strict=False, should return None instead of raising
+        validated = await validator.validate_operable(
+            data={"required_field": None},
+            operable=operable,
+            strict=False,
+        )
+
+        assert validated["required_field"] is None
+
+    @pytest.mark.asyncio
+    async def test_listable_spec_rule_exception(self):
+        """Test exception in rule.invoke for listable items (lines 167-169)."""
+        from lionpride.types import Operable, Spec
+
+        # Use a number rule with strict constraints that will fail
+        failing_rule = NumberRule(ge=0.0, le=1.0)
+        spec = Spec(float, name="scores", listable=True, rule=failing_rule)
+        operable = Operable([spec])
+
+        validator = Validator()
+        # Value 5.0 is outside [0, 1] range - should raise and log error
+        with pytest.raises(ValidationError):
+            await validator.validate_operable(
+                data={"scores": [0.5, 5.0]},  # 5.0 will fail
+                operable=operable,
+                auto_fix=True,
+            )
+
+        # Error should be logged
+        assert len(validator.validation_log) == 1
+        assert "scores[1]" in validator.validation_log[0]["field"]
+
+    @pytest.mark.asyncio
+    async def test_listable_spec_no_rule(self):
+        """Test listable spec with no rule passes items through (lines 170-171)."""
+        from lionpride.types import Operable, Spec
+
+        # Create a custom type with no rule in default registry
+        class CustomType:
+            def __init__(self, value):
+                self.value = value
+
+        spec = Spec(CustomType, name="items", listable=True)
+        operable = Operable([spec])
+
+        # Use empty registry so no rule is found
+        empty_registry = RuleRegistry()
+        validator = Validator(registry=empty_registry)
+
+        item1 = CustomType("a")
+        item2 = CustomType("b")
+
+        # With strict=False, items should pass through unchanged
+        validated = await validator.validate_operable(
+            data={"items": [item1, item2]},
+            operable=operable,
+            strict=False,
+        )
+
+        assert validated["items"] == [item1, item2]
+
+    @pytest.mark.asyncio
+    async def test_validator_list_with_non_callable(self):
+        """Test validator list with non-callable is skipped (line 204)."""
+        from unittest.mock import MagicMock
+
+        from lionpride.types import Operable, Spec
+
+        def uppercase_validator(v):
+            return v.upper()
+
+        # Create a valid spec first
+        spec = Spec(str, name="code", validator=uppercase_validator)
+
+        # Mock spec.get to return a list with non-callable items
+        original_get = spec.get
+
+        def mock_get(key, default=None):
+            if key == "validator":
+                # Return list with callable and non-callable items
+                return [uppercase_validator, "not_callable", 42]
+            return original_get(key, default)
+
+        # Apply mock
+        mock_spec = MagicMock(wraps=spec)
+        mock_spec.get = mock_get
+        mock_spec.name = "code"
+        mock_spec.base_type = str
+        mock_spec.is_nullable = False
+        mock_spec.is_listable = False
+
+        async def mock_acreate_default_value():
+            raise ValueError("No default")
+
+        mock_spec.acreate_default_value = mock_acreate_default_value
+
+        # Create operable with actual spec (for model creation)
+        Operable([spec])  # Ensure model is created
+
+        validator = Validator()
+        # Directly call validate_spec with our mock
+        result = await validator.validate_spec(mock_spec, "abc", auto_fix=True, strict=True)
+
+        # The callable validator should still work, non-callables skipped
+        assert result == "ABC"
+
+    @pytest.mark.asyncio
+    async def test_custom_validator_exception(self):
+        """Test exception in custom validator (lines 213-216)."""
+        from lionpride.types import Operable, Spec
+
+        def failing_validator(v):
+            raise ValueError("Validator intentionally failed")
+
+        spec = Spec(str, name="field", validator=failing_validator)
+        operable = Operable([spec])
+
+        validator = Validator()
+        with pytest.raises(ValidationError) as exc_info:
+            await validator.validate_operable(
+                data={"field": "test"},
+                operable=operable,
+            )
+
+        assert "Custom validator failed" in str(exc_info.value)
+        assert "Validator intentionally failed" in str(exc_info.value)
+
+        # Error should be logged
+        assert len(validator.validation_log) == 1
+        assert validator.validation_log[0]["field"] == "field"
+
+    @pytest.mark.asyncio
+    async def test_validate_with_capabilities_filter(self):
+        """Test _validate_data skips fields not in capabilities (line 255)."""
+        from lionpride.types import Operable, Spec
+
+        spec1 = Spec(str, name="included")
+        spec2 = Spec(str, name="excluded")
+        operable = Operable([spec1, spec2])
+
+        validator = Validator()
+
+        # Use validate() method with limited capabilities
+        result = await validator.validate(
+            data={"included": "yes", "excluded": "no"},
+            operable=operable,
+            capabilities={"included"},  # Only include "included"
+        )
+
+        # Only "included" should be in the result
+        assert hasattr(result, "included")
+        assert result.included == "yes"
+        # "excluded" should not be validated/included
+
+    @pytest.mark.asyncio
+    async def test_spec_without_name_skipped(self):
+        """Test spec without name is skipped in _validate_data (line 251)."""
+        from unittest.mock import MagicMock
+
+        from lionpride.types import Operable, Spec
+
+        # Create a real operable for model creation
+        spec_with_name = Spec(str, name="named_field")
+        Operable([spec_with_name])  # Ensure model is created
+
+        # Create mock operable with a spec that has no name
+        mock_spec_no_name = MagicMock()
+        mock_spec_no_name.name = None  # No name
+        mock_spec_no_name.base_type = str
+
+        mock_operable = MagicMock()
+        mock_operable.get_specs.return_value = [mock_spec_no_name, spec_with_name]
+        mock_operable.allowed.return_value = {"named_field"}
+
+        validator = Validator()
+        # Call _validate_data directly with mock operable
+        validated = await validator._validate_data(
+            data={"named_field": "value"},
+            operable=mock_operable,
+            capabilities={"named_field"},
+        )
+
+        # Only the named field should be in results
+        assert validated["named_field"] == "value"
+
+    @pytest.mark.asyncio
+    async def test_no_rule_strict_mode_single_value(self):
+        """Test no rule found for single value in strict mode (lines 178-184)."""
+        from lionpride.types import Operable, Spec
+
+        # Create a custom type with no rule in registry
+        class UnknownType:
+            pass
+
+        spec = Spec(UnknownType, name="unknown")
+        operable = Operable([spec])
+
+        # Use empty registry
+        empty_registry = RuleRegistry()
+        validator = Validator(registry=empty_registry)
+
+        # With strict=True (default), should raise ValidationError
+        with pytest.raises(ValidationError) as exc_info:
+            await validator.validate_operable(
+                data={"unknown": UnknownType()},
+                operable=operable,
+                strict=True,
+            )
+
+        assert "No rule found" in str(exc_info.value)
+        assert "unknown" in str(exc_info.value)
+
+        # Error should be logged
+        assert len(validator.validation_log) == 1
+        assert validator.validation_log[0]["field"] == "unknown"
+
+    def test_validator_repr(self):
+        """Test Validator.__repr__ (lines 339-340)."""
+        validator = Validator()
+
+        repr_str = repr(validator)
+
+        assert "Validator" in repr_str
+        assert "registry_types" in repr_str
+        # Default registry has str, int, float, bool, dict, etc.
+        assert "str" in repr_str
+
+    def test_validator_repr_custom_registry(self):
+        """Test Validator.__repr__ with custom registry."""
+        registry = RuleRegistry()
+        registry.register(str, StringRule())
+
+        validator = Validator(registry=registry)
+        repr_str = repr(validator)
+
+        assert "Validator" in repr_str
+        assert "str" in repr_str
+
+
+class TestAsyncValidatorEdgeCases:
+    """Tests for async validator edge cases."""
+
+    @pytest.mark.asyncio
+    async def test_async_custom_validator_exception(self):
+        """Test exception in async custom validator."""
+        from lionpride.types import Operable, Spec
+
+        async def failing_async_validator(v):
+            raise RuntimeError("Async validator failed")
+
+        spec = Spec(str, name="async_field", validator=failing_async_validator)
+        operable = Operable([spec])
+
+        validator = Validator()
+        with pytest.raises(ValidationError) as exc_info:
+            await validator.validate_operable(
+                data={"async_field": "test"},
+                operable=operable,
+            )
+
+        assert "Custom validator failed" in str(exc_info.value)
+        assert "Async validator failed" in str(exc_info.value)

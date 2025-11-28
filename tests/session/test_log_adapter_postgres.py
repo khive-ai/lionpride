@@ -1,15 +1,14 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Integration tests for PostgresLogAdapter with testcontainers.
+"""Tests for PostgresLogAdapter.
 
-Requires:
+Unit tests (mocked):
+    pytest tests/session/test_log_adapter_postgres.py -v -k "not integration"
+
+Integration tests (require Docker + testcontainers):
     pip install 'sqlalchemy[asyncio]' asyncpg 'testcontainers[postgres]'
-
-Run with:
     pytest tests/session/test_log_adapter_postgres.py -v -m integration
-
-These tests require Docker to be running.
 """
 
 from __future__ import annotations
@@ -20,6 +19,15 @@ import pytest
 
 from lionpride.session import Log, LogType
 from lionpride.session.log_adapter import PostgresLogAdapter
+
+# Check if sqlalchemy is available for unit tests
+try:
+    import sqlalchemy
+
+    del sqlalchemy  # Only checking availability
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    SQLALCHEMY_AVAILABLE = False
 
 # -----------------------------------------------------------------------------
 # Table name validation tests (don't need testcontainers)
@@ -60,8 +68,9 @@ class TestPostgresLogAdapterValidation:
 # -----------------------------------------------------------------------------
 
 
+@pytest.mark.skipif(not SQLALCHEMY_AVAILABLE, reason="sqlalchemy not available")
 class TestPostgresLogAdapterMocked:
-    """Unit tests for PostgresLogAdapter using mocks (no Docker required)."""
+    """Unit tests for PostgresLogAdapter using mocks (requires sqlalchemy)."""
 
     def test_dsn_conversion_postgresql_to_asyncpg(self):
         """Should convert postgresql:// to postgresql+asyncpg://."""
@@ -211,21 +220,519 @@ class TestPostgresLogAdapterMocked:
         assert isinstance(params["since"], datetime)
 
 
+@pytest.mark.skipif(not SQLALCHEMY_AVAILABLE, reason="sqlalchemy not available")
+class TestPostgresLogAdapterEnsureInitialized:
+    """Tests for PostgresLogAdapter._ensure_initialized with mocks."""
+
+    @pytest.mark.asyncio
+    async def test_ensure_initialized_skips_if_already_initialized(self):
+        """Should skip initialization if already initialized."""
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test")
+        adapter._initialized = True
+        adapter._engine = "fake_engine"
+
+        # Should not raise even without real engine
+        await adapter._ensure_initialized()
+
+        # State unchanged
+        assert adapter._initialized is True
+        assert adapter._engine == "fake_engine"
+
+    @pytest.mark.asyncio
+    async def test_ensure_initialized_dsn_conversion(self):
+        """Should convert postgresql:// to postgresql+asyncpg://."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test")
+
+        mock_conn = AsyncMock()
+        mock_conn.execute = AsyncMock()
+        mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_conn.__aexit__ = AsyncMock(return_value=None)
+
+        mock_engine = MagicMock()
+        mock_engine.begin = MagicMock(return_value=mock_conn)
+
+        # Patch where it's imported from, not where it's used
+        with patch(
+            "sqlalchemy.ext.asyncio.create_async_engine",
+            return_value=mock_engine,
+        ) as mock_create_engine:
+            await adapter._ensure_initialized()
+
+            # Should have converted DSN
+            mock_create_engine.assert_called_once_with("postgresql+asyncpg://localhost/test")
+
+        assert adapter._initialized is True
+        assert adapter._engine is mock_engine
+
+    @pytest.mark.asyncio
+    async def test_ensure_initialized_dsn_already_asyncpg(self):
+        """Should not double-convert if DSN already has asyncpg."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        adapter = PostgresLogAdapter(dsn="postgresql+asyncpg://localhost/test")
+
+        mock_conn = AsyncMock()
+        mock_conn.execute = AsyncMock()
+        mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_conn.__aexit__ = AsyncMock(return_value=None)
+
+        mock_engine = MagicMock()
+        mock_engine.begin = MagicMock(return_value=mock_conn)
+
+        with patch(
+            "sqlalchemy.ext.asyncio.create_async_engine",
+            return_value=mock_engine,
+        ) as mock_create_engine:
+            await adapter._ensure_initialized()
+
+            # Should use DSN as-is (no double conversion)
+            mock_create_engine.assert_called_once_with("postgresql+asyncpg://localhost/test")
+
+    @pytest.mark.asyncio
+    async def test_ensure_initialized_auto_create_true_creates_table(self):
+        """Should create table and indexes when auto_create=True."""
+        from unittest.mock import AsyncMock, MagicMock, call, patch
+
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test", auto_create=True)
+
+        mock_conn = AsyncMock()
+        mock_conn.execute = AsyncMock()
+        mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_conn.__aexit__ = AsyncMock(return_value=None)
+
+        mock_engine = MagicMock()
+        mock_engine.begin = MagicMock(return_value=mock_conn)
+
+        with patch(
+            "sqlalchemy.ext.asyncio.create_async_engine",
+            return_value=mock_engine,
+        ):
+            await adapter._ensure_initialized()
+
+        # Should have called execute 5 times (table + 4 indexes)
+        assert mock_conn.execute.call_count == 5
+
+    @pytest.mark.asyncio
+    async def test_ensure_initialized_auto_create_false_skips_table(self):
+        """Should skip table creation when auto_create=False."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test", auto_create=False)
+
+        mock_engine = MagicMock()
+        mock_engine.begin = MagicMock()
+
+        with patch(
+            "sqlalchemy.ext.asyncio.create_async_engine",
+            return_value=mock_engine,
+        ):
+            await adapter._ensure_initialized()
+
+        # Should NOT have called begin (no table creation)
+        mock_engine.begin.assert_not_called()
+        assert adapter._initialized is True
+
+    @pytest.mark.asyncio
+    async def test_ensure_initialized_import_error(self):
+        """Should raise ImportError with helpful message when sqlalchemy not available."""
+        import builtins
+        from unittest.mock import patch
+
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test")
+
+        # Store original import
+        original_import = builtins.__import__
+
+        def mock_import(name, *args, **kwargs):
+            if name == "sqlalchemy" or name.startswith("sqlalchemy."):
+                raise ImportError("No module named 'sqlalchemy'")
+            return original_import(name, *args, **kwargs)
+
+        with (
+            patch.object(builtins, "__import__", side_effect=mock_import),
+            pytest.raises(ImportError, match="sqlalchemy"),
+        ):
+            await adapter._ensure_initialized()
+
+
+@pytest.mark.skipif(not SQLALCHEMY_AVAILABLE, reason="sqlalchemy not available")
+class TestPostgresLogAdapterWriteMocked:
+    """Tests for PostgresLogAdapter.write with mocks."""
+
+    @pytest.mark.asyncio
+    async def test_write_single_log_success(self):
+        """Should write a single log and return count."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test")
+
+        # Create mock for write transaction
+        mock_conn = AsyncMock()
+        mock_conn.execute = AsyncMock()
+        mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_conn.__aexit__ = AsyncMock(return_value=None)
+
+        mock_engine = MagicMock()
+        mock_engine.begin = MagicMock(return_value=mock_conn)
+
+        # Pre-initialize to skip _ensure_initialized
+        adapter._initialized = True
+        adapter._engine = mock_engine
+
+        log = Log(log_type=LogType.INFO, source="test", message="test message")
+
+        count = await adapter.write([log])
+
+        assert count == 1
+        mock_conn.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_write_multiple_logs_success(self):
+        """Should write multiple logs and return total count."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test")
+
+        mock_conn = AsyncMock()
+        mock_conn.execute = AsyncMock()
+        mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_conn.__aexit__ = AsyncMock(return_value=None)
+
+        mock_engine = MagicMock()
+        mock_engine.begin = MagicMock(return_value=mock_conn)
+
+        adapter._initialized = True
+        adapter._engine = mock_engine
+
+        logs = [Log(log_type=LogType.INFO, message=f"msg_{i}") for i in range(5)]
+
+        count = await adapter.write(logs)
+
+        assert count == 5
+        assert mock_conn.execute.call_count == 5
+
+    @pytest.mark.asyncio
+    async def test_write_calls_ensure_initialized(self):
+        """Write should call _ensure_initialized before processing."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test")
+
+        # Mock _ensure_initialized
+        init_called = False
+
+        async def mock_ensure():
+            nonlocal init_called
+            init_called = True
+            adapter._initialized = True
+
+            # Setup mock engine
+            mock_conn = AsyncMock()
+            mock_conn.execute = AsyncMock()
+            mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_conn.__aexit__ = AsyncMock(return_value=None)
+
+            mock_engine = MagicMock()
+            mock_engine.begin = MagicMock(return_value=mock_conn)
+            adapter._engine = mock_engine
+
+        adapter._ensure_initialized = mock_ensure
+
+        log = Log(log_type=LogType.INFO, message="test")
+        await adapter.write([log])
+
+        assert init_called is True
+
+    @pytest.mark.asyncio
+    async def test_write_with_log_type_enum(self):
+        """Should handle log_type as enum (with .value)."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test")
+
+        mock_conn = AsyncMock()
+        mock_conn.execute = AsyncMock()
+        mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_conn.__aexit__ = AsyncMock(return_value=None)
+
+        mock_engine = MagicMock()
+        mock_engine.begin = MagicMock(return_value=mock_conn)
+
+        adapter._initialized = True
+        adapter._engine = mock_engine
+
+        log = Log(log_type=LogType.API_CALL, model="gpt-4")
+
+        await adapter.write([log])
+
+        # Verify execute was called with correct params
+        call_args = mock_conn.execute.call_args
+        params = call_args[0][1]
+        assert params["log_type"] == "api_call"  # Enum converted to string
+
+    @pytest.mark.asyncio
+    async def test_write_exception_handling(self):
+        """Should log error and re-raise on exception."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test")
+
+        mock_conn = AsyncMock()
+        mock_conn.execute = AsyncMock(side_effect=Exception("DB connection failed"))
+        mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_conn.__aexit__ = AsyncMock(return_value=None)
+
+        mock_engine = MagicMock()
+        mock_engine.begin = MagicMock(return_value=mock_conn)
+
+        adapter._initialized = True
+        adapter._engine = mock_engine
+
+        log = Log(log_type=LogType.INFO, message="test")
+
+        with pytest.raises(Exception, match="DB connection failed"):
+            await adapter.write([log])
+
+
+@pytest.mark.skipif(not SQLALCHEMY_AVAILABLE, reason="sqlalchemy not available")
+class TestPostgresLogAdapterReadMocked:
+    """Tests for PostgresLogAdapter.read with comprehensive mocks."""
+
+    @pytest.mark.asyncio
+    async def test_read_calls_ensure_initialized(self):
+        """Read should call _ensure_initialized before processing."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test")
+
+        init_called = False
+
+        async def mock_ensure():
+            nonlocal init_called
+            init_called = True
+            adapter._initialized = True
+
+            mock_result = MagicMock()
+            mock_result.fetchall.return_value = []
+
+            mock_conn = AsyncMock()
+            mock_conn.execute = AsyncMock(return_value=mock_result)
+            mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_conn.__aexit__ = AsyncMock(return_value=None)
+
+            mock_engine = MagicMock()
+            mock_engine.connect = MagicMock(return_value=mock_conn)
+            adapter._engine = mock_engine
+
+        adapter._ensure_initialized = mock_ensure
+
+        await adapter.read(limit=10)
+
+        assert init_called is True
+
+    @pytest.mark.asyncio
+    async def test_read_with_string_content(self):
+        """Read should parse JSON string content."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test")
+        adapter._initialized = True
+
+        # Return content as JSON string (not dict)
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = [
+            ('{"log_type": "info", "message": "test from string"}',),
+        ]
+
+        mock_conn = AsyncMock()
+        mock_conn.execute = AsyncMock(return_value=mock_result)
+        mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_conn.__aexit__ = AsyncMock(return_value=None)
+
+        mock_engine = MagicMock()
+        mock_engine.connect = MagicMock(return_value=mock_conn)
+
+        adapter._engine = mock_engine
+
+        result = await adapter.read(limit=10)
+
+        assert len(result) == 1
+        assert result[0]["log_type"] == "info"
+        assert result[0]["message"] == "test from string"
+
+    @pytest.mark.asyncio
+    async def test_read_with_dict_content(self):
+        """Read should handle dict content directly (no JSON parsing)."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test")
+        adapter._initialized = True
+
+        # Return content as dict (JSONB returns dict in asyncpg)
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = [
+            ({"log_type": "info", "message": "test from dict"},),
+        ]
+
+        mock_conn = AsyncMock()
+        mock_conn.execute = AsyncMock(return_value=mock_result)
+        mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_conn.__aexit__ = AsyncMock(return_value=None)
+
+        mock_engine = MagicMock()
+        mock_engine.connect = MagicMock(return_value=mock_conn)
+
+        adapter._engine = mock_engine
+
+        result = await adapter.read(limit=10)
+
+        assert len(result) == 1
+        assert result[0]["log_type"] == "info"
+        assert result[0]["message"] == "test from dict"
+
+    @pytest.mark.asyncio
+    async def test_read_with_since_as_datetime(self):
+        """Read should handle since as datetime (not string)."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test")
+        adapter._initialized = True
+
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = []
+
+        mock_conn = AsyncMock()
+        mock_conn.execute = AsyncMock(return_value=mock_result)
+        mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_conn.__aexit__ = AsyncMock(return_value=None)
+
+        mock_engine = MagicMock()
+        mock_engine.connect = MagicMock(return_value=mock_conn)
+
+        adapter._engine = mock_engine
+
+        # Pass datetime directly (not string)
+        since_dt = datetime(2025, 1, 1, tzinfo=UTC)
+
+        await adapter.read(since=since_dt, limit=10)
+
+        call_args = mock_conn.execute.call_args
+        params = call_args[0][1]
+        # Should pass datetime as-is
+        assert params["since"] == since_dt
+
+    @pytest.mark.asyncio
+    async def test_read_exception_handling(self):
+        """Should log error and re-raise on exception."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test")
+        adapter._initialized = True
+
+        mock_conn = AsyncMock()
+        mock_conn.execute = AsyncMock(side_effect=Exception("Query failed"))
+        mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_conn.__aexit__ = AsyncMock(return_value=None)
+
+        mock_engine = MagicMock()
+        mock_engine.connect = MagicMock(return_value=mock_conn)
+
+        adapter._engine = mock_engine
+
+        with pytest.raises(Exception, match="Query failed"):
+            await adapter.read(limit=10)
+
+    @pytest.mark.asyncio
+    async def test_read_combined_log_type_and_since(self):
+        """Should build correct query with both log_type and since filters."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test")
+        adapter._initialized = True
+
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = [
+            ({"log_type": "api_call", "model": "gpt-4"},),
+        ]
+
+        mock_conn = AsyncMock()
+        mock_conn.execute = AsyncMock(return_value=mock_result)
+        mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_conn.__aexit__ = AsyncMock(return_value=None)
+
+        mock_engine = MagicMock()
+        mock_engine.connect = MagicMock(return_value=mock_conn)
+
+        adapter._engine = mock_engine
+
+        since_str = "2025-01-01T00:00:00+00:00"
+        result = await adapter.read(log_type="api_call", since=since_str, limit=5, offset=2)
+
+        assert len(result) == 1
+        call_args = mock_conn.execute.call_args
+        params = call_args[0][1]
+        assert params["log_type"] == "api_call"
+        assert params["limit"] == 5
+        assert params["offset"] == 2
+        assert isinstance(params["since"], datetime)
+
+    @pytest.mark.asyncio
+    async def test_read_multiple_rows(self):
+        """Should return multiple logs correctly."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        adapter = PostgresLogAdapter(dsn="postgresql://localhost/test")
+        adapter._initialized = True
+
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = [
+            ({"log_type": "info", "message": "msg1"},),
+            ({"log_type": "error", "error": "err1"},),
+            ('{"log_type": "warning", "message": "warn1"}',),  # String content
+        ]
+
+        mock_conn = AsyncMock()
+        mock_conn.execute = AsyncMock(return_value=mock_result)
+        mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_conn.__aexit__ = AsyncMock(return_value=None)
+
+        mock_engine = MagicMock()
+        mock_engine.connect = MagicMock(return_value=mock_conn)
+
+        adapter._engine = mock_engine
+
+        result = await adapter.read(limit=10)
+
+        assert len(result) == 3
+        assert result[0]["log_type"] == "info"
+        assert result[1]["log_type"] == "error"
+        assert result[2]["log_type"] == "warning"
+
+
 # -----------------------------------------------------------------------------
 # Integration tests (require testcontainers)
 # -----------------------------------------------------------------------------
 
-# Skip integration tests if testcontainers not available
-pytest.importorskip("testcontainers")
-pytest.importorskip("sqlalchemy")
-pytest.importorskip("asyncpg")
+# Check if integration test dependencies are available
+try:
+    import asyncpg
+    import sqlalchemy
+    from testcontainers.postgres import PostgresContainer
 
-from testcontainers.postgres import PostgresContainer
+    del asyncpg, sqlalchemy  # Only checking availability
+    INTEGRATION_DEPS_AVAILABLE = True
+except ImportError:
+    INTEGRATION_DEPS_AVAILABLE = False
+    PostgresContainer = None  # type: ignore
 
 
 @pytest.fixture(scope="module")
 def postgres_container():
     """Start a PostgreSQL container for the test module."""
+    if not INTEGRATION_DEPS_AVAILABLE:
+        pytest.skip("testcontainers, sqlalchemy, or asyncpg not available")
     with PostgresContainer("postgres:15-alpine") as postgres:
         yield postgres
 
@@ -255,6 +762,7 @@ async def adapter(postgres_dsn):
 
 
 @pytest.mark.integration
+@pytest.mark.skipif(not INTEGRATION_DEPS_AVAILABLE, reason="Integration deps not available")
 class TestPostgresLogAdapterBasics:
     """Basic functionality tests for PostgresLogAdapter."""
 
@@ -297,6 +805,7 @@ class TestPostgresLogAdapterBasics:
 
 
 @pytest.mark.integration
+@pytest.mark.skipif(not INTEGRATION_DEPS_AVAILABLE, reason="Integration deps not available")
 class TestPostgresLogAdapterWrite:
     """Write operation tests for PostgresLogAdapter."""
 
@@ -396,6 +905,7 @@ class TestPostgresLogAdapterWrite:
 
 
 @pytest.mark.integration
+@pytest.mark.skipif(not INTEGRATION_DEPS_AVAILABLE, reason="Integration deps not available")
 class TestPostgresLogAdapterRead:
     """Read operation tests for PostgresLogAdapter."""
 
@@ -495,6 +1005,7 @@ class TestPostgresLogAdapterRead:
 
 
 @pytest.mark.integration
+@pytest.mark.skipif(not INTEGRATION_DEPS_AVAILABLE, reason="Integration deps not available")
 class TestPostgresLogAdapterLifecycle:
     """Lifecycle and resource management tests."""
 
@@ -538,6 +1049,7 @@ class TestPostgresLogAdapterLifecycle:
 
 
 @pytest.mark.integration
+@pytest.mark.skipif(not INTEGRATION_DEPS_AVAILABLE, reason="Integration deps not available")
 class TestPostgresLogAdapterEdgeCases:
     """Edge cases and error handling tests."""
 

@@ -606,3 +606,74 @@ class TestServiceBackend:
 
         with pytest.raises(NotImplementedError, match="does not support streaming calls"):
             await backend.stream()
+
+
+# =============================================================================
+# ServiceConfig Tests - request_options validation
+# =============================================================================
+
+
+class TestServiceConfigRequestOptions:
+    """Test ServiceConfig request_options validation (lines 74-75)."""
+
+    def test_validate_request_options_when_invalid_type_then_raises(self):
+        """Test _validate_request_options raises ValueError for invalid types (line 74-75).
+
+        When request_options is not a Pydantic model, BaseModel instance, or dict/str,
+        the validator raises ValueError with 'Invalid request options' message.
+        """
+
+        class NotPydantic:
+            """Class that's not a Pydantic BaseModel."""
+
+            pass
+
+        # Create an instance that's not a dict, str, or BaseModel
+        # The validator checks: isinstance(v, type) and issubclass(v, BaseModel)
+        # For a non-BaseModel type, it will fall through to raise ValueError
+        with pytest.raises(ValueError, match="Invalid request options"):
+            ServiceConfig(provider="test", name="test_service", request_options=NotPydantic())
+
+    def test_validate_request_options_when_exception_in_schema_load(self):
+        """Test _validate_request_options raises ValueError when schema loading fails.
+
+        This tests line 74-75: except Exception as e: raise ValueError(...) from e
+        """
+        # Pass an invalid type that will cause the schema loading to fail
+        # A number is not a valid request_options (not dict, not str, not BaseModel)
+        with pytest.raises(ValueError, match="Invalid request options"):
+            ServiceConfig(provider="test", name="test_service", request_options=12345)
+
+
+# =============================================================================
+# Calling Tests - response property
+# =============================================================================
+
+
+class TestCallingResponseProperty:
+    """Test Calling.response property (lines 125-127)."""
+
+    def test_response_property_when_unset_then_returns_unset(self, mock_calling):
+        """Test response property returns Unset when execution.response is Unset (line 125-127).
+
+        Before invoke() is called, execution.response is Unset (sentinel value).
+        The response property should return Unset in this case.
+        """
+        from lionpride.types import Unset, is_sentinel
+
+        # Before invoke(), execution.response should be Unset
+        assert is_sentinel(mock_calling.execution.response)
+
+        # Access response property - should return Unset
+        response = mock_calling.response
+        assert response is Unset
+
+    @pytest.mark.asyncio
+    async def test_response_property_when_completed_then_returns_response(self, mock_calling):
+        """Test response property returns NormalizedResponse after successful invoke."""
+        await mock_calling.invoke()
+
+        response = mock_calling.response
+        assert response is not None
+        assert response.status == "success"
+        assert response.data == "test_result"
