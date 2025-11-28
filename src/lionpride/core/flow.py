@@ -207,18 +207,21 @@ class Flow(Element, Generic[E, P]):
         # Resolve name to UUID if needed
         if isinstance(progression_id, str) and progression_id in self._progression_names:
             uid = self._progression_names[progression_id]
-            del self._progression_names[progression_id]
-            # Use helper to verify and remove (not catching - let NotFoundError bubble with context)
+            name_to_delete = progression_id
+        else:
+            # Convert to UUID for type-safe removal
+            uid = self._coerce_id(progression_id)
             prog = self._check_progression_exists(uid)
-            return self.progressions.remove(uid)
+            name_to_delete = prog.name if prog.name in self._progression_names else None
 
-        # Convert to UUID for type-safe removal
-        uid = self._coerce_id(progression_id)
-        prog = self._check_progression_exists(uid)
+        # Remove from pile FIRST (may raise NotFoundError)
+        removed = self.progressions.remove(uid)
 
-        if prog.name and prog.name in self._progression_names:
-            del self._progression_names[prog.name]
-        return self.progressions.remove(uid)
+        # Only delete from name index AFTER successful pile removal
+        if name_to_delete and name_to_delete in self._progression_names:
+            del self._progression_names[name_to_delete]
+
+        return removed
 
     @synchronized
     def get_progression(self, key: UUID | str | P) -> P:
@@ -255,11 +258,10 @@ class Flow(Element, Generic[E, P]):
 
         Raises:
             ExistsError: If item already exists
+            KeyError: If progression not found (item is rolled back)
         """
-        # Add to items pile (let ExistsError bubble)
-        self.items.add(item)
-
-        # Add to specified progressions
+        # Validate progressions exist BEFORE adding item (fail-fast)
+        resolved_progs: list[P] = []
         if progressions is not None:
             # Normalize to list - treat string/UUID/Progression as single value
             if isinstance(progressions, (str, UUID, Progression)):
@@ -267,12 +269,19 @@ class Flow(Element, Generic[E, P]):
             else:
                 progs = list(progressions)
 
+            # Resolve all progressions first - KeyError here means no side effects
             for prog in progs:
-                # If Progression instance, use directly; otherwise lookup
                 if isinstance(prog, Progression):
-                    prog.append(item)
+                    resolved_progs.append(prog)
                 else:
-                    self.get_progression(prog).append(item)
+                    resolved_progs.append(self.get_progression(prog))
+
+        # Now safe to add item - all progressions verified
+        self.items.add(item)
+
+        # Add to resolved progressions (guaranteed to exist)
+        for prog in resolved_progs:
+            prog.append(item)
 
     def remove_item(self, item_id: UUID | str | Element) -> E:
         """Remove item from items pile and all progressions.
