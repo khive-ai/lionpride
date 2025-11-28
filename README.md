@@ -7,17 +7,17 @@
 [![codecov](https://codecov.io/github/khive-ai/lionpride/graph/badge.svg?token=FAE47FY26T)](https://app.codecov.io/github/khive-ai/lionpride)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
-**Production-ready multi-agent workflow orchestration framework.**
+**Production-ready primitives for multi-agent workflow orchestration.**
 
-> **Alpha Release** - API may change. Originated from [lionagi](https://github.com/khive-ai/lionagi) v0, elevated and hardened for production use.
+> **Alpha Release** - API stabilizing. Originated from [lionagi](https://github.com/khive-ai/lionagi) v0, elevated and hardened for production use.
 
 ## Features
 
-- **Model Agnostic** - Built-in providers for OpenAI-compatible APIs, Anthropic, Gemini, Claude Code
-- **LNDL** - Domain-specific language for LLM structured output and enhanced reasoning (JSON fallback supported)
-- **75% Token Reduction** - Efficient instruction representation for complex agentic workflows (e.g., 20+ tools)
-- **Async Native** - Operation graph building, dependency-aware execution, auto-extensions
+- **Model Agnostic** - Built-in providers for OpenAI-compatible APIs, Anthropic, Gemini
+- **LNDL** - Domain-specific language for LLM structured output and enhanced reasoning
+- **Async Native** - Operation graph building, dependency-aware execution
 - **Modular Architecture** - Protocol-based composition, zero framework lock-in
+- **99%+ Test Coverage** - Production-hardened with comprehensive test suites
 
 ## Installation
 
@@ -28,26 +28,111 @@ pip install lionpride
 ## Quick Start
 
 ```python
-from lionpride import Session
-from lionpride.services import iModel
+import asyncio
+from lionpride import Session, iModel
 
-# Create session with model
-session = Session()
+# Create model and session
 model = iModel(provider="openai", model="gpt-4o-mini")
-session.register_service(model)
+session = Session(default_generate_model=model)
 
-# Create branch and operate
-branch = session.create_branch()
-result = await branch.operate(
-    instruction="Analyze this data",
-    imodel=model,
+# Create branch with model access
+branch = session.create_branch(name="main")
+
+# Conduct an operation
+async def main():
+    result = await session.conduct(
+        "operate",
+        branch,
+        instruction="What is 2 + 2?",
+    )
+    print(result)
+
+asyncio.run(main())
+```
+
+## Core Concepts
+
+### Session & Branch
+
+`Session` orchestrates messages, services, and operations. `Branch` is a named conversation thread with access control.
+
+```python
+from lionpride import Session, iModel
+
+# Session with default model
+model = iModel(provider="openai", model="gpt-4o-mini")
+session = Session(default_generate_model=model)
+
+# Branch inherits access to default model
+branch = session.create_branch(
+    name="analysis",
+    capabilities={"MyOutputSchema"},  # Allowed output types
 )
 ```
 
+### Operations
+
+Operations are composable building blocks for agent workflows:
+
+```python
+from lionpride.operations.operate import operate, OperateParams, CommunicateParams, GenerateParams
+
+# Structured output with validation
+params = OperateParams(
+    communicate=CommunicateParams(
+        generate=GenerateParams(
+            instruction="Analyze this data and return insights",
+            request_model=MyInsightsModel,  # Pydantic model for validation
+        )
+    )
+)
+
+result = await operate(session, branch, params)
+```
+
+### Services
+
+`ServiceRegistry` manages models and tools with O(1) name lookup:
+
+```python
+from lionpride import Session, iModel, ServiceRegistry
+
+# Register multiple models
+registry = ServiceRegistry()
+registry.register(iModel(provider="openai", model="gpt-4o", name="gpt4"))
+registry.register(iModel(provider="anthropic", model="claude-3-5-sonnet", name="claude"))
+
+session = Session(services=registry)
+branch = session.create_branch(resources={"gpt4", "claude"})  # Access to both
+```
+
+## Architecture
+
+```text
+lionpride/
+├── core/           # Primitives: Element, Pile, Flow, Graph, Event
+├── session/        # Session, Branch, Message management
+├── services/       # iModel, Tool, ServiceRegistry, MCP integration
+├── operations/     # operate, react, communicate, generate, parse
+├── rules/          # Validation rules and auto-correction
+├── types/          # Spec, Operable, type system
+├── lndl/           # LNDL parser and resolver
+└── ln/             # Utility functions
+```
+
+See [CLAUDE.md](CLAUDE.md) for detailed codebase navigation.
+
+## Documentation
+
+- [CLAUDE.md](CLAUDE.md) - AI agent codebase guide
+- [AGENTS.md](AGENTS.md) - Quick reference for AI agents
+- [notebooks/](notebooks/) - Example notebooks
+
 ## Roadmap
 
-- Formal mathematical framework
+- Formal mathematical framework for agent composition
 - Rust core for performance-critical paths
+- Enhanced MCP (Model Context Protocol) support
 
 ## License
 
