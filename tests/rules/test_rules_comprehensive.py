@@ -1023,3 +1023,91 @@ class TestStringRulePerformFixException:
         rule = StringRule()
         with pytest.raises(ValidationError, match="Failed to fix field"):
             await rule.invoke("field", TypeErrorStr(), str)
+
+
+class TestBaseModelRule:
+    """Tests for BaseModelRule validation."""
+
+    @pytest.mark.asyncio
+    async def test_validate_non_basemodel_type_raises(self):
+        """Test validate raises when expected type is not BaseModel subclass."""
+        from lionpride.rules import BaseModelRule
+
+        rule = BaseModelRule()
+        with pytest.raises(ValueError, match="must be a BaseModel subclass"):
+            await rule.validate("value", str)  # str is not BaseModel
+
+    @pytest.mark.asyncio
+    async def test_validate_already_correct_type(self):
+        """Test validate passes for already correct type."""
+        from pydantic import BaseModel
+
+        from lionpride.rules import BaseModelRule
+
+        class MyModel(BaseModel):
+            name: str
+
+        rule = BaseModelRule()
+        instance = MyModel(name="test")
+        # Should not raise - already correct type
+        await rule.validate(instance, MyModel)
+
+    @pytest.mark.asyncio
+    async def test_validate_dict_success(self):
+        """Test validate passes for valid dict input."""
+        from pydantic import BaseModel
+
+        from lionpride.rules import BaseModelRule
+
+        class MyModel(BaseModel):
+            name: str
+            value: int
+
+        rule = BaseModelRule()
+        await rule.validate({"name": "test", "value": 42}, MyModel)
+
+    @pytest.mark.asyncio
+    async def test_validate_dict_failure(self):
+        """Test validate raises for invalid dict input."""
+        from pydantic import BaseModel
+
+        from lionpride.rules import BaseModelRule
+
+        class MyModel(BaseModel):
+            name: str
+            value: int
+
+        rule = BaseModelRule()
+        with pytest.raises(ValueError, match="Dict validation failed"):
+            await rule.validate({"name": "test"}, MyModel)  # Missing value
+
+    @pytest.mark.asyncio
+    async def test_validate_wrong_type(self):
+        """Test validate raises for non-dict, non-model input."""
+        from pydantic import BaseModel
+
+        from lionpride.rules import BaseModelRule
+
+        class MyModel(BaseModel):
+            name: str
+
+        rule = BaseModelRule()
+        with pytest.raises(ValueError, match="Cannot validate"):
+            await rule.validate(12345, MyModel)  # int cannot be validated
+
+    @pytest.mark.asyncio
+    async def test_perform_fix_uses_fuzzy_validate(self):
+        """Test perform_fix uses fuzzy_validate_pydantic."""
+        from pydantic import BaseModel
+
+        from lionpride.rules import BaseModelRule
+
+        class MyModel(BaseModel):
+            name: str
+            value: int
+
+        rule = BaseModelRule(fuzzy_parse=True, fuzzy_match=False)
+        result = await rule.perform_fix({"name": "test", "value": 42}, MyModel)
+        assert isinstance(result, MyModel)
+        assert result.name == "test"
+        assert result.value == 42

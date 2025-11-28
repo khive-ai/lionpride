@@ -37,6 +37,7 @@ Usage:
 
 from .action_request import ActionRequestRule
 from .base import Rule, RuleParams, RuleQualifier, ValidationError
+from .basemodel import BaseModelRule
 from .boolean import BooleanRule
 from .choice import ChoiceRule
 from .mapping import MappingRule
@@ -51,6 +52,7 @@ __all__ = (
     "ActionRequest",
     "ActionRequestRule",
     "ActionResponse",
+    "BaseModelRule",
     "BooleanRule",
     "ChoiceRule",
     "MappingRule",
