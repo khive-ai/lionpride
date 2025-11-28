@@ -291,6 +291,28 @@ class ReactParams(Params):
     """Parameters for react operation (full agentic loop).
 
     React = Operate + Interpret + Analyze.
+
+    Intermediate Response Options:
+        Use intermediate_response_options to provide structured intermediate
+        deliverables during multi-step reasoning. Each option becomes a
+        nullable field in the step response that the model can populate.
+
+        Example:
+            class ProgressReport(BaseModel):
+                progress_pct: int
+                current_status: str
+
+            params = ReactParams(
+                intermediate_response_options=[ProgressReport],
+                intermediate_listable=False,  # single value per option
+            )
+
+            # Step response will include:
+            # - reasoning: str
+            # - action_requests: list[ActionRequest]
+            # - is_done: bool
+            # - intermediate_response_options: IntermediateOptions | None
+            #   where IntermediateOptions has: progressreport: ProgressReport | None
     """
 
     _config = ModelConfig(none_as_sentinel=True, empty_as_sentinel=True)
@@ -314,3 +336,21 @@ class ReactParams(Params):
 
     return_trace: bool = False
     """Return full execution trace."""
+
+    # Intermediate response options
+    intermediate_response_options: list[type[BaseModel]] | type[BaseModel] | None = None
+    """Models for intermediate deliverables (e.g., ProgressReport, PartialResult).
+
+    Each model becomes a nullable field in step responses. The model can
+    populate these during multi-step reasoning to provide structured
+    intermediate outputs.
+    """
+
+    intermediate_listable: bool = False
+    """Whether intermediate options can be lists (e.g., list[CodeBlock])."""
+
+    intermediate_nullable: bool = True
+    """Whether intermediate options default to None (usually True)."""
+
+    response_model: type[BaseModel] | None = None
+    """Model for final answer structure."""

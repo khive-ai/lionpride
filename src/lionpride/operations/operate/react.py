@@ -10,17 +10,22 @@ Stream-first architecture:
 Composition:
     react() → react_stream() → operate() → communicate() → generate()
                                         → act() (via actions=True)
+
+Intermediate Response Options:
+    Use intermediate_response_options in ReactParams to provide structured
+    intermediate deliverables. Each becomes a nullable field in step responses.
 """
 
 from __future__ import annotations
 
 import logging
 from collections.abc import AsyncGenerator
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from pydantic import BaseModel, Field
 
 from lionpride.rules import ActionRequest, ActionResponse
+from lionpride.types import Operable, Spec
 
 from .types import (
     CommunicateParams,
@@ -33,7 +38,14 @@ from .types import (
 if TYPE_CHECKING:
     from lionpride.session import Branch, Session
 
-__all__ = ("ReactResult", "ReactStep", "ReactStepResponse", "react", "react_stream")
+__all__ = (
+    "ReactResult",
+    "ReactStep",
+    "ReactStepResponse",
+    "build_step_operable",
+    "react",
+    "react_stream",
+)
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +82,9 @@ class ReactStep(BaseModel):
     actions_executed: list[ActionResponse] = Field(
         default_factory=list, description="Action execution results"
     )
+    intermediate_options: dict[str, Any] | None = Field(
+        default=None, description="Intermediate deliverables from this step"
+    )
     is_final: bool = Field(default=False, description="Whether this is the final step")
 
 
@@ -100,6 +115,135 @@ class ReactStepResponse(BaseModel, Generic[T]):
     final_answer: T | None = Field(
         default=None, description="Your final answer (only when is_done=true)"
     )
+
+
+# =============================================================================
+# Operable Building
+# =============================================================================
+
+
+def build_intermediate_operable(
+    options: list[type[BaseModel]] | type[BaseModel],
+    *,
+    listable: bool = False,
+    nullable: bool = True,
+) -> Operable:
+    """Build Operable for intermediate response options.
+
+    Each user-provided model becomes a field in the intermediate options
+    structure. Uses Spec.from_model() for clean model-to-spec conversion.
+
+    Args:
+        options: Model(s) for intermediate deliverables
+        listable: Whether options can be lists
+        nullable: Whether options default to None
+
+    Returns:
+        Operable for the IntermediateOptions nested model
+
+    Example:
+        >>> operable = build_intermediate_operable([ProgressReport, PartialResult])
+        >>> Model = operable.create_model()  # IntermediateOptions with nullable fields
+    """
+    if not isinstance(options, list):
+        options = [options]
+
+    specs = []
+    for opt in options:
+        spec = Spec.from_model(opt, nullable=nullable, listable=listable, default=None)
+        specs.append(spec)
+
+    return Operable(specs=tuple(specs), name="IntermediateOptions")
+
+
+def build_step_operable(
+    response_model: type[BaseModel] | None = None,
+    intermediate_options: list[type[BaseModel]] | type[BaseModel] | None = None,
+    *,
+    intermediate_listable: bool = False,
+    intermediate_nullable: bool = True,
+) -> Operable:
+    """Build Operable for ReactStepResponse with optional intermediate options.
+
+    Creates a dynamic Operable that includes:
+    - Core step fields (reasoning, action_requests, is_done)
+    - Optional final_answer with custom type
+    - Optional intermediate_response_options as nested model
+
+    Args:
+        response_model: Type for final_answer field
+        intermediate_options: Model(s) for intermediate deliverables
+        intermediate_listable: Whether intermediate options can be lists
+        intermediate_nullable: Whether intermediate options default to None
+
+    Returns:
+        Operable for the step response model
+
+    Example:
+        >>> operable = build_step_operable(
+        ...     response_model=MyAnswer,
+        ...     intermediate_options=[ProgressReport],
+        ... )
+        >>> StepModel = operable.create_model()
+    """
+    # Core step specs
+    specs = [
+        Spec(
+            str,
+            name="reasoning",
+            description="Your reasoning about the current state and next action",
+        ).as_optional(),
+        Spec(
+            list[ActionRequest],
+            name="action_requests",
+            description="List of tool calls. Empty when done.",
+        ).as_optional(),
+        Spec(
+            bool,
+            name="is_done",
+            default=False,
+            description="Set to true when you have the final answer",
+        ),
+    ]
+
+    # Add final_answer with custom type if provided
+    if response_model:
+        specs.append(
+            Spec.from_model(
+                response_model,
+                name="final_answer",
+                nullable=True,
+                default=None,
+            )
+        )
+    else:
+        # Generic Any type for final_answer
+        specs.append(
+            Spec(
+                base_type=Any,
+                name="final_answer",
+                description="Your final answer (only when is_done=true)",
+            ).as_optional()
+        )
+
+    # Add intermediate_response_options as nested model if provided
+    if intermediate_options:
+        intermediate_operable = build_intermediate_operable(
+            intermediate_options,
+            listable=intermediate_listable,
+            nullable=intermediate_nullable,
+        )
+        # Create the nested model type
+        IntermediateModel = intermediate_operable.create_model()
+        specs.append(
+            Spec(
+                IntermediateModel,
+                name="intermediate_response_options",
+                description="Intermediate deliverable outputs. Fill as needed.",
+            ).as_optional()
+        )
+
+    return Operable(specs=tuple(specs), name="ReactStepResponse")
 
 
 # =============================================================================
@@ -166,6 +310,21 @@ async def react_stream(
     verbose = params.return_trace
     max_steps = params.max_steps
 
+    # Build step Operable with intermediate options if provided
+    step_operable = None
+    if params.intermediate_response_options is not None:
+        step_operable = build_step_operable(
+            response_model=params.response_model,
+            intermediate_options=params.intermediate_response_options,
+            intermediate_listable=params.intermediate_listable,
+            intermediate_nullable=params.intermediate_nullable,
+        )
+        if verbose:
+            logger.info(
+                f"Built step Operable with intermediate options: "
+                f"{[s.name for s in step_operable.get_specs()]}"
+            )
+
     # ReAct loop
     for step_num in range(1, max_steps + 1):
         steps_remaining = max_steps - step_num
@@ -186,15 +345,20 @@ async def react_stream(
 
         try:
             # Build OperateParams for this step
+            # Use step_operable if we have intermediate options, else default ReactStepResponse
             operate_params = OperateParams(
                 communicate=CommunicateParams(
                     generate=GenerateParams(
                         imodel=imodel,
                         instruction=step_instruction,
                         context=context,
-                        request_model=ReactStepResponse,
+                        # Use operable-built model if available, else static ReactStepResponse
+                        request_model=None if step_operable else ReactStepResponse,
                         imodel_kwargs={"model": model_name, **step_kwargs},
                     ),
+                    # Pass operable for dynamic schema
+                    operable=step_operable,
+                    capabilities=step_operable.allowed() if step_operable else None,
                     parse=ParseParams(),
                     strict_validation=False,
                 ),
@@ -228,6 +392,20 @@ async def react_stream(
                 if verbose:
                     for resp in step.actions_executed:
                         logger.info(f"Tool {resp.function}: {str(resp.output)[:100]}...")
+
+            # Extract intermediate options if present
+            if hasattr(operate_result, "intermediate_response_options"):
+                iro = operate_result.intermediate_response_options
+                if iro is not None:
+                    # Convert to dict for storage in ReactStep
+                    if hasattr(iro, "model_dump"):
+                        step.intermediate_options = iro.model_dump(exclude_none=True)
+                    elif isinstance(iro, dict):
+                        step.intermediate_options = {k: v for k, v in iro.items() if v is not None}
+                    if verbose and step.intermediate_options:
+                        logger.info(
+                            f"Intermediate options: {list(step.intermediate_options.keys())}"
+                        )
 
             # Check if done
             is_done = getattr(operate_result, "is_done", False) or is_last_step

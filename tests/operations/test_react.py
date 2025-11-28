@@ -419,3 +419,164 @@ class TestReactCoverage:
             assert len(result.steps) == 1
             assert "Error:" in result.steps[0].reasoning
             assert "Error for traceback test" in result.steps[0].reasoning
+
+
+class TestIntermediateResponseOptions:
+    """Tests for intermediate_response_options feature."""
+
+    def test_build_intermediate_operable(self):
+        """Test building Operable from intermediate option models."""
+        from lionpride.operations.operate.react import build_intermediate_operable
+
+        class ProgressReport(BaseModel):
+            progress_pct: int
+            status: str
+
+        class PartialResult(BaseModel):
+            data: str
+
+        operable = build_intermediate_operable([ProgressReport, PartialResult])
+
+        # Should have specs for both models
+        assert operable.name == "IntermediateOptions"
+        specs = operable.get_specs()
+        assert len(specs) == 2
+        assert specs[0].name == "progressreport"
+        assert specs[1].name == "partialresult"
+        # Both should be nullable
+        assert specs[0].is_nullable
+        assert specs[1].is_nullable
+
+    def test_build_intermediate_operable_single_model(self):
+        """Test building Operable from single model."""
+        from lionpride.operations.operate.react import build_intermediate_operable
+
+        class Progress(BaseModel):
+            pct: int
+
+        operable = build_intermediate_operable(Progress)
+
+        specs = operable.get_specs()
+        assert len(specs) == 1
+        assert specs[0].name == "progress"
+
+    def test_build_intermediate_operable_listable(self):
+        """Test building Operable with listable option."""
+        from lionpride.operations.operate.react import build_intermediate_operable
+
+        class CodeBlock(BaseModel):
+            code: str
+
+        operable = build_intermediate_operable(CodeBlock, listable=True)
+
+        specs = operable.get_specs()
+        assert specs[0].is_listable
+        assert specs[0].is_nullable
+
+    def test_build_step_operable_basic(self):
+        """Test building step Operable without intermediate options."""
+        from lionpride.operations.operate.react import build_step_operable
+
+        operable = build_step_operable()
+
+        assert operable.name == "ReactStepResponse"
+        spec_names = {s.name for s in operable.get_specs()}
+        assert "reasoning" in spec_names
+        assert "action_requests" in spec_names
+        assert "is_done" in spec_names
+        assert "final_answer" in spec_names
+
+    def test_build_step_operable_with_response_model(self):
+        """Test building step Operable with custom response model."""
+        from lionpride.operations.operate.react import build_step_operable
+
+        class MyAnswer(BaseModel):
+            result: str
+            confidence: float
+
+        operable = build_step_operable(response_model=MyAnswer)
+
+        # final_answer should use MyAnswer type
+        final_answer_spec = operable.get("final_answer")
+        assert final_answer_spec is not None
+        # The base_type should be MyAnswer
+        assert final_answer_spec.base_type == MyAnswer
+
+    def test_build_step_operable_with_intermediate_options(self):
+        """Test building step Operable with intermediate options."""
+        from lionpride.operations.operate.react import build_step_operable
+
+        class Progress(BaseModel):
+            pct: int
+
+        operable = build_step_operable(intermediate_options=[Progress])
+
+        spec_names = {s.name for s in operable.get_specs()}
+        assert "intermediate_response_options" in spec_names
+
+    def test_build_step_operable_creates_model(self):
+        """Test that step Operable can create a Pydantic model."""
+        from lionpride.operations.operate.react import build_step_operable
+
+        class Progress(BaseModel):
+            pct: int
+
+        operable = build_step_operable(intermediate_options=[Progress])
+        Model = operable.create_model()
+
+        # Should be able to instantiate with defaults
+        instance = Model(is_done=False)
+        assert instance.is_done is False
+        assert instance.reasoning is None
+        assert instance.intermediate_response_options is None
+
+    async def test_react_with_intermediate_options(self, session_with_model):
+        """Test react with intermediate_response_options parameter."""
+        from lionpride.operations.operate.react import react
+        from lionpride.operations.operate.types import ReactParams
+
+        session, model = session_with_model
+        branch = session.create_branch(name="test", resources={model.name})
+
+        class Progress(BaseModel):
+            pct: int
+            status: str
+
+        # Mock operate to return intermediate options
+        with patch("lionpride.operations.operate.factory.operate") as mock_operate:
+            mock_result = MagicMock()
+            mock_result.is_done = True
+            mock_result.reasoning = "Done"
+            mock_result.action_requests = None
+            mock_result.action_responses = None
+            # Mock intermediate options
+            mock_iro = MagicMock()
+            mock_iro.model_dump.return_value = {"progress": {"pct": 100, "status": "complete"}}
+            mock_result.intermediate_response_options = mock_iro
+            mock_operate.return_value = mock_result
+
+            params = ReactParams(
+                operate=OperateParams(
+                    communicate=CommunicateParams(
+                        generate=GenerateParams(
+                            instruction="Test",
+                            imodel=model,
+                            imodel_kwargs={"model_name": "gpt-4"},
+                        ),
+                        parse=ParseParams(),
+                    ),
+                    actions=True,
+                    reason=True,
+                ),
+                max_steps=5,
+                intermediate_response_options=[Progress],
+            )
+
+            result = await react(session, branch, params)
+
+            assert result.completed is True
+            assert result.steps[0].intermediate_options is not None
+            assert result.steps[0].intermediate_options.get("progress") == {
+                "pct": 100,
+                "status": "complete",
+            }
