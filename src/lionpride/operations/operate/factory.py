@@ -115,7 +115,13 @@ async def operate(
             raise ValueError(f"Response validation failed: {result.get('error')}")
         return result, None
 
-    # 8. Execute actions if enabled and present
+    # 8. Capture assistant message before action execution (if return_message)
+    assistant_msg = None
+    if params.return_message:
+        branch_msgs = session.messages[b_]
+        assistant_msg = branch_msgs[-1] if branch_msgs else None
+
+    # 9. Execute actions if enabled and present
     if params.actions and has_action_requests(result):
         act_params = params.act
         result, _action_responses = await execute_tools(
@@ -125,11 +131,8 @@ async def operate(
             concurrent=act_params.concurrent if act_params else True,
         )
 
-    # 9. Return result
+    # 10. Return result
     if params.return_message:
-        # Get the last assistant message from branch
-        branch_msgs = session.messages[b_]
-        assistant_msg = branch_msgs[-1] if branch_msgs else None
         return result, assistant_msg
 
     return result

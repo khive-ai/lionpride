@@ -17,12 +17,14 @@ from .operate import (
     ReactParams,
     ReactResult,
     ReactStep,
+    ReactStepResponse,
     communicate,
     generate,
     interpret,
     operate,
     parse,
     react,
+    react_stream,
 )
 from .registry import OperationRegistry
 
@@ -45,6 +47,7 @@ __all__ = (
     "ReactParams",
     "ReactResult",
     "ReactStep",
+    "ReactStepResponse",
     "Reason",
     "communicate",
     "create_operation",
@@ -55,4 +58,5 @@ __all__ = (
     "operate",
     "parse",
     "react",
+    "react_stream",
 )

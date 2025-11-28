@@ -246,14 +246,13 @@ def _persist_action_messages(
     Pattern:
     - ActionRequest: sender=branch.id (LLM via branch), recipient=tool_name
     - ActionResponse: sender=tool_name, recipient=branch.id
-    """
-    # Build response lookup by function name for pairing
-    response_map: dict[str, ActionResponse] = {}
-    for resp in action_responses:
-        key = f"{resp.function}:{hash(str(resp.arguments))}"
-        response_map[key] = resp
 
-    for req in action_requests:
+    Note: action_responses are in same order as action_requests (from act()),
+    so we use direct zip pairing instead of hash-based lookup to handle
+    duplicate tool calls with identical arguments correctly.
+    """
+    # Use direct pairing - order preserved from act() execution
+    for req, resp in zip(action_requests, action_responses, strict=True):
         # Create ActionRequest message
         # Pattern: branch (LLM) requests action from tool
         req_msg = Message(
@@ -267,23 +266,19 @@ def _persist_action_messages(
         )
         session.add_message(req_msg, branches=branch)
 
-        # Find matching response
-        key = f"{req.function}:{hash(str(req.arguments))}"
-        if key in response_map:
-            resp = response_map[key]
-            # Create ActionResponse message
-            # Pattern: tool responds to branch
-            resp_msg = Message(
-                content=ActionResponseContent.create(
-                    request_id=str(req_msg.id),
-                    result=resp.output if not isinstance(resp.output, Exception) else None,
-                    error=str(resp.output) if isinstance(resp.output, Exception) else None,
-                ),
-                sender=req.function,  # Tool function name
-                recipient=branch.id,
-                metadata={"action_type": "response", "function": req.function},
-            )
-            session.add_message(resp_msg, branches=branch)
+        # Create ActionResponse message
+        # Pattern: tool responds to branch
+        resp_msg = Message(
+            content=ActionResponseContent.create(
+                request_id=str(req_msg.id),
+                result=resp.output if not isinstance(resp.output, Exception) else None,
+                error=str(resp.output) if isinstance(resp.output, Exception) else None,
+            ),
+            sender=req.function,  # Tool function name
+            recipient=branch.id,
+            metadata={"action_type": "response", "function": req.function},
+        )
+        session.add_message(resp_msg, branches=branch)
 
 
 def _update_response_with_actions(

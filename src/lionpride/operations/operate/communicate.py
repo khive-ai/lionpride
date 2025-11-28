@@ -11,7 +11,7 @@ from lionpride.services.types import APICalling
 from lionpride.session.messages import AssistantResponseContent, Message
 
 from .generate import generate
-from .types import CommunicateParams, GenerateParams
+from .types import CommunicateParams, GenerateParams, ParseParams
 
 if TYPE_CHECKING:
     from lionpride.session import Branch, Session
@@ -154,14 +154,16 @@ async def _communicate_with_operable(
     # 2. Parse
     from .parse import parse
 
+    # Handle sentinel parse params - use defaults if not provided
+    parse_params = params.parse if not params._is_sentinel(params.parse) else ParseParams()
     parsed = await parse(
         session=session,
         branch=branch,
-        params=params.parse.with_updates(
+        params=parse_params.with_updates(
             copy_containers="deep",
             text=gen_calling.response.data,
             target_keys=list(capabilities),
-            imodel=params.parse.imodel or session.default_parse_model,
+            imodel=parse_params.imodel or session.default_parse_model,
         ),
     )
 

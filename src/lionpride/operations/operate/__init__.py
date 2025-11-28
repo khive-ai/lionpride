@@ -7,7 +7,7 @@ from .factory import operate
 from .generate import generate
 from .interpret import interpret
 from .parse import parse
-from .react import ReactResult, ReactStep, react
+from .react import ReactResult, ReactStep, ReactStepResponse, react, react_stream
 from .types import (
     ActParams,
     CommunicateParams,
@@ -30,6 +30,7 @@ __all__ = (
     "ReactParams",
     "ReactResult",
     "ReactStep",
+    "ReactStepResponse",
     "act",
     "communicate",
     "execute_tools",
@@ -39,4 +40,5 @@ __all__ = (
     "operate",
     "parse",
     "react",
+    "react_stream",
 )
