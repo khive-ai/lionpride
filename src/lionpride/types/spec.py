@@ -227,11 +227,53 @@ class Spec:
         """Create listable version."""
         return self.with_updates(listable=True)
 
+    def as_optional(self) -> Self:
+        """Create optional version (nullable + default=None)."""
+        return self.as_nullable().with_default(None)
+
     def with_default(self, default: Any) -> Self:
         """Create spec with default value/factory. Callables treated as factories."""
         if callable(default):
             return self.with_updates(default_factory=default)
         return self.with_updates(default=default)
+
+    @classmethod
+    def from_model(
+        cls,
+        model: type,
+        name: str | None = None,
+        *,
+        nullable: bool = False,
+        listable: bool = False,
+        default: Any = Undefined,
+    ) -> Self:
+        """Create Spec from a model class (e.g., Pydantic BaseModel).
+
+        Args:
+            model: The model class to use as base_type
+            name: Field name (defaults to lowercase class name)
+            nullable: Whether field is nullable
+            listable: Whether field is a list
+            default: Default value (Undefined means no default)
+
+        Returns:
+            Spec configured for the model type
+
+        Example:
+            >>> Spec.from_model(ProgressReport)  # name="progressreport"
+            >>> Spec.from_model(CodeBlock, name="blocks", listable=True, nullable=True)
+        """
+        field_name = name if name is not None else model.__name__.lower()
+        spec = cls(base_type=model, name=field_name)
+
+        if listable:
+            spec = spec.as_listable()
+        if nullable:
+            spec = spec.as_nullable()
+        if not_sentinel(default):
+            spec = spec.with_default(default)
+
+        return spec
 
     def with_validator(self, validator: Callable[..., Any] | list[Callable[..., Any]]) -> Self:
         """Create spec with validator(s)."""

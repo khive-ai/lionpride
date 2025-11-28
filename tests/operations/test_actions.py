@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from lionpride.core.event import Event, EventStatus
-from lionpride.operations.actions import _execute_single_action, act
+from lionpride.operations.operate.act import _execute_single_action, act
 from lionpride.rules import ActionRequest, ActionResponse
 from lionpride.services import ServiceRegistry, iModel
 from lionpride.services.types.backend import NormalizedResponse

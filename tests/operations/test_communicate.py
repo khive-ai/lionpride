@@ -1,23 +1,25 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for communicate.py coverage.
+"""Tests for communicate operation.
 
-Targets coverage for lines:
-- 41, 45, 54, 73, 77: Parameter validation
-- 152-175: Retry instruction construction
-- 186-188, 198-200: JSON validation
-- 215, 218, 220, 222, 224: Result formatting
+Tests:
+- Text path (no operable): Generate → persist → return text
+- IPU path (with operable): Generate → parse → validate → persist → return model
+- Capability enforcement
+- Message persistence
 """
 
 from dataclasses import dataclass
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
-from pydantic import BaseModel
 
 from lionpride import Event, EventStatus
-from lionpride.session.messages import Message
+from lionpride.operations.operate.communicate import communicate
+from lionpride.operations.operate.types import CommunicateParams, GenerateParams, ParseParams
+from lionpride.session import Session
+from lionpride.types import Operable, Spec
 
 
 @dataclass
@@ -35,308 +37,248 @@ class MockNormalizedResponse:
             self.metadata = {"usage": {"prompt_tokens": 10, "completion_tokens": 20}}
 
 
-class TestCommunicateCoverage:
-    """Test communicate.py uncovered lines."""
+@pytest.fixture
+def mock_model():
+    """Create a mock iModel for testing without API calls."""
+    from lionpride.services.providers.oai_chat import OAIChatEndpoint
+    from lionpride.services.types.imodel import iModel
 
-    async def test_communicate_missing_instruction(self, session_with_model):
-        """Test line 41: Missing instruction raises ValueError."""
-        from lionpride.operations.operate.communicate import communicate
+    endpoint = OAIChatEndpoint(config=None, name="mock_model", api_key="mock-key")
+    model = iModel(backend=endpoint)
 
-        session, model = session_with_model
-        branch = session.create_branch(name="test")
+    async def mock_invoke(**kwargs):
+        class MockCalling(Event):
+            def __init__(self):
+                super().__init__()
+                self.status = EventStatus.COMPLETED
+                self.execution.response = MockNormalizedResponse()
 
-        parameters = {"imodel": model}
+        return MockCalling()
 
-        with pytest.raises(ValueError, match="communicate requires 'instruction' parameter"):
-            await communicate(session, branch, parameters)
+    object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_invoke))
+    return model
 
-    async def test_communicate_missing_imodel(self, session_with_model):
-        """Test line 45: Missing imodel raises ValueError."""
-        from lionpride.operations.operate.communicate import communicate
 
+@pytest.fixture
+def session_with_model(mock_model):
+    """Create session with registered mock model."""
+    session = Session()
+    session.services.register(mock_model, update=True)
+    return session, mock_model
+
+
+class TestCommunicateValidation:
+    """Test parameter validation."""
+
+    async def test_missing_generate_params_raises_error(self, session_with_model):
+        """Test that missing generate params raises ValueError."""
         session, _ = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock_model"})
 
-        parameters = {"instruction": "Test"}
+        params = CommunicateParams()  # No generate params
 
-        with pytest.raises(ValueError, match="communicate requires 'imodel' parameter"):
-            await communicate(session, branch, parameters)
+        with pytest.raises(ValueError, match="communicate requires 'generate' params"):
+            await communicate(session, branch, params)
 
-    async def test_communicate_imodel_without_name_attr(self, session_with_model):
-        """Test line 54: imodel object without name attribute raises ValueError."""
-        from lionpride.operations.operate.communicate import communicate
 
+class TestTextPath:
+    """Test text path (no operable) - simple stateful chat."""
+
+    async def test_text_path_returns_string(self, session_with_model):
+        """Test text path returns response string."""
         session, _ = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={"mock_model"})
 
-        # Mock imodel without name attribute
-        mock_imodel = MagicMock(spec=[])  # No attributes
+        params = CommunicateParams(
+            generate=GenerateParams(
+                imodel="mock_model",
+                instruction="Test instruction",
+            ),
+        )
 
-        parameters = {"instruction": "Test", "imodel": mock_imodel}
-
-        with pytest.raises(
-            ValueError, match="imodel must be a string name or have a 'name' attribute"
-        ):
-            await communicate(session, branch, parameters)
-
-    async def test_communicate_return_as_model_without_response_model(self, session_with_model):
-        """Test line 73: return_as='model' without response_model raises ValueError."""
-        from lionpride.operations.operate.communicate import communicate
-
-        session, model = session_with_model
-        branch = session.create_branch(name="test")
-
-        parameters = {
-            "instruction": "Test",
-            "imodel": model,
-            "return_as": "model",
-            # No response_model
-        }
-
-        with pytest.raises(
-            ValueError, match="return_as='model' requires 'response_model' parameter"
-        ):
-            await communicate(session, branch, parameters)
-
-    async def test_communicate_branch_string_resolution(self, session_with_model):
-        """Test line 77: Branch string resolution."""
-        from lionpride.operations.operate.communicate import communicate
-
-        session, model = session_with_model
-        session.create_branch(name="test_branch")
-
-        parameters = {"instruction": "Test", "imodel": model}
-
-        # Pass branch as string
-        result = await communicate(session, "test_branch", parameters)
+        result = await communicate(session, branch, params)
 
         assert isinstance(result, str)
+        assert result == "mock response text"
 
-    async def test_communicate_return_as_raw(self, session_with_model):
-        """Test line 218: return_as='raw' returns raw response."""
-        from lionpride.operations.operate.communicate import communicate
+    async def test_text_path_persists_messages(self, session_with_model):
+        """Test that text path adds messages to branch."""
+        session, _ = session_with_model
+        branch = session.create_branch(name="test", resources={"mock_model"})
 
-        session, model = session_with_model
-        branch = session.create_branch(name="test")
+        initial_count = len(session.messages[branch])
 
-        parameters = {
-            "instruction": "Test",
-            "imodel": model,
-            "return_as": "raw",
-        }
-
-        result = await communicate(session, branch, parameters)
-
-        assert isinstance(result, dict)
-        assert "id" in result or "choices" in result
-
-    async def test_communicate_return_as_message(self, session_with_model):
-        """Test line 220: return_as='message' returns Message."""
-        from lionpride.operations.operate.communicate import communicate
-
-        session, model = session_with_model
-        branch = session.create_branch(name="test")
-
-        parameters = {
-            "instruction": "Test",
-            "imodel": model,
-            "return_as": "message",
-        }
-
-        result = await communicate(session, branch, parameters)
-
-        assert isinstance(result, Message)
-
-    async def test_communicate_invalid_return_as(self, session_with_model):
-        """Test line 224: Invalid return_as raises ValueError."""
-        from lionpride.operations.operate.communicate import communicate
-
-        session, model = session_with_model
-        branch = session.create_branch(name="test")
-
-        # Mock to bypass normal flow
-        with patch("lionpride.operations.operate.communicate._format_result") as mock_format:
-            mock_format.side_effect = ValueError("Unsupported return_as: invalid")
-
-            parameters = {
-                "instruction": "Test",
-                "imodel": model,
-                "return_as": "invalid",
-            }
-
-            with pytest.raises(ValueError, match="Unsupported return_as"):
-                await communicate(session, branch, parameters)
-
-    async def test_format_result_text_with_basemodel(self):
-        """Test line 215: Text format with BaseModel returns model_dump_json."""
-        from lionpride.operations.operate.communicate import _format_result
-
-        class TestModel(BaseModel):
-            value: str
-
-        validated = TestModel(value="test")
-        result = _format_result(
-            return_as="text",
-            validated=validated,
-            response_text="raw text",
-            raw_response={},
-            assistant_msg=MagicMock(),
-            response_model=TestModel,
+        params = CommunicateParams(
+            generate=GenerateParams(
+                imodel="mock_model",
+                instruction="Test instruction",
+            ),
         )
+
+        await communicate(session, branch, params)
+
+        # Should have added 2 messages (instruction + response)
+        final_count = len(session.messages[branch])
+        assert final_count == initial_count + 2
+
+    async def test_branch_as_string(self, session_with_model):
+        """Test that branch can be passed as string name."""
+        session, _ = session_with_model
+        branch_name = "test_branch"
+        session.create_branch(name=branch_name, resources={"mock_model"})
+
+        params = CommunicateParams(
+            generate=GenerateParams(
+                imodel="mock_model",
+                instruction="Test",
+            ),
+        )
+
+        result = await communicate(session, branch_name, params)
 
         assert isinstance(result, str)
-        assert "test" in result
+        assert result == "mock response text"
 
-    async def test_format_result_model(self):
-        """Test line 222: Model format returns validated model."""
-        from lionpride.operations.operate.communicate import _format_result
 
-        class TestModel(BaseModel):
-            value: str
+class TestIPUPath:
+    """Test IPU path (with operable) - structured output with validation."""
 
-        validated = TestModel(value="test")
-        result = _format_result(
-            return_as="model",
-            validated=validated,
-            response_text="raw text",
-            raw_response={},
-            assistant_msg=MagicMock(),
-            response_model=TestModel,
+    @pytest.fixture
+    def simple_operable(self):
+        """Create a simple operable for testing."""
+        return Operable(
+            specs=[
+                Spec(str, name="name"),
+                Spec(int, name="value"),
+            ],
+            name="TestOperable",
         )
 
-        assert isinstance(result, TestModel)
-        assert result.value == "test"
+    async def test_operable_requires_capabilities(self, session_with_model, simple_operable):
+        """Test that operable path requires explicit capabilities."""
+        session, _ = session_with_model
+        # Branch with NO capabilities
+        branch = session.create_branch(name="test", resources={"mock_model"}, capabilities=set())
 
-    async def test_validate_json_with_dict(self):
-        """Test lines 186-188: _validate_json with dict input."""
-        from lionpride.operations.operate.communicate import _validate_json
-
-        class TestModel(BaseModel):
-            title: str
-
-        validated, error = _validate_json(
-            response_data={"title": "Test"},
-            response_model=TestModel,
-            strict=False,
-            fuzzy_parse=True,
+        params = CommunicateParams(
+            generate=GenerateParams(
+                imodel="mock_model",
+                instruction="Return JSON",
+            ),
+            parse=ParseParams(),
+            operable=simple_operable,
+            # No capabilities set
         )
 
-        assert error is None
-        assert isinstance(validated, TestModel)
-        assert validated.title == "Test"
+        with pytest.raises(ValueError, match="requires explicit capabilities"):
+            await communicate(session, branch, params)
 
-    async def test_validate_json_returns_none(self):
-        """Test lines 198: _validate_json returns None validation error."""
-        from lionpride.operations.operate.communicate import _validate_json
-
-        class TestModel(BaseModel):
-            title: str
-
-        # Pass invalid string that won't validate
-        validated, error = _validate_json(
-            response_data="not json",
-            response_model=TestModel,
-            strict=False,
-            fuzzy_parse=True,
+    async def test_capabilities_must_be_subset_of_branch(self, session_with_model, simple_operable):
+        """Test that requested capabilities must be subset of branch capabilities."""
+        session, _ = session_with_model
+        # Branch with limited capabilities
+        branch = session.create_branch(
+            name="test",
+            resources={"mock_model"},
+            capabilities={"name"},  # Only 'name' allowed
         )
 
-        # Should return None and error message
-        assert validated is None
-        assert error is not None
-
-    async def test_validate_json_exception(self):
-        """Test lines 199-200: _validate_json exception handling."""
-        from lionpride.operations.operate.communicate import _validate_json
-
-        class TestModel(BaseModel):
-            title: str
-
-        # This should cause validation error
-        validated, error = _validate_json(
-            response_data='{"invalid": "json"}',
-            response_model=TestModel,
-            strict=True,
-            fuzzy_parse=False,
+        params = CommunicateParams(
+            generate=GenerateParams(
+                imodel="mock_model",
+                instruction="Return JSON",
+            ),
+            parse=ParseParams(),
+            operable=simple_operable,
+            capabilities={"name", "value"},  # Requesting more than allowed
         )
 
-        assert validated is None
-        assert error is not None
+        with pytest.raises(PermissionError, match="does not have all required capabilities"):
+            await communicate(session, branch, params)
 
-    async def test_communicate_with_string_imodel_name(self, session_with_model):
-        """Test lines 49-50: imodel as string name resolution."""
-        from lionpride.operations.operate.communicate import communicate
+    async def test_operable_path_with_valid_json(
+        self, session_with_model, simple_operable, mock_model
+    ):
+        """Test IPU path with valid JSON response."""
 
-        session, _model = session_with_model
-        branch = session.create_branch(name="test")
-
-        # Pass imodel as string name (lines 49-50)
-        parameters = {
-            "instruction": "Test",
-            "imodel": "mock_model",  # String name, not object
-        }
-
-        result = await communicate(session, branch, parameters)
-
-        assert isinstance(result, str)
-
-    async def test_communicate_retry_on_validation_failure(self, session_with_model):
-        """Test lines 157-167: Retry instruction construction."""
-        from lionpride.operations.operate.communicate import communicate
-
-        session, model = session_with_model
-        branch = session.create_branch(name="test")
-
-        class StrictModel(BaseModel):
-            required_field: str
-
-        call_count = 0
-
-        async def mock_invoke_with_retry(**kwargs):
-            nonlocal call_count
-            call_count += 1
-
+        # Mock response with valid JSON
+        async def mock_invoke_json(**kwargs):
             class MockCalling(Event):
                 def __init__(self):
                     super().__init__()
                     self.status = EventStatus.COMPLETED
-                    if call_count == 1:
-                        # First call: invalid response
-                        self.execution.response = MockNormalizedResponse(data="invalid json")
-                    else:
-                        # Second call: valid response
-                        self.execution.response = MockNormalizedResponse(
-                            data='{"required_field": "valid"}'
-                        )
+                    self.execution.response = MockNormalizedResponse(
+                        data='{"name": "test", "value": 42}'
+                    )
 
             return MockCalling()
 
-        object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_invoke_with_retry))
+        object.__setattr__(mock_model, "invoke", AsyncMock(side_effect=mock_invoke_json))
 
-        parameters = {
-            "instruction": "Test",
-            "imodel": model,
-            "response_model": StrictModel,
-            "return_as": "model",  # Return as model to get the StrictModel instance
-            "max_retries": 1,  # Allow 1 retry to hit lines 157-167
-            "model_kwargs": {"model_name": "gpt-4"},
-        }
+        session, _ = session_with_model
+        branch = session.create_branch(
+            name="test",
+            resources={"mock_model"},
+            capabilities={"name", "value"},
+        )
 
-        result = await communicate(session, branch, parameters)
+        params = CommunicateParams(
+            generate=GenerateParams(
+                imodel="mock_model",
+                instruction="Return JSON",
+            ),
+            parse=ParseParams(),
+            operable=simple_operable,
+            capabilities={"name", "value"},
+        )
 
-        # Should succeed on retry
-        assert result.required_field == "valid"
-        assert call_count == 2
+        result = await communicate(session, branch, params)
 
-    async def test_format_result_invalid_return_as(self):
-        """Test line 224: Invalid return_as in _format_result."""
-        from lionpride.operations.operate.communicate import _format_result
+        # Result should be validated model instance
+        assert hasattr(result, "name")
+        assert hasattr(result, "value")
+        assert result.name == "test"
+        assert result.value == 42
 
-        with pytest.raises(ValueError, match="Unsupported return_as"):
-            _format_result(
-                return_as="invalid_type",
-                validated=None,
-                response_text="text",
-                raw_response={},
-                assistant_msg=MagicMock(),
-                response_model=None,
-            )
+    async def test_operable_path_persists_messages(
+        self, session_with_model, simple_operable, mock_model
+    ):
+        """Test that IPU path adds messages to branch."""
+
+        async def mock_invoke_json(**kwargs):
+            class MockCalling(Event):
+                def __init__(self):
+                    super().__init__()
+                    self.status = EventStatus.COMPLETED
+                    self.execution.response = MockNormalizedResponse(
+                        data='{"name": "test", "value": 42}'
+                    )
+
+            return MockCalling()
+
+        object.__setattr__(mock_model, "invoke", AsyncMock(side_effect=mock_invoke_json))
+
+        session, _ = session_with_model
+        branch = session.create_branch(
+            name="test",
+            resources={"mock_model"},
+            capabilities={"name", "value"},
+        )
+
+        initial_count = len(session.messages[branch])
+
+        params = CommunicateParams(
+            generate=GenerateParams(
+                imodel="mock_model",
+                instruction="Return JSON",
+            ),
+            parse=ParseParams(),
+            operable=simple_operable,
+            capabilities={"name", "value"},
+        )
+
+        await communicate(session, branch, params)
+
+        # Should have added 2 messages
+        final_count = len(session.messages[branch])
+        assert final_count == initial_count + 2

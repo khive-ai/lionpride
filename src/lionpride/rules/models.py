@@ -88,8 +88,9 @@ class Reason(HashableModel):
         branch = session.create_branch(capabilities={"reason"})
 
         # Operations with reason=True inject this spec
-        result = await session.conduct("operate", branch=branch,
-                                        response_model=MyOutput, reason=True)
+        result = await session.conduct(
+            "operate", branch=branch, response_model=MyOutput, reason=True
+        )
         # → Response includes Reason field with reasoning + confidence
     """
 

@@ -59,18 +59,13 @@ class Validator:
     def __init__(
         self,
         registry: RuleRegistry | None = None,
-        rules: dict[str, Rule] | None = None,
     ):
         """Initialize validator with rule registry.
 
         Args:
             registry: RuleRegistry for type→Rule lookup (uses default if None)
-            rules: Legacy dict-based rules (for backwards compatibility)
         """
         self.registry = registry or get_default_registry()
-        # Legacy support: dict-based rules
-        self._legacy_rules = rules
-        # Validation log for tracking attempts and errors
         self.validation_log: list[dict[str, Any]] = []
 
     def log_validation_error(self, field: str, value: Any, error: str) -> None:
@@ -248,6 +243,53 @@ class Validator:
 
         return value
 
+    async def _validate_data(
+        self,
+        data: dict[str, Any],
+        operable: Operable,
+        capabilities: set[str],
+        auto_fix: bool = True,
+        strict: bool = True,
+    ) -> dict[str, Any]:
+        """Validate data spec-by-spec against an Operable.
+
+        Only validates fields that are in the capabilities set.
+        Empty capabilities = nothing validated.
+
+        Args:
+            data: Raw data dict (e.g., from LLM response)
+            operable: Operable defining expected structure
+            capabilities: Set of field names allowed to be validated
+            auto_fix: Enable auto-correction for each field
+            strict: Raise if validation fails
+
+        Returns:
+            Dict of validated field values (only fields in capabilities)
+
+        Raises:
+            ValidationError: If any field validation fails
+        """
+        validated: dict[str, Any] = {}
+
+        for spec in operable.get_specs():
+            field_name = spec.name
+            if field_name is None:
+                continue
+
+            # Only validate fields in capabilities
+            if field_name not in capabilities:
+                continue
+
+            # Get value from data
+            value = data.get(field_name)
+
+            # Validate against spec
+            validated[field_name] = await self.validate_spec(
+                spec, value, auto_fix=auto_fix, strict=strict
+            )
+
+        return validated
+
     async def validate_operable(
         self,
         data: dict[str, Any],
@@ -257,7 +299,8 @@ class Validator:
     ) -> dict[str, Any]:
         """Validate data spec-by-spec against an Operable.
 
-        This is the main validation method for the IPU pipeline.
+        Validates all fields defined in the operable. This is a convenience
+        wrapper around _validate_data that validates all fields.
 
         Args:
             data: Raw data dict (e.g., from LLM response)
@@ -271,109 +314,51 @@ class Validator:
         Raises:
             ValidationError: If any field validation fails
         """
-        validated: dict[str, Any] = {}
-
-        for spec in operable.get_specs():
-            field_name = spec.name
-            if field_name is None:
-                continue
-
-            # Get value from data
-            value = data.get(field_name)
-
-            # Validate against spec
-            validated[field_name] = await self.validate_spec(
-                spec, value, auto_fix=auto_fix, strict=strict
-            )
-
-        return validated
-
-    # === Legacy API (backwards compatibility) ===
-
-    async def validate_field(
-        self,
-        field_name: str,
-        field_value: Any,
-        field_type: type | None = None,
-        auto_fix: bool = True,
-        strict: bool = True,
-    ) -> Any:
-        """Validate single field using registry lookup.
-
-        Legacy method for backwards compatibility.
-        Prefer validate_spec() for new code.
-
-        Args:
-            field_name: Field name
-            field_value: Field value
-            field_type: Expected type (optional)
-            auto_fix: Enable auto-correction
-            strict: Raise if no rule applies
-
-        Returns:
-            Validated (and possibly fixed) value
-        """
-        # Get rule from registry
-        rule = self.registry.get_rule(base_type=field_type, field_name=field_name)
-
-        # Fallback to legacy rules if available
-        if rule is None and self._legacy_rules:
-            for legacy_rule in self._legacy_rules.values():
-                try:
-                    if await legacy_rule.apply(field_name, field_value, field_type):
-                        rule = legacy_rule
-                        break
-                except Exception:
-                    continue
-
-        if rule is None:
-            if strict:
-                error_msg = (
-                    f"No rule found for field '{field_name}' with type {field_type}. "
-                    f"Register a rule or set strict=False."
-                )
-                self.log_validation_error(field_name, field_value, error_msg)
-                raise ValidationError(error_msg)
-            return field_value
-
-        try:
-            return await rule.invoke(field_name, field_value, field_type, auto_fix=auto_fix)
-        except Exception as e:
-            self.log_validation_error(field_name, field_value, str(e))
-            raise
+        # Validate all fields in the operable
+        capabilities = operable.allowed()
+        return await self._validate_data(
+            data, operable, capabilities, auto_fix=auto_fix, strict=strict
+        )
 
     async def validate(
         self,
         data: dict[str, Any],
-        operable: Operable | None = None,
+        operable: Operable,
+        capabilities: set[str],
         auto_fix: bool = True,
         strict: bool = True,
-    ) -> dict[str, Any]:
-        """Validate data structure.
+    ) -> Any:
+        """Validate data and return a model instance.
 
-        If operable provided, validates spec-by-spec.
-        Otherwise, validates each field using registry lookup.
+        This is the security microkernel - all capability-based access control
+        flows through these few lines.
+
+        Flow:
+        1. Validate data field-by-field with rules (respects capabilities)
+        2. Create model from operable with allowed capabilities
+        3. Validate dict into model instance
 
         Args:
-            data: Field → value dict to validate
-            operable: Operable spec (optional)
-            auto_fix: Enable auto-correction
+            data: Raw data dict (e.g., from LLM response)
+            operable: Operable defining expected structure (carries its own adapter)
+            capabilities: Set of field names allowed
+            auto_fix: Enable auto-correction for each field
             strict: Raise if validation fails
 
         Returns:
-            Validated data dict
-        """
-        if operable is not None:
-            return await self.validate_operable(data, operable, auto_fix, strict)
+            Validated model instance
 
-        # No operable - validate each field by inferred type
-        validated: dict[str, Any] = {}
-        for field_name, value in data.items():
-            field_type = type(value) if value is not None else None
-            validated[field_name] = await self.validate_field(
-                field_name, value, field_type, auto_fix, strict
-            )
-        return validated
+        Raises:
+            ValidationError: If validation fails
+        """
+        # 1. Validate data with rules
+        validated_dict = await self._validate_data(
+            data, operable, capabilities, auto_fix=auto_fix, strict=strict
+        )
+
+        # 2. Create model with capabilities (operable uses its own adapter)
+        Model = operable.create_model(include=capabilities)
+        return operable.adapter.validate_model(Model, validated_dict)
 
     def __repr__(self) -> str:
         """String representation."""

@@ -20,6 +20,12 @@ from lionpride.operations.flow import DependencyAwareExecutor
 from lionpride.operations.node import create_operation
 from lionpride.operations.operate.factory import operate
 from lionpride.operations.operate.generate import generate
+from lionpride.operations.operate.types import (
+    CommunicateParams,
+    GenerateParams,
+    OperateParams,
+    ParseParams,
+)
 from lionpride.session import Session
 from lionpride.session.messages import InstructionContent, Message
 
@@ -250,17 +256,17 @@ class TestDependencyAwareExecutor:
     async def test_basic_execution(self, session_with_model):
         """Test executing a single operation."""
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={model.name})
 
         builder = Builder()
         builder.add(
             "task1",
             "generate",
-            {
-                "instruction": "Say hello",
-                "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
-            },
+            GenerateParams(
+                instruction="Say hello",
+                imodel=model,
+                return_as="text",
+            ),
         )
         graph = builder.build()
 
@@ -300,26 +306,18 @@ class TestDependencyAwareExecutor:
     async def test_parallel_execution(self, session_with_model):
         """Test independent operations run in parallel."""
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={model.name})
 
         builder = Builder()
         builder.add(
             "task1",
             "generate",
-            {
-                "instruction": "First",
-                "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
-            },
+            GenerateParams(instruction="First", imodel=model, return_as="text"),
         )
         builder.add(
             "task2",
             "generate",
-            {
-                "instruction": "Second",
-                "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
-            },
+            GenerateParams(instruction="Second", imodel=model, return_as="text"),
         )
         # No dependencies - should run in parallel
 
@@ -342,11 +340,14 @@ class TestDependencyAwareExecutor:
     async def test_context_inheritance(self, session_with_model):
         """Test operations receive predecessor results in context."""
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={model.name})
 
-        # Create factory that uses context
+        # Create factory that uses context - accepts typed params or any params
         async def context_consumer(session, branch, parameters):
-            context = parameters.get("context", {})
+            # Parameters can be a dict with context added by the executor
+            context = getattr(parameters, "context", None) or (
+                parameters.get("context", {}) if isinstance(parameters, dict) else {}
+            )
             return {"received_context": context}
 
         # Register to session's per-session registry
@@ -356,13 +357,9 @@ class TestDependencyAwareExecutor:
         builder.add(
             "task1",
             "generate",
-            {
-                "instruction": "First",
-                "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
-            },
+            GenerateParams(instruction="First", imodel=model, return_as="text"),
         )
-        builder.add("task2", "context_consumer", {}, depends_on=["task1"])
+        builder.add("task2", "context_consumer", None, depends_on=["task1"])
         graph = builder.build()
 
         results = await flow(session, branch, graph, verbose=False)
@@ -375,35 +372,23 @@ class TestDependencyAwareExecutor:
     async def test_aggregation_support(self, session_with_model):
         """Test aggregation operations wait for all sources."""
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={model.name})
 
         builder = Builder()
         builder.add(
             "task1",
             "generate",
-            {
-                "instruction": "First",
-                "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
-            },
+            GenerateParams(instruction="First", imodel=model, return_as="text"),
         )
         builder.add(
             "task2",
             "generate",
-            {
-                "instruction": "Second",
-                "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
-            },
+            GenerateParams(instruction="Second", imodel=model, return_as="text"),
         )
         builder.add_aggregation(
             "summary",
             "generate",
-            {
-                "instruction": "Summarize",
-                "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
-            },
+            GenerateParams(instruction="Summarize", imodel=model, return_as="text"),
             source_names=["task1", "task2"],
         )
 
@@ -482,17 +467,15 @@ class TestFactories:
 
     async def test_generate_basic(self, session_with_model):
         """Test generate factory - stateless, returns text by default."""
-        session, _model = session_with_model
-        branch = session.create_branch(name="test")
+        session, model = session_with_model
+        branch = session.create_branch(name="test", resources={model.name})
 
-        result = await generate(
-            session,
-            branch,
-            {
-                "imodel": "mock_model",
-                "messages": [{"role": "user", "content": "Say hello"}],
-            },
+        params = GenerateParams(
+            imodel="mock_model",
+            instruction="Say hello",
+            return_as="text",
         )
+        result = await generate(session, branch, params)
 
         assert "mock response" in result
         # Verify NO messages added (stateless)
@@ -502,19 +485,16 @@ class TestFactories:
     async def test_generate_with_model_params(self, mock_model):
         """Test generate factory with model parameters."""
         session = Session()
-        branch = session.create_branch(name="test")
         session.services.register(mock_model, update=True)
+        branch = session.create_branch(name="test", resources={mock_model.name})
 
-        result = await generate(
-            session,
-            branch,
-            {
-                "imodel": "mock_model",
-                "messages": [{"role": "user", "content": "Test"}],
-                "model": "gpt-4",
-                "temperature": 0.7,
-            },
+        params = GenerateParams(
+            imodel="mock_model",
+            instruction="Test",
+            return_as="text",
+            imodel_kwargs={"model": "gpt-4", "temperature": 0.7},
         )
+        result = await generate(session, branch, params)
 
         assert "mock response" in result
 
@@ -551,8 +531,10 @@ class TestFactories:
                 def __init__(self):
                     super().__init__()
                     self.status = EventStatus.COMPLETED
+                    # JSON needs to be wrapped with the model name (lowercase)
                     self.execution.response = MockResponse(
-                        status="success", data='{"analysis": "test analysis", "confidence": 0.85}'
+                        status="success",
+                        data='{"exampleoutput": {"analysis": "test analysis", "confidence": 0.85}}',
                     )
 
             return MockCalling()
@@ -561,59 +543,62 @@ class TestFactories:
 
         session = Session()
         session.services.register(model, update=True)
-        branch = session.create_branch(name="test")
-
-        result = await operate(
-            session,
-            branch,
-            {
-                "instruction": "Analyze",
-                "imodel": model,
-                "response_model": ExampleOutput,
-                "skip_validation": False,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
-            },
+        branch = session.create_branch(
+            name="test", capabilities={"exampleoutput"}, resources={model.name}
         )
 
-        # Result should be parsed ExampleOutput instance
-        assert isinstance(result, ExampleOutput)
-        assert result.analysis == "test analysis"
-        assert result.confidence == 0.85
+        params = OperateParams(
+            communicate=CommunicateParams(
+                generate=GenerateParams(
+                    instruction="Analyze",
+                    imodel=model,
+                    request_model=ExampleOutput,
+                    imodel_kwargs={"model_name": "gpt-4.1-mini"},
+                ),
+                parse=ParseParams(),
+                strict_validation=False,
+            ),
+        )
+        result = await operate(session, branch, params)
+
+        # Result should be a model with exampleoutput field containing ExampleOutput instance
+        assert hasattr(result, "exampleoutput")
+        assert result.exampleoutput.analysis == "test analysis"
+        assert result.exampleoutput.confidence == 0.85
 
     async def test_operate_skip_validation(self, session_with_model):
         """Test operate factory with skip_validation=True."""
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={model.name})
 
-        result = await operate(
-            session,
-            branch,
-            {
-                "instruction": "Test",
-                "imodel": model,
-                "response_model": ExampleOutput,
-                "skip_validation": True,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
-            },
+        params = OperateParams(
+            communicate=CommunicateParams(
+                generate=GenerateParams(
+                    instruction="Test",
+                    imodel=model,
+                    request_model=ExampleOutput,
+                    imodel_kwargs={"model_name": "gpt-4.1-mini"},
+                ),
+                parse=ParseParams(),
+            ),
+            skip_validation=True,
         )
+        result = await operate(session, branch, params)
 
         # Should return raw response when skipping validation
         assert result == "mock response"
 
     async def test_factory_return_as_message(self, session_with_model):
         """Test generate with return_as='message'."""
-        session, _model = session_with_model
-        branch = session.create_branch(name="test")
+        session, model = session_with_model
+        branch = session.create_branch(name="test", resources={model.name})
 
-        result = await generate(
-            session,
-            branch,
-            {
-                "imodel": "mock_model",
-                "messages": [{"role": "user", "content": "Test"}],
-                "return_as": "message",
-            },
+        params = GenerateParams(
+            imodel="mock_model",
+            instruction="Test",
+            return_as="message",
         )
+        result = await generate(session, branch, params)
 
         # Should return Message instance with metadata
         assert isinstance(result, Message)
@@ -647,18 +632,16 @@ class TestFactories:
 
         session = Session()
         session.services.register(model, update=True)
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={model.name})
 
+        params = GenerateParams(
+            instruction="Test",
+            imodel=model,
+            return_as="text",
+            imodel_kwargs={"model_name": "gpt-4.1-mini"},
+        )
         with pytest.raises(RuntimeError, match="Model invocation failed"):
-            await generate(
-                session,
-                branch,
-                {
-                    "instruction": "Test",
-                    "imodel": model,
-                    "model_kwargs": {"model_name": "gpt-4.1-mini"},
-                },
-            )
+            await generate(session, branch, params)
 
 
 # -------------------------------------------------------------------------
@@ -672,14 +655,14 @@ class TestSessionConduct:
     async def test_conduct_basic_generate(self, session_with_model):
         """Test basic conduct() with generate operation."""
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={model.name})
 
-        op = await session.conduct(
-            "generate",
-            branch,
-            imodel=model,
-            messages=[{"role": "user", "content": "Hello"}],
+        params = GenerateParams(
+            instruction="Hello",
+            imodel=model.name,
+            return_as="text",
         )
+        op = await session.conduct("generate", branch, params=params)
 
         # Verify operation lifecycle
         from lionpride.core import EventStatus
@@ -692,15 +675,15 @@ class TestSessionConduct:
         """Test conduct() with explicitly passed imodel."""
         session = Session()
         session.services.register(mock_model, update=True)
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={mock_model.name})
 
-        # Pass imodel explicitly
-        op = await session.conduct(
-            "generate",
-            branch,
-            imodel=mock_model,
-            messages=[{"role": "user", "content": "Hello"}],
+        # Pass imodel explicitly via params
+        params = GenerateParams(
+            instruction="Hello",
+            imodel=mock_model.name,
+            return_as="text",
         )
+        op = await session.conduct("generate", branch, params=params)
 
         from lionpride.core import EventStatus
 
@@ -749,15 +732,15 @@ class TestSessionConduct:
         session = Session(default_generate_model=mock_model)
         session.services.register(mock_model, update=True)
         session.services.register(explicit_model, update=True)
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={explicit_model.name})
 
-        # Pass explicit imodel
-        op = await session.conduct(
-            "generate",
-            branch,
-            imodel=explicit_model,
-            messages=[{"role": "user", "content": "Hello"}],
+        # Pass explicit imodel via params
+        params = GenerateParams(
+            instruction="Hello",
+            imodel=explicit_model.name,
+            return_as="text",
         )
+        op = await session.conduct("generate", branch, params=params)
 
         assert "explicit model response" in op.response
 
@@ -768,12 +751,13 @@ class TestSessionConduct:
         session = Session()
         branch = session.create_branch(name="test")
 
-        # Without imodel, the operation should fail
-        op = await session.conduct(
-            "generate",
-            branch,
-            messages=[{"role": "user", "content": "Hello"}],
+        # Without imodel, the operation should fail (no model registered)
+        params = GenerateParams(
+            instruction="Hello",
+            imodel="nonexistent_model",  # Model doesn't exist in registry
+            return_as="text",
         )
+        op = await session.conduct("generate", branch, params=params)
 
         # Operation should fail due to missing imodel
         assert op.status == EventStatus.FAILED
@@ -781,7 +765,7 @@ class TestSessionConduct:
     async def test_conduct_branch_uses_default(self, session_with_model):
         """Test conduct() uses default_branch when None passed."""
         session, model = session_with_model
-        branch1 = session.create_branch(name="first")
+        branch1 = session.create_branch(name="first", resources={model.name})
         _branch2 = session.create_branch(name="second")
 
         # Explicitly set default branch
@@ -789,12 +773,12 @@ class TestSessionConduct:
         assert session.default_branch is branch1
 
         # Pass None for branch - should use default_branch
-        op = await session.conduct(
-            "generate",
-            None,
-            imodel=model,
-            messages=[{"role": "user", "content": "Hello"}],
+        params = GenerateParams(
+            instruction="Hello",
+            imodel=model.name,
+            return_as="text",
         )
+        op = await session.conduct("generate", None, params=params)
 
         from lionpride.core import EventStatus
 
@@ -809,26 +793,26 @@ class TestSessionConduct:
         assert len(session.branches) == 0
         assert session.default_branch is None
 
+        params = GenerateParams(
+            instruction="Hello",
+            imodel=mock_model.name,
+            return_as="text",
+        )
         with pytest.raises(RuntimeError, match="No branch provided and no default branch set"):
-            await session.conduct(
-                "generate",
-                None,
-                imodel=mock_model,
-                messages=[{"role": "user", "content": "Hello"}],
-            )
+            await session.conduct("generate", None, params=params)
 
     async def test_conduct_branch_by_uuid(self, session_with_model):
         """Test conduct() accepts branch by UUID."""
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={model.name})
 
         # Pass UUID string
-        op = await session.conduct(
-            "generate",
-            str(branch.id),
-            imodel=model,
-            messages=[{"role": "user", "content": "Hello"}],
+        params = GenerateParams(
+            instruction="Hello",
+            imodel=model.name,
+            return_as="text",
         )
+        op = await session.conduct("generate", str(branch.id), params=params)
 
         from lionpride.core import EventStatus
 
@@ -837,15 +821,15 @@ class TestSessionConduct:
     async def test_conduct_branch_by_name(self, session_with_model):
         """Test conduct() accepts branch by name."""
         session, model = session_with_model
-        _branch = session.create_branch(name="named_branch")
+        _branch = session.create_branch(name="named_branch", resources={model.name})
 
         # Pass branch name (string lookup)
-        op = await session.conduct(
-            "generate",
-            "named_branch",
-            imodel=model,
-            messages=[{"role": "user", "content": "Hello"}],
+        params = GenerateParams(
+            instruction="Hello",
+            imodel=model.name,
+            return_as="text",
         )
+        op = await session.conduct("generate", "named_branch", params=params)
 
         from lionpride.core import EventStatus
 
@@ -859,11 +843,12 @@ class TestSessionConduct:
         branch = session.create_branch(name="test")
 
         # KeyError is caught by Event.invoke() machinery
-        op = await session.conduct(
-            "nonexistent_operation",
-            branch,
-            imodel=model,
+        params = GenerateParams(
+            instruction="Hello",
+            imodel=model.name,
+            return_as="text",
         )
+        op = await session.conduct("nonexistent_operation", branch, params=params)
 
         # Verify operation failed with appropriate error
         assert op.status == EventStatus.FAILED
@@ -872,14 +857,14 @@ class TestSessionConduct:
     async def test_conduct_returns_operation_node(self, session_with_model):
         """Test conduct() returns Operation node with full lifecycle."""
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={model.name})
 
-        op = await session.conduct(
-            "generate",
-            branch,
-            imodel=model,
-            messages=[{"role": "user", "content": "Hello"}],
+        params = GenerateParams(
+            instruction="Hello",
+            imodel=model.name,
+            return_as="text",
         )
+        op = await session.conduct("generate", branch, params=params)
 
         from lionpride.operations import Operation
 
@@ -899,14 +884,14 @@ class TestSessionConduct:
     async def test_conduct_operation_is_bound(self, session_with_model):
         """Test conducted operation is bound to session/branch."""
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={model.name})
 
-        op = await session.conduct(
-            "generate",
-            branch,
-            imodel=model,
-            messages=[{"role": "user", "content": "Hello"}],
+        params = GenerateParams(
+            instruction="Hello",
+            imodel=model.name,
+            return_as="text",
         )
+        op = await session.conduct("generate", branch, params=params)
 
         # Verify binding
         assert op._session is session
@@ -942,9 +927,10 @@ class TestSessionConduct:
                 def __init__(self):
                     super().__init__()
                     self.status = EventStatus.COMPLETED
+                    # Response must be wrapped in lowercase model name as key
                     self.execution.response = MockResponse(
                         status="success",
-                        data='{"analysis": "test result", "confidence": 0.95}',
+                        data='{"exampleoutput": {"analysis": "test result", "confidence": 0.95}}',
                     )
 
             return MockCalling()
@@ -953,21 +939,35 @@ class TestSessionConduct:
 
         session = Session()
         session.services.register(json_model, update=True)
-        branch = session.create_branch(name="test")
-
-        op = await session.conduct(
-            "operate",
-            branch,
-            instruction="Analyze this",
-            imodel=json_model,
-            response_model=ExampleOutput,
-            model_kwargs={"model_name": "gpt-4.1-mini"},
+        branch = session.create_branch(
+            name="test",
+            resources={json_model.name},
+            capabilities={"exampleoutput"},  # Required for operate with response_model
         )
 
-        # Verify structured response
-        assert isinstance(op.response, ExampleOutput)
-        assert op.response.analysis == "test result"
-        assert op.response.confidence == 0.95
+        params = OperateParams(
+            communicate=CommunicateParams(
+                generate=GenerateParams(
+                    instruction="Analyze this",
+                    imodel=json_model.name,
+                    imodel_kwargs={"model_name": "gpt-4.1-mini"},
+                    request_model=ExampleOutput,  # request_model is on GenerateParams
+                ),
+                parse=ParseParams(),
+                strict_validation=False,
+            ),
+        )
+        op = await session.conduct("operate", branch, params=params)
+
+        # Debug: check operation status and error
+        from lionpride.core import EventStatus
+
+        assert op.status == EventStatus.COMPLETED, f"Operation failed: {op.execution.error}"
+
+        # Verify structured response - Operable wraps the model in a field with lowercase model name
+        assert hasattr(op.response, "exampleoutput")
+        assert op.response.exampleoutput.analysis == "test result"
+        assert op.response.exampleoutput.confidence == 0.95
 
 
 # -------------------------------------------------------------------------
@@ -1011,12 +1011,14 @@ class TestOperationLifecycle:
         from lionpride.operations import Operation
 
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={model.name})
 
-        op = Operation(
-            operation_type="generate",
-            parameters={"imodel": model, "messages": [{"role": "user", "content": "Hi"}]},
+        params = GenerateParams(
+            instruction="Hi",
+            imodel=model.name,
+            return_as="text",
         )
+        op = Operation(operation_type="generate", parameters=params)
 
         # Fluent pattern
         await op.bind(session, branch).invoke()
@@ -1120,13 +1122,13 @@ class TestSessionDefaultBranch:
         session.conversations.remove_progression(branch.id)
 
         # conduct() should raise RuntimeError
+        params = GenerateParams(
+            instruction="Hello",
+            imodel=mock_model.name,
+            return_as="text",
+        )
         with pytest.raises(RuntimeError, match="No branch provided"):
-            await session.conduct(
-                "generate",
-                None,
-                imodel=mock_model,
-                messages=[{"role": "user", "content": "Hello"}],
-            )
+            await session.conduct("generate", None, params=params)
 
     def test_default_branch_via_init(self):
         """Test default_branch set via __init__ parameter."""
@@ -1245,59 +1247,33 @@ class TestOperationsIntegration:
     async def test_multi_level_dependency_graph(self, session_with_model):
         """Test complex multi-level dependency graph."""
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={model.name})
 
         builder = Builder()
 
+        # Helper to create generate params
+        def gen_params(instruction: str):
+            return GenerateParams(
+                instruction=instruction,
+                imodel=model.name,
+                return_as="text",
+                imodel_kwargs={"model_name": "gpt-4.1-mini"},
+            )
+
         # Level 1: Root
-        builder.add(
-            "root",
-            "generate",
-            {
-                "instruction": "Root",
-                "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
-            },
-        )
+        builder.add("root", "generate", gen_params("Root"))
 
         # Level 2: Depends on root
-        builder.add(
-            "level2_a",
-            "generate",
-            {"instruction": "2A", "imodel": model, "model_kwargs": {"model_name": "gpt-4.1-mini"}},
-            depends_on=["root"],
-        )
-        builder.add(
-            "level2_b",
-            "generate",
-            {"instruction": "2B", "imodel": model, "model_kwargs": {"model_name": "gpt-4.1-mini"}},
-            depends_on=["root"],
-        )
+        builder.add("level2_a", "generate", gen_params("2A"), depends_on=["root"])
+        builder.add("level2_b", "generate", gen_params("2B"), depends_on=["root"])
 
         # Level 3: Depends on level 2
-        builder.add(
-            "level3_a",
-            "generate",
-            {"instruction": "3A", "imodel": model, "model_kwargs": {"model_name": "gpt-4.1-mini"}},
-            depends_on=["level2_a"],
-        )
-        builder.add(
-            "level3_b",
-            "generate",
-            {"instruction": "3B", "imodel": model, "model_kwargs": {"model_name": "gpt-4.1-mini"}},
-            depends_on=["level2_b"],
-        )
+        builder.add("level3_a", "generate", gen_params("3A"), depends_on=["level2_a"])
+        builder.add("level3_b", "generate", gen_params("3B"), depends_on=["level2_b"])
 
         # Aggregation: Depends on all level 3
         builder.add_aggregation(
-            "final",
-            "generate",
-            {
-                "instruction": "Final",
-                "imodel": model,
-                "model_kwargs": {"model_name": "gpt-4.1-mini"},
-            },
-            source_names=["level3_a", "level3_b"],
+            "final", "generate", gen_params("Final"), source_names=["level3_a", "level3_b"]
         )
 
         graph = builder.build()

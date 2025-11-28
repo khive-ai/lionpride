@@ -4,22 +4,19 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel
-
-from lionpride.session.messages import (
-    AssistantResponseContent,
-    InstructionContent,
-    Message,
-)
-from lionpride.session.messages.prepare_msg import prepare_messages_for_chat
-from lionpride.types.spec_adapters.pydantic_field import PydanticSpecAdapter
+from lionpride.rules import Validator
+from lionpride.services.types import APICalling
+from lionpride.session.messages import AssistantResponseContent, Message
 
 from .generate import generate
+from .types import CommunicateParams, GenerateParams, ParseParams
 
 if TYPE_CHECKING:
     from lionpride.session import Branch, Session
+
+__all__ = ("communicate",)
 
 logger = logging.getLogger(__name__)
 
@@ -27,198 +24,204 @@ logger = logging.getLogger(__name__)
 async def communicate(
     session: Session,
     branch: Branch | str,
-    parameters: dict[str, Any],
-) -> str | dict | Message | BaseModel:
-    """Stateful chat with optional structured output and retry.
+    params: CommunicateParams,
+    poll_timeout: float | None = None,
+    poll_interval: float | None = None,
+    validator: Validator | None = None,
+) -> str | Any:
+    """Stateful chat with optional structured output.
+
+    Two paths:
+    1. Text path (no operable): Generate → persist → return text
+    2. IPU path (operable set): Generate → parse → validate → persist → return model
 
     Args:
-        parameters: Must include 'instruction' and 'imodel'. Optionally:
-            response_model for validation, max_retries, return_as.
+        session: Session for services and message storage
+        branch: Branch for conversation history
+        params: Communicate parameters
+        poll_timeout: Timeout for model polling
+        poll_interval: Interval for model polling
+        validator: Optional validator instance (uses default if None)
+
+    Returns:
+        Text (no operable) or validated model instance (with operable)
     """
-    # Extract parameters
-    instruction = parameters.pop("instruction", None)
-    if not instruction:
-        raise ValueError("communicate requires 'instruction' parameter")
+    b_ = session.get_branch(branch)
 
-    imodel_param = parameters.get("imodel")
-    if not imodel_param:
-        raise ValueError("communicate requires 'imodel' parameter")
+    if params._is_sentinel(params.generate):
+        raise ValueError("communicate requires 'generate' params")
 
-    # Support both string name and iModel object
-    if isinstance(imodel_param, str):
-        imodel_name = imodel_param
-        imodel_direct = None
+    # Determine path based on operable
+    has_operable = not params._is_sentinel(params.operable)
+
+    if has_operable:
+        return await _communicate_with_operable(
+            session=session,
+            branch=b_,
+            params=params,
+            poll_timeout=poll_timeout,
+            poll_interval=poll_interval,
+            validator=validator,
+        )
     else:
-        imodel_name = getattr(imodel_param, "name", None)
-        if not imodel_name:
-            raise ValueError("imodel must be a string name or have a 'name' attribute")
-        imodel_direct = imodel_param
+        return await _communicate_text(
+            session=session,
+            branch=b_,
+            params=params,
+            poll_timeout=poll_timeout,
+            poll_interval=poll_interval,
+        )
 
-    # Common params
-    context = parameters.pop("context", None)
-    images = parameters.pop("images", None)
-    image_detail = parameters.pop("image_detail", None)
-    return_as: Literal["text", "raw", "message", "model"] = parameters.pop("return_as", "text")
 
-    # JSON mode params
-    response_model = parameters.pop("response_model", None)
-    strict_validation = parameters.pop("strict_validation", False)
-    fuzzy_parse = parameters.pop("fuzzy_parse", True)
+async def _communicate_text(
+    session: Session,
+    branch: Branch,
+    params: CommunicateParams,
+    poll_timeout: float | None,
+    poll_interval: float | None,
+) -> str:
+    """Text path: Generate → persist → return text.
 
-    # Retry params
-    max_retries = parameters.pop("max_retries", 0)
-
-    # Validate return_as="model" has a validation target
-    if return_as == "model" and not response_model:
-        raise ValueError("return_as='model' requires 'response_model' parameter")
-
-    # Resolve branch
-    if isinstance(branch, str):
-        branch = session.conversations.get_progression(branch)
-
-    # Get imodel for sender name
-    imodel = imodel_direct if imodel_direct else session.services.get(imodel_name)
-
-    # Create initial instruction message
-    ins_content = InstructionContent(
-        instruction=instruction,
-        context=context,
-        images=images,
-        image_detail=image_detail,
-        response_model=response_model,
-    )
-    ins_msg = Message(
-        content=ins_content,
-        sender=branch.user or session.user or "user",
-        recipient=session.id,
+    No operable, no validation - just stateful chat.
+    """
+    gen_params = params.generate.with_updates(
+        copy_containers="deep",
+        return_as="calling",
+        imodel=params.generate.imodel or session.default_generate_model,
     )
 
-    # Retry loop
-    last_error: str | None = None
-    for attempt in range(max_retries + 1):
-        # Prepare messages
-        branch_msgs = session.messages[branch]
-        messages = list(
-            prepare_messages_for_chat(
-                messages=branch_msgs,
-                progression=branch,
-                new_instruction=ins_msg,
-                to_chat=True,
-            )
-        )
+    # 1. Generate
+    gen_calling: APICalling = await generate(
+        session=session,
+        branch=branch,
+        params=gen_params,
+        poll_timeout=poll_timeout,
+        poll_interval=poll_interval,
+    )
 
-        # Call generate (stateless)
-        gen_params = {**parameters, "messages": messages, "return_as": "message"}
-        result_msg = await generate(session, branch, gen_params)
+    response_text = gen_calling.response.data
 
-        # Extract response data
-        response_text = result_msg.content.assistant_response
-        raw_response = result_msg.metadata.get("raw_response", {})
-        metadata = {k: v for k, v in result_msg.metadata.items() if k != "raw_response"}
+    # 2. Persist messages
+    _persist_messages(session, branch, gen_params, gen_calling)
 
-        # Create assistant message for persistence
-        assistant_msg = Message(
-            content=AssistantResponseContent(assistant_response=response_text),
-            sender=imodel.name,
-            recipient=branch.user or session.user or "user",
-            metadata={"raw_response": raw_response, **metadata},
-        )
-
-        # Add messages to session/branch (stateful)
-        session.add_message(ins_msg, branches=branch)
-        session.add_message(assistant_msg, branches=branch)
-
-        # Validate if needed
-        if response_model:
-            validated, error = _validate_json(
-                response_text, response_model, strict_validation, fuzzy_parse
-            )
-        else:
-            # No validation needed
-            validated, error = response_text, None
-
-        # Success - return result
-        if error is None:
-            return _format_result(
-                return_as,
-                validated,
-                response_text,
-                raw_response,
-                assistant_msg,
-                response_model,
-            )
-
-        # Validation failed
-        last_error = error
-        logger.warning(f"Validation failed (attempt {attempt + 1}): {error}")
-
-        # Retry if we have attempts left
-        if attempt < max_retries:
-            retry_instruction = (
-                f"Your previous response failed validation with error:\n{error}\n\n"
-                f"Please provide a valid response that matches the expected format."
-            )
-            ins_content = InstructionContent(instruction=retry_instruction)
-            ins_msg = Message(
-                content=ins_content,
-                sender=branch.user or session.user or "user",
-                recipient=session.id,
-            )
-            logger.info(f"Retrying (attempt {attempt + 2}/{max_retries + 1})...")
-
-    # All retries exhausted
-    if strict_validation:
-        raise ValueError(
-            f"Response validation failed after {max_retries + 1} attempts: {last_error}"
-        )
-
-    return {"raw": response_text, "validation_failed": True, "error": last_error}
+    # 3. Return text
+    return response_text
 
 
-def _validate_json(
-    response_data: str | dict,
-    response_model: type[BaseModel],
-    strict: bool,
-    fuzzy_parse: bool,
-) -> tuple[Any, str | None]:
-    """Validate JSON response with PydanticSpecAdapter."""
-    try:
-        if isinstance(response_data, dict):
-            validated = response_model.model_validate(response_data)
-            return validated, None
-
-        validated = PydanticSpecAdapter.validate_response(
-            response_data,
-            response_model,
-            strict=strict,
-            fuzzy_parse=fuzzy_parse,
-        )
-        if validated is not None:
-            return validated, None
-        return None, f"Response did not match {response_model.__name__} schema"
-    except Exception as e:
-        return None, str(e)
-
-
-def _format_result(
-    return_as: str,
-    validated: Any,
-    response_text: str,
-    raw_response: dict,
-    assistant_msg: Message,
-    response_model: type[BaseModel] | None,
+async def _communicate_with_operable(
+    session: Session,
+    branch: Branch,
+    params: CommunicateParams,
+    poll_timeout: float | None,
+    poll_interval: float | None,
+    validator: Validator | None,
 ) -> Any:
-    """Format the result based on return_as parameter."""
-    match return_as:
-        case "text":
-            if isinstance(validated, BaseModel):
-                return validated.model_dump_json()
-            return response_text
-        case "raw":
-            return raw_response
-        case "message":
-            return assistant_msg
-        case "model":
-            return validated
+    """IPU path: Generate → parse → validate → persist → return model.
 
-    raise ValueError(f"Unsupported return_as: {return_as}")
+    Requires operable and capabilities.
+    """
+    # Validate capabilities
+    capabilities = params.capabilities or branch.capabilities
+    if not capabilities:
+        raise ValueError(
+            "communicate with operable requires explicit capabilities "
+            "(set params.capabilities or branch.capabilities)"
+        )
+    if not capabilities.issubset(branch.capabilities):
+        raise PermissionError(
+            f"Branch '{branch.name}' does not have all required capabilities: "
+            f"requested {capabilities}, allowed {branch.capabilities}"
+        )
+
+    # Generate with schema from operable
+    request_model = params.operable.create_model(include=capabilities)
+    gen_params = params.generate.with_updates(
+        copy_containers="deep",
+        return_as="calling",
+        request_model=request_model,
+        imodel=params.generate.imodel or session.default_generate_model,
+    )
+
+    # 1. Generate
+    gen_calling: APICalling = await generate(
+        session=session,
+        branch=branch,
+        params=gen_params,
+        poll_timeout=poll_timeout,
+        poll_interval=poll_interval,
+    )
+
+    # 2. Parse
+    from .parse import parse
+
+    # Handle sentinel parse params - use defaults if not provided
+    parse_params = params.parse if not params._is_sentinel(params.parse) else ParseParams()
+    parsed = await parse(
+        session=session,
+        branch=branch,
+        params=parse_params.with_updates(
+            copy_containers="deep",
+            text=gen_calling.response.data,
+            target_keys=list(capabilities),
+            imodel=parse_params.imodel or session.default_parse_model,
+        ),
+    )
+
+    # Handle parse failure - return error dict for operate to handle
+    if parsed is None:
+        error_msg = "Failed to parse JSON from LLM response"
+        _persist_messages(session, branch, gen_params, gen_calling)
+        return {"validation_failed": True, "error": error_msg}
+
+    # 3. Validate via security microkernel
+    val_ = validator or Validator()
+    try:
+        validated = await val_.validate(
+            parsed,
+            params.operable,
+            capabilities,
+            params.auto_fix,
+            params.strict_validation,
+        )
+    except Exception as e:
+        # Return validation failure dict for operate to handle
+        _persist_messages(session, branch, gen_params, gen_calling)
+        return {"validation_failed": True, "error": str(e)}
+
+    # 4. Persist messages
+    _persist_messages(session, branch, gen_params, gen_calling)
+
+    return validated
+
+
+def _persist_messages(
+    session: Session,
+    branch: Branch,
+    gen_params: GenerateParams,
+    gen_calling: APICalling,
+) -> None:
+    """Add instruction and response messages to branch."""
+    # Instruction message
+    if gen_params.instruction_message is not None:
+        session.add_message(
+            gen_params.instruction_message.model_copy(
+                update={"sender": session.id, "recipient": branch.id}
+            ),
+            branches=branch,
+        )
+
+    # Assistant response message
+    session.add_message(
+        message=Message(
+            content=AssistantResponseContent.create(
+                assistant_response=gen_calling.response.data,
+            ),
+            metadata={
+                "raw_response": gen_calling.response.raw_response,
+                **gen_calling.response.metadata,
+            },
+            sender=branch.id,
+            recipient=session.id,
+        ),
+        branches=branch,
+    )

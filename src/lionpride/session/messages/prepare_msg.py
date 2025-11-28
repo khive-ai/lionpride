@@ -62,9 +62,11 @@ def prepare_messages_for_chat(
 
     if len(to_use) == 0:
         if new_instruction:
-            content = new_instruction.content.with_updates(copy_containers="deep")
+            content: InstructionContent = new_instruction.content.with_updates(
+                copy_containers="deep"
+            )
             if to_chat:
-                chat_msg = content.chat_msg
+                chat_msg = content.to_chat(structure_format)
                 return [chat_msg] if not_sentinel(chat_msg, True, True) else []
             return [content]
         return []

@@ -119,9 +119,8 @@ class Operation(Node, Event):
         factory = session.operations.get(self.operation_type)
 
         # Execute operation via factory
-        # Factory signature: (session, branch, parameters) -> result
-        # Pass a copy to preserve original parameters for logging/retry/audit
-        return await factory(session, branch, dict(self.parameters))
+        # Factory signature: (session, branch, params) -> result
+        return await factory(session, branch, self.parameters)
 
     def __repr__(self) -> str:
         bound = "bound" if self._session is not None else "unbound"
