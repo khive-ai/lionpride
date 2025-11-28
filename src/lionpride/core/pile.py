@@ -56,11 +56,6 @@ class Pile(Element, PydapterAdaptable, PydapterAsyncAdaptable, Generic[T]):
     Type-dispatched __getitem__:
     - Single item (T): pile[uuid], pile[str], pile[int]
     - Multi item (Pile[T]): pile[slice], pile[list], pile[tuple], pile[progression], pile[callable]
-
-    Args:
-        items: Initial items
-        item_type: Type(s) for validation (single/set/list/Union)
-        strict_type: Enforce exact type match (no subclasses)
     """
 
     # Private internal state - excluded from serialization

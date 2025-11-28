@@ -217,7 +217,6 @@ class DependencyAwareExecutor:
                 op_branch = node.metadata.get("branch")
                 if op_branch is not None:
                     resolved = self._resolve_operation_branch(op_branch)
-                    # Use 'is not None' - Branch can be falsy when empty (len=0)
                     self.operation_branches[node.id] = (
                         resolved if resolved is not None else default_branch
                     )

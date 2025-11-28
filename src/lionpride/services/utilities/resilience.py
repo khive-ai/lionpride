@@ -327,33 +327,12 @@ async def retry_with_backoff(
     ),
     **kwargs,
 ) -> T:
-    """Retry async function with exponential backoff using lionpride-core.
+    """Retry async function with exponential backoff + jitter.
 
-    Uses only lionpride.libs.concurrency.sleep - no external dependencies.
-    Implements exponential backoff with optional jitter to prevent thundering herd.
+    Only retries on network transient errors by default. Does NOT retry
+    programming errors, file system errors, or timeouts (opt-in explicitly).
 
-    Args:
-        func: Async function to retry
-        *args: Positional arguments for func
-        max_retries: Maximum number of retry attempts (default: 3)
-        initial_delay: Initial delay in seconds (default: 1.0)
-        max_delay: Maximum delay cap in seconds (default: 60.0)
-        exponential_base: Base for exponential calculation (default: 2.0)
-        jitter: Add random jitter to prevent thundering herd (default: True)
-        retry_on: Tuple of exception types that should trigger retries.
-            Defaults to NETWORK transient errors (ConnectionError,
-            CircuitBreakerOpenError). Does NOT retry by default:
-            - Programming errors: TypeError, ValueError, AttributeError, KeyError
-            - File system errors: FileNotFoundError, PermissionError, OSError
-            - Timeouts: TimeoutError (context-dependent, opt-in explicitly)
-
-        **kwargs: Keyword arguments for func
-
-    Returns:
-        Result from successful func execution
-
-    Raises:
-        Last exception if all retries exhausted
+    Raises last exception if all retries exhausted.
     """
     last_exception = None
 

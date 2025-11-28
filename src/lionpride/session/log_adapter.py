@@ -1,20 +1,7 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Log adapters for persistent storage backends.
-
-Provides async adapters for writing logs to various storage backends:
-- SQLite WAL (default, local development)
-- PostgreSQL (production)
-
-Uses pydapter's AsyncPostgresAdapter for SQL operations.
-SQLite uses asyncpg-compatible interface for consistency.
-
-Example:
-    adapter = SQLiteWALLogAdapter(db_path="./logs.db")
-    await adapter.write(logs)
-    recent = await adapter.read(limit=100)
-"""
+"""Async log adapters for SQLite WAL and PostgreSQL backends."""
 
 from __future__ import annotations
 
