@@ -129,6 +129,7 @@ def get_default_registry() -> RuleRegistry:
         dict → MappingRule
         ActionRequest → ActionRequestRule
         Reason → ReasonRule
+        BaseModel → BaseModelRule (catches all Pydantic models)
 
     Returns:
         RuleRegistry with default rules registered
@@ -136,7 +137,10 @@ def get_default_registry() -> RuleRegistry:
     global _default_registry
 
     if _default_registry is None:
+        from pydantic import BaseModel
+
         from .action_request import ActionRequestRule
+        from .basemodel import BaseModelRule
         from .boolean import BooleanRule
         from .mapping import MappingRule
         from .models import ActionRequest, Reason
@@ -152,6 +156,7 @@ def get_default_registry() -> RuleRegistry:
         _default_registry.register(dict, MappingRule())
         _default_registry.register(ActionRequest, ActionRequestRule())
         _default_registry.register(Reason, ReasonRule())
+        _default_registry.register(BaseModel, BaseModelRule())
 
     return _default_registry
 
