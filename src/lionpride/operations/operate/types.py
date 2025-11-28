@@ -10,9 +10,7 @@ Hierarchy (composition):
     CommunicateParams ──────────────┤
     ActParams ──────────────────────┼─► OperateParams
                                     │
-    OperateParams ──────────────────┤
-    InterpretParams ────────────────┼─► ReactParams
-    AnalyzeParams ──────────────────┘
+    OperateParams ──────────────────┴─► ReactParams
 """
 
 from __future__ import annotations
@@ -31,7 +29,6 @@ if TYPE_CHECKING:
 
 __all__ = (
     "ActParams",
-    "AnalyzeParams",
     "CommunicateParams",
     "GenerateParams",
     "HandleUnmatched",
@@ -202,9 +199,6 @@ class CommunicateParams(Params):
     strict_validation: bool = True
     """Raise on validation failure."""
 
-    fuzzy_parse: bool = True
-    """Enable fuzzy JSON parsing."""
-
 
 @dataclass(frozen=True, slots=True)
 class OperateParams(Params):
@@ -265,74 +259,35 @@ class InterpretParams(Params):
 
 
 @dataclass(frozen=True, slots=True)
-class AnalyzeParams(Params):
-    """Parameters for analyze operation (deep analysis).
-
-    Performs deep analysis on content or responses.
-    """
-
-    _config = ModelConfig(none_as_sentinel=True, empty_as_sentinel=True)
-
-    content: str = None
-    """Content to analyze."""
-
-    imodel: iModel | str = None
-    """Model to use for analysis."""
-
-    analysis_type: str = "general"
-    """Type of analysis to perform."""
-
-    depth: Literal["shallow", "medium", "deep"] = "medium"
-    """Analysis depth."""
-
-
-@dataclass(frozen=True, slots=True)
 class ReactParams(Params):
-    """Parameters for react operation (full agentic loop).
+    """Parameters for react operation (multi-step reasoning loop).
 
-    React = Operate + Interpret + Analyze.
+    React is a pure loop: reasoning + actions + optional intermediate outputs.
+    For final structured output, follow up with communicate().
 
-    Intermediate Response Options:
-        Use intermediate_response_options to provide structured intermediate
-        deliverables during multi-step reasoning. Each option becomes a
-        nullable field in the step response that the model can populate.
+    Step response fields:
+        - reasoning: str | None
+        - action_requests: list[ActionRequest] | None
+        - is_done: bool
+        - intermediate_response_options: nested model | None (if configured)
 
-        Example:
-            class ProgressReport(BaseModel):
-                progress_pct: int
-                current_status: str
+    Example:
+        class ProgressReport(BaseModel):
+            progress_pct: int
+            current_status: str
 
-            params = ReactParams(
-                intermediate_response_options=[ProgressReport],
-                intermediate_listable=False,  # single value per option
-            )
-
-            # Step response will include:
-            # - reasoning: str
-            # - action_requests: list[ActionRequest]
-            # - is_done: bool
-            # - intermediate_response_options: IntermediateOptions | None
-            #   where IntermediateOptions has: progressreport: ProgressReport | None
+        params = ReactParams(
+            intermediate_response_options=[ProgressReport],
+        )
     """
 
     _config = ModelConfig(none_as_sentinel=True, empty_as_sentinel=True)
 
-    # Composed params
     operate: OperateParams = None
     """Operate parameters."""
 
-    interpret: InterpretParams = None
-    """Interpret parameters."""
-
-    analyze: AnalyzeParams = None
-    """Analyze parameters."""
-
-    # React-specific (loop control)
     max_steps: int = 10
     """Maximum react steps."""
-
-    stop_condition: str | None = None
-    """Condition to stop loop."""
 
     return_trace: bool = False
     """Return full execution trace."""
@@ -351,6 +306,3 @@ class ReactParams(Params):
 
     intermediate_nullable: bool = True
     """Whether intermediate options default to None (usually True)."""
-
-    response_model: type[BaseModel] | None = None
-    """Model for final answer structure."""

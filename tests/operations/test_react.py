@@ -151,9 +151,8 @@ class TestReactCoverage:
         """Test ReactStepResponse model structure."""
         from lionpride.operations.operate.react import ReactStepResponse
 
-        # Verify model has expected fields
+        # Verify model has expected fields (no final_answer - react is pure loop)
         fields = ReactStepResponse.model_fields
-        assert "final_answer" in fields
         assert "reasoning" in fields
         assert "action_requests" in fields
         assert "is_done" in fields
@@ -484,23 +483,7 @@ class TestIntermediateResponseOptions:
         assert "reasoning" in spec_names
         assert "action_requests" in spec_names
         assert "is_done" in spec_names
-        assert "final_answer" in spec_names
-
-    def test_build_step_operable_with_response_model(self):
-        """Test building step Operable with custom response model."""
-        from lionpride.operations.operate.react import build_step_operable
-
-        class MyAnswer(BaseModel):
-            result: str
-            confidence: float
-
-        operable = build_step_operable(response_model=MyAnswer)
-
-        # final_answer should use MyAnswer type
-        final_answer_spec = operable.get("final_answer")
-        assert final_answer_spec is not None
-        # The base_type should be MyAnswer
-        assert final_answer_spec.base_type == MyAnswer
+        # no final_answer - react is pure loop
 
     def test_build_step_operable_with_intermediate_options(self):
         """Test building step Operable with intermediate options."""

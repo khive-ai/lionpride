@@ -1,26 +1,25 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""React operation - multi-step reasoning with tool calling.
+"""React operation - multi-step reasoning loop.
+
+React is a pure loop: reasoning + actions + optional intermediate outputs.
+For final structured output, follow up with communicate().
 
 Stream-first architecture:
-    react_stream() - async generator yielding intermediate results
-    react() - wrapper collecting all results
+    react_stream() - async generator yielding steps
+    react() - wrapper collecting all steps
 
 Composition:
     react() → react_stream() → operate() → communicate() → generate()
                                         → act() (via actions=True)
-
-Intermediate Response Options:
-    Use intermediate_response_options in ReactParams to provide structured
-    intermediate deliverables. Each becomes a nullable field in step responses.
 """
 
 from __future__ import annotations
 
 import logging
 from collections.abc import AsyncGenerator
-from typing import TYPE_CHECKING, Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
@@ -49,77 +48,50 @@ __all__ = (
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T")
 
-
-# =============================================================================
-# Prompt Templates
-# =============================================================================
-
-REACT_FIRST_STEP_PROMPT = """You can perform multiple reason-action steps for accuracy.
-If you need more steps, set is_done=false. You have {steps_remaining} steps remaining.
-Strategize accordingly."""
+REACT_FIRST_STEP_PROMPT = """You can perform multiple reason-action steps.
+Set is_done=false to continue. You have {steps_remaining} steps remaining."""
 
 REACT_CONTINUE_PROMPT = """Continue reasoning based on previous results.
-You have {steps_remaining} steps remaining. Set is_done=true when ready to provide final answer."""
+You have {steps_remaining} steps remaining. Set is_done=true when complete."""
 
-REACT_FINAL_PROMPT = """This is your last step. Provide your final answer now."""
-
-
-# =============================================================================
-# Response Models
-# =============================================================================
+REACT_FINAL_PROMPT = """This is your last step."""
 
 
 class ReactStep(BaseModel):
     """Single step in a ReAct loop."""
 
     step: int = Field(..., description="Step number (1-indexed)")
-    reasoning: str | None = Field(default=None, description="LLM reasoning for this step")
+    reasoning: str | None = Field(default=None, description="LLM reasoning")
     actions_requested: list[ActionRequest] = Field(
-        default_factory=list, description="Actions requested by LLM"
+        default_factory=list, description="Actions requested"
     )
     actions_executed: list[ActionResponse] = Field(
-        default_factory=list, description="Action execution results"
+        default_factory=list, description="Action results"
     )
     intermediate_options: dict[str, Any] | None = Field(
-        default=None, description="Intermediate deliverables from this step"
+        default=None, description="Intermediate deliverables"
     )
     is_final: bool = Field(default=False, description="Whether this is the final step")
 
 
-class ReactResult(BaseModel, Generic[T]):
-    """Result from a ReAct execution."""
+class ReactResult(BaseModel):
+    """Result from a ReAct loop."""
 
     steps: list[ReactStep] = Field(default_factory=list, description="Execution steps")
-    final_response: T | None = Field(default=None, description="Final structured response")
     total_steps: int = Field(default=0, description="Total steps executed")
-    completed: bool = Field(default=False, description="Whether execution completed normally")
-    reason_stopped: str = Field(default="", description="Why execution stopped")
+    completed: bool = Field(default=False, description="Whether loop completed normally")
+    reason_stopped: str = Field(default="", description="Why loop stopped")
 
 
-class ReactStepResponse(BaseModel, Generic[T]):
-    """Response model for each ReAct step.
+class ReactStepResponse(BaseModel):
+    """Response model for each ReAct step (LLM output)."""
 
-    LLM returns this structure with reasoning, actions, and completion status.
-    """
-
-    reasoning: str | None = Field(
-        default=None, description="Your reasoning about the current state and next action"
-    )
+    reasoning: str | None = Field(default=None, description="Reasoning for this step")
     action_requests: list[ActionRequest] | None = Field(
-        default=None,
-        description="List of tool calls, each with 'function' and 'arguments'. Empty when done.",
+        default=None, description="Tool calls to execute"
     )
-    is_done: bool = Field(default=False, description="Set to true when you have the final answer")
-    final_answer: T | None = Field(
-        default=None, description="Your final answer (only when is_done=true)"
-    )
-
-
-# =============================================================================
-# Operable Building
-# =============================================================================
+    is_done: bool = Field(default=False, description="Set true when complete")
 
 
 def build_intermediate_operable(
@@ -157,7 +129,6 @@ def build_intermediate_operable(
 
 
 def build_step_operable(
-    response_model: type[BaseModel] | None = None,
     intermediate_options: list[type[BaseModel]] | type[BaseModel] | None = None,
     *,
     intermediate_listable: bool = False,
@@ -167,88 +138,32 @@ def build_step_operable(
 
     Creates a dynamic Operable that includes:
     - Core step fields (reasoning, action_requests, is_done)
-    - Optional final_answer with custom type
     - Optional intermediate_response_options as nested model
 
     Args:
-        response_model: Type for final_answer field
         intermediate_options: Model(s) for intermediate deliverables
         intermediate_listable: Whether intermediate options can be lists
         intermediate_nullable: Whether intermediate options default to None
 
     Returns:
         Operable for the step response model
-
-    Example:
-        >>> operable = build_step_operable(
-        ...     response_model=MyAnswer,
-        ...     intermediate_options=[ProgressReport],
-        ... )
-        >>> StepModel = operable.create_model()
     """
-    # Core step specs
     specs = [
-        Spec(
-            str,
-            name="reasoning",
-            description="Your reasoning about the current state and next action",
-        ).as_optional(),
-        Spec(
-            list[ActionRequest],
-            name="action_requests",
-            description="List of tool calls. Empty when done.",
-        ).as_optional(),
-        Spec(
-            bool,
-            name="is_done",
-            default=False,
-            description="Set to true when you have the final answer",
-        ),
+        Spec(str, name="reasoning", description="Your reasoning").as_optional(),
+        Spec(list[ActionRequest], name="action_requests", description="Tool calls").as_optional(),
+        Spec(bool, name="is_done", default=False, description="Set true when complete"),
     ]
 
-    # Add final_answer with custom type if provided
-    if response_model:
-        specs.append(
-            Spec.from_model(
-                response_model,
-                name="final_answer",
-                nullable=True,
-                default=None,
-            )
-        )
-    else:
-        # Generic Any type for final_answer
-        specs.append(
-            Spec(
-                base_type=Any,
-                name="final_answer",
-                description="Your final answer (only when is_done=true)",
-            ).as_optional()
-        )
-
-    # Add intermediate_response_options as nested model if provided
     if intermediate_options:
         intermediate_operable = build_intermediate_operable(
             intermediate_options,
             listable=intermediate_listable,
             nullable=intermediate_nullable,
         )
-        # Create the nested model type
         IntermediateModel = intermediate_operable.create_model()
-        specs.append(
-            Spec(
-                IntermediateModel,
-                name="intermediate_response_options",
-                description="Intermediate deliverable outputs. Fill as needed.",
-            ).as_optional()
-        )
+        specs.append(Spec(IntermediateModel, name="intermediate_response_options").as_optional())
 
     return Operable(specs=tuple(specs), name="ReactStepResponse")
-
-
-# =============================================================================
-# Stream Implementation
-# =============================================================================
 
 
 async def react_stream(
@@ -314,7 +229,6 @@ async def react_stream(
     step_operable = None
     if params.intermediate_response_options is not None:
         step_operable = build_step_operable(
-            response_model=params.response_model,
             intermediate_options=params.intermediate_response_options,
             intermediate_listable=params.intermediate_listable,
             intermediate_nullable=params.intermediate_nullable,
@@ -424,55 +338,25 @@ async def react_stream(
             return
 
 
-# =============================================================================
-# Wrapper Implementation
-# =============================================================================
-
-
 async def react(
     session: Session,
     branch: Branch | str,
     params: ReactParams,
 ) -> ReactResult:
-    """ReAct operation - multi-step reasoning with tool calling.
+    """ReAct loop - collect all steps into ReactResult.
 
-    Wrapper around react_stream() that collects all steps and returns ReactResult.
-
-    Composition:
-        react() → react_stream() → operate() → communicate() → generate()
-                                            → act() (via actions=True)
-
-    Tools must be pre-registered in session.services before calling react().
-
-    Args:
-        session: Session for services and message storage.
-        branch: Branch for conversation history.
-        params: ReactParams with nested operate params.
-
-    Returns:
-        ReactResult with steps and final_response.
+    For final structured output, follow up with communicate().
     """
     result: ReactResult = ReactResult()
 
     async for step in react_stream(session, branch, params):
         result.steps.append(step)
-
         if step.is_final:
             result.completed = True
-            result.reason_stopped = "Task completed"
-            # Extract final_answer from the last operate result
-            # (stored in step reasoning or we need to re-extract)
+            result.reason_stopped = "Loop completed"
             break
 
-    # Extract final response from last step if completed
-    if result.completed and result.steps:
-        last_step = result.steps[-1]
-        # The final_answer would be in the operate result, but we only stored step data
-        # For now, we indicate completion via steps
-        result.final_response = last_step.reasoning
-
     result.total_steps = len(result.steps)
-
     if not result.completed and not result.reason_stopped:
         result.reason_stopped = f"Max steps ({params.max_steps}) reached"
 
