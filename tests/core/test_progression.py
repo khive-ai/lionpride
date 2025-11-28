@@ -345,34 +345,33 @@ class TestProgressionCoreOperations:
         Choice: Indexing and slicing more common than popleft in workflow patterns
     """
 
-    def test_append(self):
-        """append should add item to end."""
+    @pytest.mark.parametrize("use_element", [False, True])
+    def test_append(self, use_element):
+        """append should add UUID or Element to end."""
         prog = Progression()
-        uid = uuid4()
-        prog.append(uid)
+        if use_element:
+            item = create_test_elements(count=1)[0]
+            expected_id = item.id
+        else:
+            item = uuid4()
+            expected_id = item
+        prog.append(item)
         assert len(prog) == 1
-        assert prog.order[-1] == uid
+        assert prog.order[-1] == expected_id
 
-    def test_append_element(self):
-        """append should accept Elements."""
-        prog = Progression()
-        elements = create_test_elements(count=1)
-        prog.append(elements[0])
-        assert prog.order[-1] == elements[0].id
-
-    def test_insert(self):
-        """insert should add item at specific position."""
-        uid1, uid2, uid3 = uuid4(), uuid4(), uuid4()
+    @pytest.mark.parametrize("use_element", [False, True])
+    def test_insert(self, use_element):
+        """insert should add UUID or Element at position."""
+        uid1, uid3 = uuid4(), uuid4()
         prog = Progression(order=[uid1, uid3])
-        prog.insert(1, uid2)
-        assert prog.order == [uid1, uid2, uid3]
-
-    def test_insert_element(self):
-        """insert should accept Elements."""
-        elements = create_test_elements(count=2)
-        prog = Progression(order=[elements[0]])
-        prog.insert(0, elements[1])
-        assert prog.order[0] == elements[1].id
+        if use_element:
+            item = create_test_elements(count=1)[0]
+            expected_id = item.id
+        else:
+            item = uuid4()
+            expected_id = item
+        prog.insert(1, item)
+        assert prog.order[1] == expected_id
 
     def test_remove(self):
         """remove should delete first occurrence."""

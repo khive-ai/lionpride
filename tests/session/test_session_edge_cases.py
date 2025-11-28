@@ -1,10 +1,10 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Edge case tests for Session and Branch.
+"""Edge case tests for Session and Branch: UNIQUE tests not in integration tests.
 
-Tests designed to expose potential bugs and verify edge case handling.
-Each test documents the specific edge case being tested.
+Note: Basic message management, forking, multi-branch workflows are in
+tests/session/test_session_branch_integration.py. This file covers edge cases.
 
 Covers:
 - Session with no default branch
@@ -13,20 +13,18 @@ Covers:
 - add_message content type dispatch
 - get_branch with various input types
 - set_default_model with unregistered model
-- Multiple branches sharing message UUIDs
 - Fork chain lineage tracking
 - Empty branch operations
 - Referential integrity violations
 """
 
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 
 from lionpride.errors import NotFoundError
 from lionpride.session import Branch, Session
 from lionpride.session.messages import (
-    ActionRequestContent,
     ActionResponseContent,
     AssistantResponseContent,
     InstructionContent,
@@ -513,74 +511,6 @@ class TestSetDefaultModelEdgeCases:
         assert session._default_backends["parse"] == "parse_model"
 
 
-class TestMultipleBranchesSharedMessages:
-    """Test multiple branches sharing the same message UUIDs."""
-
-    def test_message_in_multiple_branches_single_storage(self):
-        """Message added to multiple branches is stored once in session.
-
-        Edge case: Deduplication in Pile storage.
-        """
-        session = Session()
-        branch1 = session.create_branch(name="branch1")
-        branch2 = session.create_branch(name="branch2")
-
-        msg = Message(content=InstructionContent(instruction="Shared"))
-
-        session.conversations.add_item(msg, progressions=[branch1, branch2])
-
-        # Message stored once
-        assert len(session.messages) == 1
-
-        # But referenced in both branches
-        assert msg.id in branch1.order
-        assert msg.id in branch2.order
-
-    def test_remove_message_from_one_branch_keeps_in_other(self):
-        """Removing message from one branch keeps it in storage and other branches.
-
-        Edge case: Branch removal vs session removal.
-        """
-        session = Session()
-        branch1 = session.create_branch(name="branch1")
-        branch2 = session.create_branch(name="branch2")
-
-        msg = Message(content=InstructionContent(instruction="Shared"))
-        session.conversations.add_item(msg, progressions=[branch1, branch2])
-
-        # Remove from branch1 only
-        branch1.remove(msg.id)
-
-        # Message still in storage
-        assert msg.id in session.messages
-
-        # Still in branch2
-        assert msg.id in branch2.order
-
-        # Not in branch1
-        assert msg.id not in branch1.order
-
-    def test_forked_branches_share_message_references(self):
-        """Forked branches share message UUIDs (not copies).
-
-        Edge case: Fork semantics - shallow copy of order, not deep clone.
-        """
-        session = Session()
-        source = session.create_branch(name="source")
-
-        msg = Message(content=InstructionContent(instruction="Original"))
-        session.conversations.add_item(msg, progressions=[source])
-
-        forked = session.fork(source)
-
-        # Same message UUID in both
-        assert list(source.order) == list(forked.order)
-        assert msg.id in forked.order
-
-        # Same single message in storage
-        assert len(session.messages) == 1
-
-
 class TestForkChainLineage:
     """Test fork chain lineage tracking."""
 
@@ -847,34 +777,3 @@ class TestBranchSystemMessageReplacement:
         # Now it's in session
         assert sys_msg.id in session.messages
         assert branch.system_message == sys_msg.id
-
-
-class TestBranchRepr:
-    """Test Branch string representation."""
-
-    def test_branch_repr_format(self):
-        """Branch repr shows message count and truncated session ID.
-
-        Edge case: Verify repr format for debugging.
-        """
-        session = Session()
-        branch = session.create_branch(name="my_branch")
-
-        repr_str = repr(branch)
-        assert "Branch(" in repr_str
-        assert "messages=0" in repr_str
-        assert "session=" in repr_str
-        assert "name='my_branch'" in repr_str
-
-    def test_branch_repr_without_name(self):
-        """Branch repr handles auto-generated names.
-
-        Edge case: Branch with default name.
-        """
-        session = Session()
-        branch = session.create_branch()  # Auto-generated name
-
-        repr_str = repr(branch)
-        assert "Branch(" in repr_str
-        # Name should still be present (auto-generated like "branch_0")
-        assert "name=" in repr_str

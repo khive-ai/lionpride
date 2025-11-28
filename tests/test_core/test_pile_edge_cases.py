@@ -1,17 +1,16 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Edge case tests for Pile: Focus on behaviors that could reveal bugs."""
+"""Edge case tests for Pile: UNIQUE tests not covered by test_pile.py.
+
+Note: Basic operations (get, remove, pop, contains, include, exclude) are
+tested in tests/core/test_pile.py. This file covers edge cases only.
+"""
 
 import concurrent.futures
 import threading
-import time
-from uuid import UUID, uuid4
 
-import pytest
-
-from lionpride.core import Element, Node, Pile, Progression
-from lionpride.errors import ExistsError, NotFoundError
+from lionpride.core import Element, Pile
 
 
 class SampleElement(Element):
@@ -27,76 +26,15 @@ def create_test_elements(n: int) -> list[SampleElement]:
 
 
 # =============================================================================
-# 1. Empty Pile Operations
-# =============================================================================
-
-
-class TestEmptyPileOperations:
-    """Tests for operations on empty piles that could reveal bugs."""
-
-    def test_get_on_empty_pile_raises_not_found(self):
-        """Empty pile should raise NotFoundError for any get(), not KeyError."""
-        pile = Pile()
-        with pytest.raises(NotFoundError, match="not found"):
-            pile.get(uuid4())
-
-    def test_remove_on_empty_pile_raises_not_found(self):
-        """Empty pile should raise NotFoundError for remove(), not KeyError."""
-        pile = Pile()
-        with pytest.raises(NotFoundError, match="not found"):
-            pile.remove(uuid4())
-
-    def test_update_on_empty_pile_raises_not_found(self):
-        """Empty pile should raise NotFoundError for update()."""
-        pile = Pile()
-        item = SampleElement(value=42)
-        with pytest.raises(NotFoundError, match="not found"):
-            pile.update(item)
-
-    def test_pop_on_empty_pile_without_default_raises(self):
-        """pop() on empty pile without default should raise NotFoundError."""
-        pile = Pile()
-        with pytest.raises(NotFoundError, match="not found"):
-            pile.pop(uuid4())
-
-    def test_pop_on_empty_pile_with_default_returns_default(self):
-        """pop() on empty pile with default should return default."""
-        pile = Pile()
-        sentinel = object()
-        result = pile.pop(uuid4(), default=sentinel)
-        assert result is sentinel
-
-    def test_getitem_index_on_empty_pile_raises_index_error(self):
-        """pile[0] on empty pile should raise IndexError, not KeyError."""
-        pile = Pile()
-        with pytest.raises(IndexError):
-            _ = pile[0]
-
-    def test_slice_on_empty_pile_returns_empty_pile(self):
-        """Slicing empty pile should return empty pile, not raise."""
-        pile = Pile()
-        result = pile[:]
-        assert isinstance(result, Pile)
-        assert len(result) == 0
-
-    def test_filter_on_empty_pile_returns_empty_pile(self):
-        """Filter on empty pile should return empty pile, not raise."""
-        pile = Pile()
-        result = pile[lambda x: True]
-        assert isinstance(result, Pile)
-        assert len(result) == 0
-
-
-# =============================================================================
-# 2. Single-Item Edge Cases
+# Single-Item Edge Cases (unique - tests boundary of 1 item)
 # =============================================================================
 
 
 class TestSingleItemPile:
-    """Tests for piles with exactly one item."""
+    """Tests for piles with exactly one item - boundary condition."""
 
-    def test_remove_only_item_leaves_empty_pile(self):
-        """Removing the only item should leave valid empty pile."""
+    def test_remove_only_item_leaves_valid_empty_pile(self):
+        """Removing the only item should leave valid empty pile state."""
         item = SampleElement(value=42)
         pile = Pile(items=[item])
         pile.remove(item.id)
@@ -104,105 +42,25 @@ class TestSingleItemPile:
         assert len(pile) == 0
         assert pile.is_empty()
         assert item.id not in pile
-
-    def test_slice_single_item_all(self):
-        """pile[:] on single item should return pile with that item."""
-        item = SampleElement(value=42)
-        pile = Pile(items=[item])
-        result = pile[:]
-        assert len(result) == 1
-        assert item.id in result
+        # Verify internal state consistency
+        assert len(list(pile.keys())) == len(pile._items) == 0
 
 
 # =============================================================================
-# 3. Type Coercion Edge Cases
-# =============================================================================
-
-
-class TestTypeCoercion:
-    """Tests for UUID/string/Element coercion in operations."""
-
-    def test_get_by_uuid_string(self):
-        """get() should accept UUID as string."""
-        item = SampleElement(value=42)
-        pile = Pile(items=[item])
-        result = pile.get(str(item.id))
-        assert result == item
-
-    def test_get_by_uuid_object(self):
-        """get() should accept UUID object."""
-        item = SampleElement(value=42)
-        pile = Pile(items=[item])
-        result = pile.get(item.id)
-        assert result == item
-
-    def test_get_by_element(self):
-        """get() should accept Element (extracts id)."""
-        item = SampleElement(value=42)
-        pile = Pile(items=[item])
-        result = pile.get(item)
-        assert result == item
-
-    def test_contains_by_string_uuid(self):
-        """__contains__ should work with string UUID."""
-        item = SampleElement(value=42)
-        pile = Pile(items=[item])
-        assert str(item.id) in pile
-
-
-# =============================================================================
-# 4. Predicate Filter Edge Cases
-# =============================================================================
-
-
-class TestPredicateFilter:
-    """Tests for callable predicate filtering edge cases."""
-
-    def test_filter_returns_empty_pile(self):
-        """Filter that matches nothing returns empty pile, not None."""
-        items = create_test_elements(5)
-        pile = Pile(items=items)
-        result = pile[lambda x: False]
-        assert isinstance(result, Pile)
-        assert len(result) == 0
-
-    def test_filter_returns_all_items(self):
-        """Filter that matches everything returns pile with all items."""
-        items = create_test_elements(5)
-        pile = Pile(items=items)
-        result = pile[lambda x: True]
-        assert len(result) == 5
-
-    def test_filter_creates_independent_pile(self):
-        """Filtered pile should be independent - mutations don't affect original."""
-        items = create_test_elements(5)
-        pile = Pile(items=items)
-        filtered = pile[lambda x: x.value < 3]
-        filtered.clear()
-        assert len(pile) == 5
-
-
-# =============================================================================
-# 5. Slice Edge Cases
+# Slice Edge Cases (unique - negative indices, reverse, edge slices)
 # =============================================================================
 
 
 class TestSliceEdgeCases:
-    """Tests for slice operations edge cases."""
-
-    def test_full_slice(self):
-        """pile[::] should return all items."""
-        items = create_test_elements(5)
-        pile = Pile(items=items)
-        result = pile[::]
-        assert len(result) == 5
+    """Tests for slice operations - negative indices, reverse, boundaries."""
 
     def test_empty_slice_start_equals_end(self):
-        """pile[2:2] should return empty pile."""
+        """pile[2:2] should return empty pile (edge case)."""
         items = create_test_elements(5)
         pile = Pile(items=items)
         result = pile[2:2]
         assert len(result) == 0
+        assert isinstance(result, Pile)
 
     def test_negative_start_slice(self):
         """pile[-2:] should return last 2 items."""
@@ -210,6 +68,8 @@ class TestSliceEdgeCases:
         pile = Pile(items=items)
         result = pile[-2:]
         assert len(result) == 2
+        # Verify it's the LAST 2 items
+        assert list(result) == items[-2:]
 
     def test_reverse_slice(self):
         """pile[::-1] should return items in reverse order."""
@@ -219,68 +79,56 @@ class TestSliceEdgeCases:
         assert len(result) == 5
         assert list(result) == items[::-1]
 
+    def test_step_slice(self):
+        """pile[::2] should return every other item."""
+        items = create_test_elements(6)
+        pile = Pile(items=items)
+        result = pile[::2]
+        assert len(result) == 3
+        assert list(result) == items[::2]
+
 
 # =============================================================================
-# 6. include() Idempotency Edge Cases
+# Include Behavior (unique - tests that modified item doesn't replace)
 # =============================================================================
 
 
-class TestIncludeIdempotency:
-    """Tests for include() behavior with existing items."""
+class TestIncludePreservesOriginal:
+    """Test that include() doesn't replace existing item with same ID."""
 
-    def test_include_existing_item_returns_true(self):
-        """include() of existing item should return True."""
-        item = SampleElement(value=42)
-        pile = Pile(items=[item])
-        result = pile.include(item)
-        assert result is True
-        assert len(pile) == 1
+    def test_include_existing_item_preserves_original_data(self):
+        """include() of existing item should NOT replace original's data.
 
-    def test_include_existing_item_preserves_original(self):
-        """include() of existing item should NOT replace original."""
+        This is a critical semantic test: include() is idempotent and should
+        preserve the FIRST item added, not silently update it.
+        """
         original = SampleElement(value=42, name="original")
         pile = Pile(items=[original])
+
+        # Create item with SAME ID but different data
         modified = SampleElement(value=999, name="modified", id=original.id)
         pile.include(modified)
+
+        # Original should be preserved
         retrieved = pile.get(original.id)
         assert retrieved.value == 42
         assert retrieved.name == "original"
+        assert len(pile) == 1
 
 
 # =============================================================================
-# 7. exclude() Edge Cases
-# =============================================================================
-
-
-class TestExcludeEdgeCases:
-    """Tests for exclude() behavior."""
-
-    def test_exclude_nonexistent_uuid_returns_true(self):
-        """exclude() of non-existent UUID should return True."""
-        pile = Pile(items=[SampleElement(value=42)])
-        result = pile.exclude(uuid4())
-        assert result is True
-
-    def test_exclude_from_empty_pile_returns_true(self):
-        """exclude() on empty pile should return True."""
-        pile = Pile()
-        result = pile.exclude(uuid4())
-        assert result is True
-
-
-# =============================================================================
-# 8. Thread Safety Stress Tests
+# Thread Safety Stress (unique - higher stress than test_pile.py)
 # =============================================================================
 
 
 class TestThreadSafetyStress:
-    """Stress tests for thread safety."""
+    """High-stress concurrency tests beyond basic thread safety."""
 
-    def test_concurrent_add_remove_same_items(self):
-        """Concurrent add/remove of same items should not corrupt state."""
-        pile = Pile()
+    def test_concurrent_add_remove_same_items_many_iterations(self):
+        """Concurrent add/remove of same items across many iterations."""
+        pile: Pile[SampleElement] = Pile()
         items = create_test_elements(10)
-        errors = []
+        errors: list[tuple[str, Exception]] = []
         lock = threading.Lock()
 
         def add_items():
@@ -299,7 +147,8 @@ class TestThreadSafetyStress:
                     with lock:
                         errors.append(("remove", e))
 
-        for _ in range(10):
+        # Run many iterations to expose race conditions
+        for _ in range(20):
             with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
                 futures = [
                     executor.submit(add_items),
@@ -310,30 +159,39 @@ class TestThreadSafetyStress:
                 concurrent.futures.wait(futures)
 
         assert not errors, f"Errors occurred: {errors}"
+        # Verify internal consistency
         assert len(list(pile.keys())) == len(pile._items)
 
 
 # =============================================================================
-# 9. Serialization Edge Cases
+# Serialization Edge Cases (unique - metadata preservation)
 # =============================================================================
 
 
 class TestSerializationEdgeCases:
-    """Tests for serialization edge cases."""
+    """Tests for serialization edge cases not in test_pile.py."""
 
-    def test_empty_pile_roundtrip_with_metadata(self):
+    def test_empty_pile_with_metadata_roundtrip(self):
         """Empty pile with metadata should roundtrip correctly."""
-        pile = Pile()
-        pile.metadata["key"] = "value"
-        data = pile.to_dict()
-        restored = Pile.from_dict(data)
-        assert len(restored) == 0
-        assert restored.metadata.get("key") == "value"
+        pile: Pile[SampleElement] = Pile()
+        pile.metadata["custom_key"] = "custom_value"
+        pile.metadata["nested"] = {"deep": "data"}
 
-    def test_pile_id_preserved_through_serialization(self):
-        """Pile's own ID should be preserved through serialization."""
-        pile = Pile(items=[SampleElement(value=42)])
-        original_id = pile.id
         data = pile.to_dict()
         restored = Pile.from_dict(data)
-        assert restored.id == original_id
+
+        assert len(restored) == 0
+        assert restored.metadata.get("custom_key") == "custom_value"
+        assert restored.metadata.get("nested") == {"deep": "data"}
+
+    def test_pile_with_progression_name_roundtrip(self):
+        """Pile with custom progression name should preserve it."""
+        items = create_test_elements(3)
+        pile: Pile[SampleElement] = Pile(items=items)
+        pile._progression.name = "custom_order"
+
+        data = pile.to_dict(mode="json")
+        restored = Pile.from_dict(data)
+
+        assert restored._progression.name == "custom_order"
+        assert len(restored) == 3

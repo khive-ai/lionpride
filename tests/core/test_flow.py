@@ -346,42 +346,24 @@ def test_flow_add_progression_validates_referential_integrity():
     assert "invalid_prog" not in f._progression_names
 
 
-def test_flow_remove_progression_by_uuid(flow, progressions):
-    """Test removing progression by UUID."""
+@pytest.mark.parametrize(
+    "key_fn",
+    [
+        pytest.param(lambda p: p.id, id="uuid"),
+        pytest.param(lambda p: p.name, id="name"),
+        pytest.param(lambda p: str(p.id), id="str_uuid"),
+        pytest.param(lambda p: p, id="instance"),
+    ],
+)
+def test_flow_remove_progression_by_key(flow, progressions, key_fn):
+    """Test removing progression by various key types."""
     prog = progressions[0]
-    removed = flow.remove_progression(prog.id)
+    removed = flow.remove_progression(key_fn(prog))
 
     assert removed is prog
     assert prog.id not in flow.progressions
-    assert prog.name not in flow._progression_names
-
-
-def test_flow_remove_progression_by_name(flow, progressions):
-    """Test removing progression by name."""
-    prog = progressions[0]
-    removed = flow.remove_progression(prog.name)
-
-    assert removed is prog
-    assert prog.id not in flow.progressions
-    assert prog.name not in flow._progression_names
-
-
-def test_flow_remove_progression_by_str_uuid(flow, progressions):
-    """Test removing progression by string UUID."""
-    prog = progressions[0]
-    removed = flow.remove_progression(str(prog.id))
-
-    assert removed is prog
-    assert prog.id not in flow.progressions
-
-
-def test_flow_remove_progression_by_instance(flow, progressions):
-    """Test removing progression by Progression instance."""
-    prog = progressions[0]
-    removed = flow.remove_progression(prog)
-
-    assert removed is prog
-    assert prog.id not in flow.progressions
+    if prog.name:
+        assert prog.name not in flow._progression_names
 
 
 def test_flow_remove_progression_cleans_name_index(flow, progressions):
@@ -539,47 +521,32 @@ def test_flow_remove_item_from_pile_and_progressions():
     assert item.id not in prog2
 
 
-def test_flow_remove_item_by_str_uuid():
-    """Test removing item by string UUID."""
+@pytest.mark.parametrize("key_fn", [lambda i: str(i.id), lambda i: i])
+def test_flow_remove_item_by_key(key_fn):
+    """Test removing item by string UUID or Element instance."""
     f = Flow[TestElement, Progression]()
     item = TestElement(value=42, name="test")
     f.add_item(item)
 
-    removed = f.remove_item(str(item.id))
-    assert removed is item
-
-
-def test_flow_remove_item_by_element():
-    """Test removing item by Element instance."""
-    f = Flow[TestElement, Progression]()
-    item = TestElement(value=42, name="test")
-    f.add_item(item)
-
-    removed = f.remove_item(item)
+    removed = f.remove_item(key_fn(item))
     assert removed is item
 
 
 # ==================== __getitem__ Tests ====================
 
 
-def test_flow_get_progression_by_uuid(flow, progressions):
-    """Test getting progression by UUID."""
+@pytest.mark.parametrize(
+    "key_fn",
+    [
+        pytest.param(lambda p: p.id, id="uuid"),
+        pytest.param(lambda p: p.name, id="name"),
+        pytest.param(lambda p: str(p.id), id="str_uuid"),
+    ],
+)
+def test_flow_get_progression_by_key(flow, progressions, key_fn):
+    """Test getting progression by various key types."""
     prog = progressions[0]
-    result = flow.get_progression(prog.id)
-    assert result is prog
-
-
-def test_flow_get_progression_by_name(flow, progressions):
-    """Test getting progression by name."""
-    prog = progressions[0]
-    result = flow.get_progression(prog.name)
-    assert result is prog
-
-
-def test_flow_get_progression_by_str_uuid(flow, progressions):
-    """Test getting progression by string UUID."""
-    prog = progressions[0]
-    result = flow.get_progression(str(prog.id))
+    result = flow.get_progression(key_fn(prog))
     assert result is prog
 
 
@@ -619,16 +586,11 @@ def test_flow_contains_progression_by_name(flow, progressions):
     assert prog.name in flow._progression_names
 
 
-def test_flow_contains_item_by_uuid(flow, items):
-    """Test checking if item exists in items pile by UUID."""
+@pytest.mark.parametrize("key_fn", [lambda i: i.id, lambda i: str(i.id)])
+def test_flow_contains_item_by_key(flow, items, key_fn):
+    """Test checking if item exists by UUID or string UUID."""
     item = items[0]
-    assert item.id in flow.items
-
-
-def test_flow_contains_item_by_str_uuid(flow, items):
-    """Test checking if item exists in items pile by string UUID."""
-    item = items[0]
-    assert str(item.id) in flow.items
+    assert key_fn(item) in flow.items
 
 
 # ==================== __repr__ Tests ====================
