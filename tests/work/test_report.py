@@ -376,3 +376,89 @@ class TestReportParallel:
         next_forms = report.next_forms()
         assert len(next_forms) == 1
         assert next_forms[0].assignment == "b, c -> d"
+
+
+class TestReportEdgeCases:
+    """Tests for edge cases and error handling."""
+
+    def test_get_field_type_non_optional_type(self):
+        """Test get_field_type returns type directly when not Optional."""
+
+        class MyReport(Report):
+            # Non-optional field (required)
+            data: dict = Field(default_factory=dict)
+
+            assignment: str = "a -> data"
+            form_assignments: list[str] = ["a -> data"]
+
+        report = MyReport()
+        field_type = report.get_field_type("data")
+        assert field_type is dict
+
+    def test_get_field_type_handles_exception(self):
+        """Test get_field_type returns None on exception.
+
+        Covers lines 135-136: except Exception: pass
+        """
+        from unittest.mock import patch
+
+        class MyReport(Report):
+            data: str | None = None
+
+            assignment: str = "a -> data"
+            form_assignments: list[str] = ["a -> data"]
+
+        report = MyReport()
+
+        # Mock get_type_hints to raise an exception
+        with patch("lionpride.work.report.get_type_hints") as mock_hints:
+            mock_hints.side_effect = NameError("Unresolved forward reference")
+            result = report.get_field_type("data")
+            assert result is None
+
+    def test_get_request_model_handles_typeerror(self):
+        """Test get_request_model returns None on TypeError.
+
+        Covers lines 149-150: except TypeError: pass
+        """
+        from unittest.mock import patch
+
+        class MyReport(Report):
+            data: AnalysisModel | None = None
+
+            assignment: str = "a -> data"
+            form_assignments: list[str] = ["a -> data"]
+
+        report = MyReport()
+
+        # Mock issubclass to raise TypeError
+        original_issubclass = issubclass
+
+        def mock_issubclass(cls, classinfo):
+            if classinfo is BaseModel:
+                raise TypeError("issubclass() arg 1 must be a class")
+            return original_issubclass(cls, classinfo)
+
+        with patch("builtins.issubclass", side_effect=mock_issubclass):
+            model = report.get_request_model("data")
+            assert model is None
+
+    def test_complete_form_stores_raw_output(self):
+        """Test complete_form stores raw output under primary field."""
+
+        class Result(BaseModel):
+            value: int
+
+        report = Report(
+            assignment="a -> result",
+            form_assignments=["a -> result"],
+        )
+        report.initialize(a=1)
+
+        form = next(iter(report.forms))
+        result_obj = Result(value=42)
+        form.fill(output=result_obj)
+        report.complete_form(form)
+
+        # Raw output should be stored
+        assert report.available_data["result"] == result_obj

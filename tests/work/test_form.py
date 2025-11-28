@@ -218,3 +218,25 @@ class TestForm:
         """Test that form has created_at timestamp."""
         form = Form(assignment="a -> b")
         assert form.created_at is not None
+
+    def test_get_output_data_model_dump_fallback(self):
+        """Test get_output_data uses model_dump when field not direct attribute.
+
+        This covers line 163: result[field] = data[field] via model_dump path.
+        """
+
+        class CustomOutput:
+            """Custom class with model_dump but no direct field attributes."""
+
+            def __init__(self, data: dict):
+                self._data = data
+
+            def model_dump(self) -> dict:
+                return self._data
+
+        form = Form(assignment="a -> result, extra")
+        # CustomOutput has model_dump but no 'result' attribute
+        output = CustomOutput({"result": 99, "extra": "value"})
+        form.fill(output=output)
+        output_data = form.get_output_data()
+        assert output_data == {"result": 99, "extra": "value"}

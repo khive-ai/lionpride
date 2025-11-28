@@ -53,7 +53,7 @@ def parse_assignment(assignment: str) -> tuple[str | None, list[str], list[str]]
         work_assignment = assignment[colon_pos + 1 :].strip()
 
     parts = work_assignment.split("->", 1)
-    if len(parts) != 2:
+    if len(parts) != 2:  # pragma: no cover - defensive check, "->" validated above
         raise ValueError(f"Invalid assignment: '{assignment}'")
 
     inputs_str, outputs_str = parts
@@ -161,9 +161,6 @@ class Form(Element):
                 data = self.output.model_dump()
                 if field in data:
                     result[field] = data[field]
-                # Handle nested structure (e.g., {analysis: {analysis: {...}}})
-                elif field in data and isinstance(data[field], dict) and field in data[field]:
-                    result[field] = data[field][field]
 
         return result
 
