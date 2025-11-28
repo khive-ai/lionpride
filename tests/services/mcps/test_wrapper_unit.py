@@ -20,6 +20,7 @@ Coverage areas (by line):
 - Lines 221-228: cleanup with error handling
 """
 
+import builtins
 import json
 import logging
 import os
@@ -375,14 +376,30 @@ class TestCreateClient:
 
     async def test_fastmcp_import_error_raised(self):
         """Test ImportError when fastmcp not installed (lines 164-167)."""
-        # Ensure fastmcp is not in sys.modules
-        original = sys.modules.pop("fastmcp", None)
+        # Mock the import to raise ImportError
+        original_import = builtins.__import__
+
+        def mock_import(name, *args, **kwargs):
+            if name == "fastmcp" or name.startswith("fastmcp."):
+                raise ImportError("No module named 'fastmcp'")
+            return original_import(name, *args, **kwargs)
+
+        # Remove fastmcp from sys.modules to force re-import
+        fastmcp_modules = {
+            k: v for k, v in sys.modules.items() if k == "fastmcp" or k.startswith("fastmcp.")
+        }
+        for k in fastmcp_modules:
+            sys.modules.pop(k, None)
+
         try:
-            with pytest.raises(ImportError, match="FastMCP not installed"):
+            with (
+                patch.object(builtins, "__import__", side_effect=mock_import),
+                pytest.raises(ImportError, match="FastMCP not installed"),
+            ):
                 await MCPConnectionPool._create_client({"url": "http://localhost:8000"})
         finally:
-            if original is not None:
-                sys.modules["fastmcp"] = original
+            # Restore fastmcp modules
+            sys.modules.update(fastmcp_modules)
 
     async def test_url_connection_creates_client(self, mock_fastmcp):
         """Test URL-based connection (lines 170-172)."""
