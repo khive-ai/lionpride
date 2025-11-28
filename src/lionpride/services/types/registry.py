@@ -129,13 +129,15 @@ class ServiceRegistry:
         uid = self._name_index.pop(name)
         return self._pile.remove(uid)
 
-    def get(self, name: str | UUID | iModel) -> iModel:
+    def get(self, name: str | UUID | iModel, default: Any = ...) -> iModel:
         """Get service by name."""
         if isinstance(name, UUID):
             return self._pile[name]
         if isinstance(name, iModel):
             return name
         if name not in self._name_index:
+            if default is not ...:
+                return default
             raise KeyError(f"Service '{name}' not found")
 
         uid = self._name_index[name]

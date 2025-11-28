@@ -176,66 +176,56 @@ class DependencyAwareExecutor:
                         total=total,
                     )
 
-    async def _preallocate_branches(self) -> None:
-        """Pre-allocate branches for all operations.
+    def _resolve_operation_branch(self, branch_spec: Any) -> Branch | None:
+        """Resolve branch specification to a Branch object.
 
-        Respects per-operation branch assignment via metadata["branch"].
-        Falls back to default_branch if no per-operation branch specified.
+        Args:
+            branch_spec: Can be a Branch, UUID, string name, or None
+
+        Returns:
+            Resolved Branch or None if unresolvable
         """
+        if branch_spec is None:
+            return None
+
+        # Already a Branch
+        if hasattr(branch_spec, "id") and hasattr(branch_spec, "order"):
+            return branch_spec
+
+        # UUID or string - use session.get_branch
+        if isinstance(branch_spec, (UUID, str)):
+            try:
+                return self.session.get_branch(branch_spec)
+            except Exception:
+                # Branch not found - return None
+                return None
+
+        return None
+
+    async def _preallocate_branches(self) -> None:
+        """Pre-allocate branches for all operations."""
         # Resolve default branch
-        default_branch = self._default_branch
-        if isinstance(default_branch, str):
-            default_branch = self.session.conversations.get_progression(default_branch)
-        elif default_branch is None:
+        default_branch = self._resolve_operation_branch(self._default_branch)
+        if default_branch is None:
             default_branch = getattr(self.session, "default_branch", None)
 
-        # Allocate branches per operation, respecting metadata["branch"] if set
+        # Assign branches to operations
+        # Operations can specify branch in metadata, otherwise use default
         for node in self.graph.nodes:
             if isinstance(node, Operation):
-                # Check for per-operation branch assignment from builder
-                op_branch_ref = node.metadata.get("branch")
-                if op_branch_ref is not None:
-                    # Resolve the branch reference
-                    op_branch = self._resolve_operation_branch(op_branch_ref)
-                    if op_branch is not None:
-                        self.operation_branches[node.id] = op_branch
-                    else:
-                        # Could not resolve - fall back to default
-                        self.operation_branches[node.id] = default_branch
+                # Check if operation has a branch specified in metadata
+                op_branch = node.metadata.get("branch")
+                if op_branch is not None:
+                    resolved = self._resolve_operation_branch(op_branch)
+                    # Use 'is not None' - Branch can be falsy when empty (len=0)
+                    self.operation_branches[node.id] = (
+                        resolved if resolved is not None else default_branch
+                    )
                 else:
-                    # No per-operation branch - use default
                     self.operation_branches[node.id] = default_branch
 
         if self.verbose:
             print(f"Pre-allocated branches for {len(self.operation_branches)} operations")
-
-    def _resolve_operation_branch(self, branch_ref: Any) -> Branch | None:
-        """Resolve a branch reference from operation metadata.
-
-        Args:
-            branch_ref: UUID, string name, or Branch object
-
-        Returns:
-            Resolved Branch, or None if not found
-        """
-        from uuid import UUID
-
-        # If it's already a Branch-like object (has id attribute), use as-is
-        if hasattr(branch_ref, "id") and hasattr(branch_ref, "order"):
-            return branch_ref
-
-        # If it's a UUID, look up in session progressions
-        if isinstance(branch_ref, UUID):
-            return self.session.conversations.progressions.get(branch_ref)
-
-        # If it's a string, try to get progression by name
-        if isinstance(branch_ref, str):
-            try:
-                return self.session.conversations.get_progression(branch_ref)
-            except KeyError:
-                return None
-
-        return None
 
     async def _execute_operation(
         self,
@@ -288,7 +278,7 @@ class DependencyAwareExecutor:
         # Check for aggregation sources (special handling)
         is_aggregation = operation.metadata.get("aggregation", False)
         if is_aggregation:
-            # aggregation_sources stored in metadata (not parameters)
+            # Aggregation sources are stored in metadata, not parameters
             aggregation_sources = operation.metadata.get("aggregation_sources", [])
             if aggregation_sources:
                 if self.verbose:
@@ -323,12 +313,6 @@ class DependencyAwareExecutor:
         """Prepare operation parameters with predecessor results."""
         predecessors = self.graph.get_predecessors(operation)
 
-        if not predecessors:
-            # No dependencies - just add shared context if present
-            if self.context and "context" not in operation.parameters:
-                operation.parameters["context"] = self.context.copy()
-            return
-
         # Build context from predecessor results
         pred_context = {}
         for pred in predecessors:
@@ -347,8 +331,14 @@ class DependencyAwareExecutor:
         if self.context:
             pred_context.update(self.context)
 
-        # Update operation parameters
-        if isinstance(operation.parameters, dict):
+        # Skip if no context to add
+        if not pred_context and not self.context:
+            return
+
+        # Handle None parameters - convert to dict
+        if operation.parameters is None:
+            operation.parameters = {"context": pred_context}
+        elif isinstance(operation.parameters, dict):
             # If parameters is a dict, merge context
             if "context" not in operation.parameters:
                 operation.parameters["context"] = pred_context
@@ -363,6 +353,9 @@ class DependencyAwareExecutor:
                         "original_context": existing,
                         **pred_context,
                     }
+        else:
+            # Typed params object - store context in metadata for custom operations
+            operation.metadata["flow_context"] = pred_context
 
         if self.verbose:
             print(

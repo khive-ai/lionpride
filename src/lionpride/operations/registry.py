@@ -72,7 +72,7 @@ class OperationRegistry:
         """Register default operations.
 
         Imports are deferred to avoid circular imports.
-        Wrappers convert dict params to typed Params objects.
+        Factories are registered directly - they expect typed Params objects.
         """
         from .operate import (
             communicate,
@@ -82,64 +82,14 @@ class OperationRegistry:
             parse,
             react,
         )
-        from .operate.types import (
-            CommunicateParams,
-            GenerateParams,
-            InterpretParams,
-            ParseParams,
-        )
 
-        # Wrappers to convert dict -> typed params
-        async def _generate_wrapper(session, branch, params: dict):
-            typed_params = GenerateParams(**params)
-            return await generate(session, branch, typed_params)
-
-        async def _parse_wrapper(session, branch, params: dict):
-            typed_params = ParseParams(**params)
-            return await parse(session, branch, typed_params)
-
-        async def _interpret_wrapper(session, branch, params: dict):
-            typed_params = InterpretParams(**params)
-            return await interpret(session, branch, typed_params)
-
-        async def _communicate_wrapper(session, branch, params: dict):
-            # Extract communicate-level params
-            operable = params.pop("operable", None)
-            capabilities = params.pop("capabilities", None)
-            auto_fix = params.pop("auto_fix", True)
-            strict_validation = params.pop("strict_validation", True)
-            fuzzy_parse = params.pop("fuzzy_parse", True)
-            parse_params = params.pop("parse", None)
-
-            # Build GenerateParams from remaining params
-            gen_params = GenerateParams(
-                imodel=params.pop("imodel", None),
-                instruction=params.pop("instruction", None),
-                context=params.pop("context", None),
-                images=params.pop("images", None),
-                image_detail=params.pop("image_detail", None),
-                tool_schemas=params.pop("tool_schemas", None),
-                structure_format=params.pop("structure_format", "json"),
-                imodel_kwargs=params,  # Remaining params go to imodel
-            )
-
-            typed_params = CommunicateParams(
-                generate=gen_params,
-                parse=parse_params,
-                operable=operable,
-                capabilities=capabilities,
-                auto_fix=auto_fix,
-                strict_validation=strict_validation,
-                fuzzy_parse=fuzzy_parse,
-            )
-            return await communicate(session, branch, typed_params)
-
+        # Register factories directly - they expect typed params
         self._factories["operate"] = operate
         self._factories["react"] = react
-        self._factories["communicate"] = _communicate_wrapper
-        self._factories["generate"] = _generate_wrapper
-        self._factories["parse"] = _parse_wrapper
-        self._factories["interpret"] = _interpret_wrapper
+        self._factories["communicate"] = communicate
+        self._factories["generate"] = generate
+        self._factories["parse"] = parse
+        self._factories["interpret"] = interpret
 
     def register(
         self,

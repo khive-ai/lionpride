@@ -12,95 +12,149 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import BaseModel
 
+from lionpride.operations.operate.types import (
+    ActParams,
+    CommunicateParams,
+    GenerateParams,
+    OperateParams,
+    ParseParams,
+    ReactParams,
+)
 from lionpride.rules import ActionRequest
+
+
+def _make_react_params(
+    *,
+    instruction=None,
+    imodel=None,
+    tools=None,
+    imodel_kwargs=None,
+    max_steps=10,
+    return_trace=False,
+    context=None,
+    request_model=None,
+):
+    """Helper to build nested ReactParams structure."""
+    return ReactParams(
+        operate=OperateParams(
+            communicate=CommunicateParams(
+                generate=GenerateParams(
+                    instruction=instruction,
+                    imodel=imodel,
+                    imodel_kwargs=imodel_kwargs or {},
+                    context=context,
+                    request_model=request_model,
+                ),
+                parse=ParseParams(),
+                strict_validation=False,
+            ),
+            act=ActParams(tools=tools) if tools else None,
+        ),
+        max_steps=max_steps,
+        return_trace=return_trace,
+    )
 
 
 class TestReactCoverage:
     """Test react.py uncovered lines."""
 
-    async def test_react_missing_instruction(self, session_with_model):
-        """Test line 106-107: Missing instruction raises ValueError."""
+    async def test_react_missing_operate_params(self, session_with_model):
+        """Test missing operate params raises ValueError."""
         from lionpride.operations.operate.react import react
 
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={model.name})
 
-        parameters = {"imodel": model, "tools": ["tool"]}
+        # ReactParams with no operate
+        params = ReactParams()
 
-        with pytest.raises(ValueError, match="react requires 'instruction' parameter"):
-            await react(session, branch, parameters)
+        with pytest.raises(ValueError, match="react requires 'operate' params"):
+            await react(session, branch, params)
+
+    async def test_react_missing_instruction(self, session_with_model):
+        """Test missing instruction raises ValueError."""
+        from lionpride.operations.operate.react import react
+
+        session, model = session_with_model
+        branch = session.create_branch(name="test", resources={model.name})
+
+        params = _make_react_params(imodel=model, tools=["tool"])
+
+        with pytest.raises(ValueError, match="instruction"):
+            await react(session, branch, params)
 
     async def test_react_missing_imodel(self, session_with_model):
-        """Test line 110-111: Missing imodel raises ValueError."""
+        """Test missing imodel raises ValueError."""
         from lionpride.operations.operate.react import react
 
         session, _ = session_with_model
         branch = session.create_branch(name="test")
 
-        parameters = {"instruction": "Test", "tools": ["tool"]}
+        params = _make_react_params(instruction="Test", tools=["tool"])
 
-        with pytest.raises(ValueError, match="react requires 'imodel' parameter"):
-            await react(session, branch, parameters)
+        with pytest.raises(ValueError, match="imodel"):
+            await react(session, branch, params)
 
     async def test_react_missing_tools(self, session_with_model):
-        """Test lines 114-115: Missing tools raises ValueError."""
+        """Test missing tools raises ValueError."""
         from lionpride.operations.operate.react import react
 
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={model.name})
 
-        parameters = {"instruction": "Test", "imodel": model}
+        params = _make_react_params(instruction="Test", imodel=model)
 
-        with pytest.raises(ValueError, match="react requires 'tools' parameter"):
-            await react(session, branch, parameters)
+        with pytest.raises(ValueError, match="tools"):
+            await react(session, branch, params)
 
     async def test_react_missing_model_name(self, session_with_model):
-        """Test lines 148-150: Missing model_name raises ValueError."""
+        """Test missing model_name raises ValueError."""
         from lionpride.operations.operate.react import react
         from lionpride.services.types.tool import Tool, ToolConfig
 
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={model.name})
 
         async def test_tool() -> str:
             return "result"
 
         tool = Tool(func_callable=test_tool, config=ToolConfig(name="test_tool", provider="tool"))
 
-        parameters = {
-            "instruction": "Test",
-            "imodel": model,
-            "tools": [tool],
-            # No model_name
-        }
+        params = _make_react_params(
+            instruction="Test",
+            imodel=model,
+            tools=[tool],
+            # No model_name in imodel_kwargs
+        )
 
-        with pytest.raises(ValueError, match="react requires 'model_name' in model_kwargs"):
-            await react(session, branch, parameters)
+        with pytest.raises(ValueError, match="model_name"):
+            await react(session, branch, params)
 
     async def test_react_invalid_tool_type(self, session_with_model):
-        """Test lines 166-167: Invalid tool type raises ValueError."""
+        """Test invalid tool type raises ValueError."""
         from lionpride.operations.operate.react import react
 
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={model.name})
 
-        parameters = {
-            "instruction": "Test",
-            "imodel": model,
-            "tools": ["invalid_tool"],  # Not a Tool instance/class
-            "model_kwargs": {"model_name": "gpt-4"},
-        }
+        # Pass invalid tool type (integer instead of Tool)
+        params = _make_react_params(
+            instruction="Test",
+            imodel=model,
+            tools=[123],  # Not a Tool instance/class
+            imodel_kwargs={"model_name": "gpt-4"},
+        )
 
         with pytest.raises(ValueError, match="Invalid tool type"):
-            await react(session, branch, parameters)
+            await react(session, branch, params)
 
     async def test_react_branch_string_resolution(self, session_with_model):
-        """Test lines 152-154: Branch string resolution."""
+        """Test branch string resolution."""
         from lionpride.operations.operate.react import react
         from lionpride.services.types.tool import Tool, ToolConfig
 
         session, model = session_with_model
-        session.create_branch(name="test_branch")
+        session.create_branch(name="test_branch", resources={model.name})
 
         async def test_tool() -> str:
             return "result"
@@ -116,19 +170,19 @@ class TestReactCoverage:
             mock_result.action_requests = None
             mock_operate.return_value = mock_result
 
-            parameters = {
-                "instruction": "Test",
-                "imodel": model,
-                "tools": [tool],
-                "model_kwargs": {"model_name": "gpt-4"},
-            }
+            params = _make_react_params(
+                instruction="Test",
+                imodel=model,
+                tools=[tool],
+                imodel_kwargs={"model_name": "gpt-4"},
+            )
 
-            result = await react(session, "test_branch", parameters)
+            result = await react(session, "test_branch", params)
 
             assert result.completed is True
 
     async def test_create_react_response_model_with_type(self):
-        """Test lines 66-88: _create_react_response_model with response_model."""
+        """Test _create_react_response_model with response_model."""
         from lionpride.operations.operate.react import _create_react_response_model
 
         class CustomAnswer(BaseModel):
@@ -144,7 +198,7 @@ class TestReactCoverage:
         assert "is_done" in fields
 
     async def test_create_react_response_model_none(self):
-        """Test lines 66-67: _create_react_response_model with None."""
+        """Test _create_react_response_model with None."""
         from lionpride.operations.operate.react import (
             ReactStepResponse,
             _create_react_response_model,
@@ -155,12 +209,12 @@ class TestReactCoverage:
         assert model is ReactStepResponse
 
     async def test_react_validation_failure(self, session_with_model):
-        """Test lines 237-240: Validation failure handling."""
+        """Test validation failure handling."""
         from lionpride.operations.operate.react import react
         from lionpride.services.types.tool import Tool, ToolConfig
 
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={model.name})
 
         async def test_tool() -> str:
             return "result"
@@ -171,25 +225,25 @@ class TestReactCoverage:
         with patch("lionpride.operations.operate.factory.operate") as mock_operate:
             mock_operate.return_value = {"validation_failed": True, "error": "Invalid"}
 
-            parameters = {
-                "instruction": "Test",
-                "imodel": model,
-                "tools": [tool],
-                "model_kwargs": {"model_name": "gpt-4"},
-            }
+            params = _make_react_params(
+                instruction="Test",
+                imodel=model,
+                tools=[tool],
+                imodel_kwargs={"model_name": "gpt-4"},
+            )
 
-            result = await react(session, branch, parameters)
+            result = await react(session, branch, params)
 
             assert result.completed is False
             assert "Validation failed" in result.reason_stopped
 
     async def test_react_exception_handling(self, session_with_model):
-        """Test lines 300-307: Exception handling in react loop."""
+        """Test exception handling in react loop."""
         from lionpride.operations.operate.react import react
         from lionpride.services.types.tool import Tool, ToolConfig
 
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={model.name})
 
         async def test_tool() -> str:
             return "result"
@@ -200,26 +254,26 @@ class TestReactCoverage:
         with patch("lionpride.operations.operate.factory.operate") as mock_operate:
             mock_operate.side_effect = RuntimeError("Test error")
 
-            parameters = {
-                "instruction": "Test",
-                "imodel": model,
-                "tools": [tool],
-                "model_kwargs": {"model_name": "gpt-4"},
-            }
+            params = _make_react_params(
+                instruction="Test",
+                imodel=model,
+                tools=[tool],
+                imodel_kwargs={"model_name": "gpt-4"},
+            )
 
-            result = await react(session, branch, parameters)
+            result = await react(session, branch, params)
 
             assert result.completed is False
             assert "Error at step" in result.reason_stopped
             assert "Test error" in result.reason_stopped
 
     async def test_react_max_steps_reached(self, session_with_model):
-        """Test lines 311-315: Max steps reached without completion."""
+        """Test max steps reached without completion."""
         from lionpride.operations.operate.react import react
         from lionpride.services.types.tool import Tool, ToolConfig
 
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={model.name})
 
         async def test_tool() -> str:
             return "result"
@@ -234,15 +288,15 @@ class TestReactCoverage:
             mock_result.action_requests = None
             mock_operate.return_value = mock_result
 
-            parameters = {
-                "instruction": "Test",
-                "imodel": model,
-                "tools": [tool],
-                "max_steps": 2,
-                "model_kwargs": {"model_name": "gpt-4"},
-            }
+            params = _make_react_params(
+                instruction="Test",
+                imodel=model,
+                tools=[tool],
+                max_steps=2,
+                imodel_kwargs={"model_name": "gpt-4"},
+            )
 
-            result = await react(session, branch, parameters)
+            result = await react(session, branch, params)
 
             assert result.completed is False
             assert "Max steps (2) reached" in result.reason_stopped
@@ -254,7 +308,7 @@ class TestReactCoverage:
         from lionpride.services.types.tool import Tool, ToolConfig
 
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={model.name})
 
         async def test_tool() -> str:
             return "result"
@@ -270,27 +324,27 @@ class TestReactCoverage:
             mock_result.action_requests = None
             mock_operate.return_value = mock_result
 
-            parameters = {
-                "instruction": "Test",
-                "imodel": model,
-                "tools": [tool],
-                "verbose": True,
-                "model_kwargs": {"model_name": "gpt-4"},
-            }
+            params = _make_react_params(
+                instruction="Test",
+                imodel=model,
+                tools=[tool],
+                return_trace=True,  # verbose
+                imodel_kwargs={"model_name": "gpt-4"},
+            )
 
-            _result = await react(session, branch, parameters)
+            _result = await react(session, branch, params)
 
             captured = capsys.readouterr()
             assert "ReAct Step" in captured.out
             assert "Task completed" in captured.out
 
     async def test_react_with_tool_class(self, session_with_model):
-        """Test line 163: Tool instantiation from class."""
+        """Test Tool instantiation from class."""
         from lionpride.operations.operate.react import react
         from lionpride.services.types.tool import Tool, ToolConfig
 
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={model.name})
 
         # Create tool class (not instance)
         class TestToolClass(Tool):
@@ -312,24 +366,24 @@ class TestReactCoverage:
             mock_result.action_requests = None
             mock_operate.return_value = mock_result
 
-            parameters = {
-                "instruction": "Test",
-                "imodel": model,
-                "tools": [TestToolClass],  # Pass class, not instance
-                "model_kwargs": {"model_name": "gpt-4"},
-            }
+            params = _make_react_params(
+                instruction="Test",
+                imodel=model,
+                tools=[TestToolClass],  # Pass class, not instance
+                imodel_kwargs={"model_name": "gpt-4"},
+            )
 
-            result = await react(session, branch, parameters)
+            result = await react(session, branch, params)
 
             assert result.completed is True
 
     async def test_react_with_context(self, session_with_model):
-        """Test line 206: Context added to instruction."""
+        """Test context added to instruction."""
         from lionpride.operations.operate.react import react
         from lionpride.services.types.tool import Tool, ToolConfig
 
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={model.name})
 
         async def test_tool() -> str:
             return "result"
@@ -345,28 +399,28 @@ class TestReactCoverage:
             mock_result.action_requests = None
             mock_operate.return_value = mock_result
 
-            parameters = {
-                "instruction": "Test",
-                "imodel": model,
-                "tools": [tool],
-                "context": "Important context info",  # Line 206
-                "model_kwargs": {"model_name": "gpt-4"},
-            }
+            params = _make_react_params(
+                instruction="Test",
+                imodel=model,
+                tools=[tool],
+                context={"info": "Important context info"},
+                imodel_kwargs={"model_name": "gpt-4"},
+            )
 
-            result = await react(session, branch, parameters)
+            result = await react(session, branch, params)
 
             # Verify operate was called with instruction containing context
             call_kwargs = mock_operate.call_args
             assert "Context" in str(call_kwargs) or result.completed
 
     async def test_react_action_execution(self, session_with_model, capsys):
-        """Test lines 249-281: Full action execution path."""
+        """Test full action execution path."""
         from lionpride.operations.operate.react import react
         from lionpride.services import iModel
         from lionpride.services.types.tool import Tool, ToolConfig
 
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={model.name})
 
         # Register a tool
         async def multiply(a: int, b: int) -> int:
@@ -401,17 +455,18 @@ class TestReactCoverage:
                 return mock_result
 
         with patch(
-            "lionpride.operations.operate.factory.operate", side_effect=mock_operate_with_actions
+            "lionpride.operations.operate.factory.operate",
+            side_effect=mock_operate_with_actions,
         ):
-            parameters = {
-                "instruction": "Calculate 3 * 4",
-                "imodel": model,
-                "tools": [tool],
-                "verbose": True,
-                "model_kwargs": {"model_name": "gpt-4"},
-            }
+            params = _make_react_params(
+                instruction="Calculate 3 * 4",
+                imodel=model,
+                tools=[tool],
+                return_trace=True,  # verbose
+                imodel_kwargs={"model_name": "gpt-4"},
+            )
 
-            result = await react(session, branch, parameters)
+            result = await react(session, branch, params)
 
             assert result.completed is True
             assert len(result.steps) >= 2
@@ -424,12 +479,12 @@ class TestReactCoverage:
             assert "multiply" in captured.out
 
     async def test_react_verbose_exception_traceback(self, session_with_model, capsys):
-        """Test lines 302-304: Verbose exception with traceback."""
+        """Test verbose exception with traceback."""
         from lionpride.operations.operate.react import react
         from lionpride.services.types.tool import Tool, ToolConfig
 
         session, model = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", resources={model.name})
 
         async def test_tool() -> str:
             return "result"
@@ -440,18 +495,18 @@ class TestReactCoverage:
         with patch("lionpride.operations.operate.factory.operate") as mock_operate:
             mock_operate.side_effect = RuntimeError("Error for traceback test")
 
-            parameters = {
-                "instruction": "Test",
-                "imodel": model,
-                "tools": [tool],
-                "verbose": True,  # Enable verbose to get traceback
-                "model_kwargs": {"model_name": "gpt-4"},
-            }
+            params = _make_react_params(
+                instruction="Test",
+                imodel=model,
+                tools=[tool],
+                return_trace=True,  # verbose
+                imodel_kwargs={"model_name": "gpt-4"},
+            )
 
-            result = await react(session, branch, parameters)
+            result = await react(session, branch, params)
 
             captured = capsys.readouterr()
-            # Lines 302-304 print traceback when verbose=True
+            # Lines print traceback when verbose=True
             assert "Error at step" in result.reason_stopped
             # Traceback should be printed
             assert "Traceback" in captured.err or "RuntimeError" in captured.err

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import contextlib
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID
 
 from pydantic import Field, PrivateAttr
@@ -420,14 +420,14 @@ class Session(Element):
         self,
         operation_type: str,
         branch: Branch | UUID | str | None = None,
-        **kwargs,
+        params: Any | None = None,
     ) -> Operation:
         """Execute an operation on a branch.
 
         Args:
             operation_type: Operation name (operate, react, communicate, generate).
             branch: Target branch (uses default if None).
-            **kwargs: Operation parameters.
+            params: Typed operation parameters (GenerateParams, OperateParams, etc.).
 
         Returns:
             Invoked Operation (access result via op.response).
@@ -437,7 +437,7 @@ class Session(Element):
             KeyError: If operation not registered.
         """
         resolved = self._resolve_branch(branch)
-        op = Operation(operation_type=operation_type, parameters=kwargs)
+        op = Operation(operation_type=operation_type, parameters=params)
         op.bind(self, resolved)
         await op.invoke()
         return op

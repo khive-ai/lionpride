@@ -1,6 +1,11 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
+"""React operation - multi-step reasoning with tool calling.
+
+React = Operate in a loop with tool execution.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -9,8 +14,9 @@ from pydantic import BaseModel, Field
 
 from lionpride.rules import ActionRequest, ActionResponse
 
+from .types import OperateParams, ReactParams
+
 if TYPE_CHECKING:
-    from lionpride.services.types import iModel
     from lionpride.session import Branch, Session
 
 __all__ = ("ReactResult", "ReactStep", "react")
@@ -91,85 +97,82 @@ def _create_react_response_model(
 async def react(
     session: Session,
     branch: Branch | str,
-    parameters: dict[str, Any],
+    params: ReactParams,
 ) -> ReactResult:
     """ReAct operation - multi-step reasoning with tool calling.
 
     Args:
-        parameters: Must include 'instruction', 'imodel', 'tools', and 'model_name'.
-            Optional: response_model, max_steps, verbose.
+        session: Session for services and message storage.
+        branch: Branch for conversation history.
+        params: ReactParams with nested operate params.
+
+    Returns:
+        ReactResult with steps and final_response.
     """
     from .factory import operate
+    from .types import CommunicateParams, GenerateParams, ParseParams
 
-    # Extract and validate parameters
-    instruction = parameters.get("instruction")
-    if not instruction:
-        raise ValueError("react requires 'instruction' parameter")
+    # Validate nested params structure
+    if params._is_sentinel(params.operate):
+        raise ValueError("react requires 'operate' params")
+    if params._is_sentinel(params.operate.communicate):
+        raise ValueError("react requires 'operate.communicate' params")
+    if params._is_sentinel(params.operate.communicate.generate):
+        raise ValueError("react requires 'operate.communicate.generate' params")
 
-    imodel: iModel = parameters.get("imodel")
-    if not imodel:
-        raise ValueError("react requires 'imodel' parameter")
+    gen_params = params.operate.communicate.generate
+    act_params = params.operate.act
 
-    tools = parameters.get("tools", [])
+    # Extract generation params
+    instruction = gen_params.instruction
+    imodel = gen_params.imodel or session.default_generate_model
+    imodel_kwargs = gen_params.imodel_kwargs or {}
+    context = gen_params.context
+    response_model = gen_params.request_model
+
+    if params._is_sentinel(instruction):
+        raise ValueError("react requires 'instruction' in operate.communicate.generate")
+    if params._is_sentinel(imodel) and session.default_generate_model is None:
+        raise ValueError("react requires 'imodel' in operate.communicate.generate")
+
+    # Get tools from act params
+    tools = act_params.tools if act_params and not params._is_sentinel(act_params) else []
     if not tools:
-        raise ValueError("react requires 'tools' parameter with at least one tool")
+        raise ValueError("react requires 'tools' in operate.act")
 
-    response_model = parameters.get("response_model")
-    context = parameters.get("context", {})
-    max_steps = parameters.get("max_steps", 5)
-    verbose = parameters.get("verbose", False)
-
-    # Extract model_kwargs - may be nested dict or flat in parameters
-    nested_model_kwargs = parameters.get("model_kwargs", {})
-    flat_model_kwargs = {
-        k: v
-        for k, v in parameters.items()
-        if k
-        not in {
-            "instruction",
-            "imodel",
-            "tools",
-            "response_model",
-            "context",
-            "max_steps",
-            "verbose",
-            "model_kwargs",
-            "reason",  # Legacy param
-        }
-    }
-    # Merge: flat params override nested
-    model_kwargs = {**nested_model_kwargs, **flat_model_kwargs}
-
-    # Model name is required - check in model_kwargs
-    model_name = model_kwargs.pop("model_name", None)
+    # Model name is required in imodel_kwargs
+    model_name = imodel_kwargs.get("model_name")
     if not model_name:
-        raise ValueError("react requires 'model_name' in model_kwargs")
+        raise ValueError("react requires 'model_name' in imodel_kwargs")
 
     # Resolve branch
-    if isinstance(branch, str):
-        branch = session.conversations.get_progression(branch)
+    b_ = session.get_branch(branch)
 
     # Register tools with session
     from lionpride.services.types.imodel import iModel as iModelClass
     from lionpride.services.types.tool import Tool
 
-    tool_names = []
-    for tool in tools:
+    # Handle tools - can be list of Tool instances, classes, or string names
+    tool_list = tools if isinstance(tools, list) else [tools]
+    tool_instances = []
+    for tool in tool_list:
         if isinstance(tool, type) and issubclass(tool, Tool):
             tool_instance = tool()
         elif isinstance(tool, Tool):
             tool_instance = tool
+        elif isinstance(tool, str):
+            # Skip string tool names - they should already be registered
+            continue
         else:
             raise ValueError(f"Invalid tool type: {type(tool)}")
 
-        tool_names.append(tool_instance.name)
+        tool_instances.append(tool_instance)
         if not session.services.has(tool_instance.name):
             session.services.register(iModelClass(backend=tool_instance))
 
     # Build tool descriptions for prompt
     tool_descriptions = []
-    for tool in tools:
-        tool_instance = tool if isinstance(tool, Tool) else tool()
+    for tool_instance in tool_instances:
         schema = tool_instance.tool_schema or {}
         props = schema.get("properties", {})
         params_str = ", ".join(f"{k}: {v.get('type', 'any')}" for k, v in props.items())
@@ -201,27 +204,40 @@ Final answer: {{"reasoning": "...", "action_requests": [], "is_done": true, "fin
     if context:
         react_instruction += f"\n\nContext:\n{context}"
 
+    # Remove model_name from kwargs (it's passed separately)
+    step_kwargs = {k: v for k, v in imodel_kwargs.items() if k != "model_name"}
+
     # ReAct loop
     current_instruction = react_instruction
+    verbose = params.return_trace  # Use return_trace for verbose output
 
-    for step_num in range(1, max_steps + 1):
+    for step_num in range(1, params.max_steps + 1):
         if verbose:
-            print(f"\n--- ReAct Step {step_num}/{max_steps} ---")
+            print(f"\n--- ReAct Step {step_num}/{params.max_steps} ---")
 
         step = ReactStep(step=step_num)
 
         try:
-            # Call operate for this step (no actions=True - we handle actions ourselves)
+            # Build OperateParams for this step using nested structure
+            operate_params = OperateParams(
+                communicate=CommunicateParams(
+                    generate=GenerateParams(
+                        imodel=imodel,
+                        instruction=current_instruction,
+                        request_model=step_model,
+                        imodel_kwargs={"model": model_name, **step_kwargs},
+                    ),
+                    parse=ParseParams(),
+                    strict_validation=False,  # Allow validation failures to be handled
+                ),
+                actions=True,
+            )
+
+            # Call operate for this step
             operate_result = await operate(
                 session,
-                branch,
-                {
-                    "instruction": current_instruction,
-                    "imodel": imodel,
-                    "response_model": step_model,
-                    "model": model_name,
-                    **model_kwargs,
-                },
+                b_,
+                operate_params,
             )
 
             if verbose:
@@ -246,7 +262,7 @@ Final answer: {{"reasoning": "...", "action_requests": [], "is_done": true, "fin
                 if verbose:
                     print(f"Executing {len(step.actions_requested)} action(s)...")
 
-                from ..actions import act
+                from .act import act
 
                 action_responses = await act(
                     step.actions_requested,
@@ -306,6 +322,6 @@ Final answer: {{"reasoning": "...", "action_requests": [], "is_done": true, "fin
     if not result.completed:
         result.total_steps = len(result.steps)
         if not result.reason_stopped:
-            result.reason_stopped = f"Max steps ({max_steps}) reached"
+            result.reason_stopped = f"Max steps ({params.max_steps}) reached"
 
     return result

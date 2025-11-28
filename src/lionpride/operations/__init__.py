@@ -7,24 +7,42 @@ from .builder import Builder, OperationGraphBuilder
 from .flow import DependencyAwareExecutor, flow, flow_stream
 from .node import Operation, OperationType, create_operation
 from .operate import (
+    ActParams,
+    CommunicateParams,
+    GenerateParams,
+    HandleUnmatched,
+    InterpretParams,
+    OperateParams,
+    ParseParams,
+    ReactParams,
     ReactResult,
     ReactStep,
     communicate,
     generate,
+    interpret,
     operate,
+    parse,
     react,
 )
 from .registry import OperationRegistry
 
 __all__ = (
+    "ActParams",
     "ActionRequest",
     "ActionResponse",
     "Builder",
+    "CommunicateParams",
     "DependencyAwareExecutor",
+    "GenerateParams",
+    "HandleUnmatched",
+    "InterpretParams",
+    "OperateParams",
     "Operation",
     "OperationGraphBuilder",
     "OperationRegistry",
     "OperationType",
+    "ParseParams",
+    "ReactParams",
     "ReactResult",
     "ReactStep",
     "Reason",
@@ -33,6 +51,8 @@ __all__ = (
     "flow",
     "flow_stream",
     "generate",
+    "interpret",
     "operate",
+    "parse",
     "react",
 )

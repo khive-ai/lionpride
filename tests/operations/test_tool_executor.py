@@ -23,7 +23,7 @@ class TestToolExecutorCoverage:
 
     async def test_execute_tools_no_action_requests_attr(self):
         """Test line 22-23: Response without action_requests attribute."""
-        from lionpride.operations.operate.tool_executor import execute_tools
+        from lionpride.operations.operate.act import execute_tools
 
         session = Session()
         branch = session.create_branch(name="test")
@@ -38,7 +38,7 @@ class TestToolExecutorCoverage:
 
     async def test_execute_tools_empty_action_requests(self):
         """Test lines 25-27: Response with empty/None action_requests."""
-        from lionpride.operations.operate.tool_executor import execute_tools
+        from lionpride.operations.operate.act import execute_tools
 
         session = Session()
         branch = session.create_branch(name="test")
@@ -62,7 +62,7 @@ class TestToolExecutorCoverage:
 
     async def test_execute_tools_with_actions(self):
         """Test lines 29-44: Execute tools and update response."""
-        from lionpride.operations.operate.tool_executor import execute_tools
+        from lionpride.operations.operate.act import execute_tools
         from lionpride.services import iModel
         from lionpride.services.types.tool import Tool, ToolConfig
 
@@ -95,7 +95,7 @@ class TestToolExecutorCoverage:
 
     async def test_update_response_with_actions_with_model_copy(self):
         """Test lines 52-54: Update response using model_copy (Pydantic v2)."""
-        from lionpride.operations.operate.tool_executor import _update_response_with_actions
+        from lionpride.operations.operate.act import _update_response_with_actions
 
         class TestResponse(BaseModel):
             value: str
@@ -114,7 +114,7 @@ class TestToolExecutorCoverage:
 
     async def test_update_response_fallback_path(self):
         """Test lines 57-59: Fallback when model_copy is unavailable (duck-typed object)."""
-        from lionpride.operations.operate.tool_executor import _update_response_with_actions
+        from lionpride.operations.operate.act import _update_response_with_actions
 
         # Create a simple object that looks like a pydantic model but doesn't have model_copy
         class DuckTypedResponse:
@@ -142,7 +142,7 @@ class TestToolExecutorCoverage:
 
     def test_has_action_requests_no_attr(self):
         """Test lines 64-65: has_action_requests without attribute."""
-        from lionpride.operations.operate.tool_executor import has_action_requests
+        from lionpride.operations.operate.act import has_action_requests
 
         # Object without action_requests
         obj = MagicMock(spec=[])
@@ -151,7 +151,7 @@ class TestToolExecutorCoverage:
 
     def test_has_action_requests_none(self):
         """Test lines 67-68: has_action_requests with None."""
-        from lionpride.operations.operate.tool_executor import has_action_requests
+        from lionpride.operations.operate.act import has_action_requests
 
         obj = MagicMock()
         obj.action_requests = None
@@ -160,7 +160,7 @@ class TestToolExecutorCoverage:
 
     def test_has_action_requests_empty(self):
         """Test has_action_requests with empty list."""
-        from lionpride.operations.operate.tool_executor import has_action_requests
+        from lionpride.operations.operate.act import has_action_requests
 
         obj = MagicMock()
         obj.action_requests = []
@@ -169,7 +169,7 @@ class TestToolExecutorCoverage:
 
     def test_has_action_requests_true(self):
         """Test has_action_requests with items."""
-        from lionpride.operations.operate.tool_executor import has_action_requests
+        from lionpride.operations.operate.act import has_action_requests
 
         obj = MagicMock()
         obj.action_requests = [ActionRequest(function="test", arguments={})]

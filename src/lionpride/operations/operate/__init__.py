@@ -1,6 +1,7 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
+from .act import act, execute_tools, has_action_requests
 from .communicate import communicate
 from .factory import operate
 from .generate import generate
@@ -9,7 +10,6 @@ from .parse import parse
 from .react import ReactResult, ReactStep, react
 from .types import (
     ActParams,
-    AnalyzeParams,
     CommunicateParams,
     GenerateParams,
     HandleUnmatched,
@@ -21,7 +21,6 @@ from .types import (
 
 __all__ = (
     "ActParams",
-    "AnalyzeParams",
     "CommunicateParams",
     "GenerateParams",
     "HandleUnmatched",
@@ -31,8 +30,11 @@ __all__ = (
     "ReactParams",
     "ReactResult",
     "ReactStep",
+    "act",
     "communicate",
+    "execute_tools",
     "generate",
+    "has_action_requests",
     "interpret",
     "operate",
     "parse",

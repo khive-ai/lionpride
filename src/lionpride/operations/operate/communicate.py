@@ -165,15 +165,26 @@ async def _communicate_with_operable(
         ),
     )
 
+    # Handle parse failure - return error dict for operate to handle
+    if parsed is None:
+        error_msg = "Failed to parse JSON from LLM response"
+        _persist_messages(session, branch, gen_params, gen_calling)
+        return {"validation_failed": True, "error": error_msg}
+
     # 3. Validate via security microkernel
     val_ = validator or Validator()
-    validated = await val_.validate(
-        parsed,
-        params.operable,
-        capabilities,
-        params.auto_fix,
-        params.strict_validation,
-    )
+    try:
+        validated = await val_.validate(
+            parsed,
+            params.operable,
+            capabilities,
+            params.auto_fix,
+            params.strict_validation,
+        )
+    except Exception as e:
+        # Return validation failure dict for operate to handle
+        _persist_messages(session, branch, gen_params, gen_calling)
+        return {"validation_failed": True, "error": str(e)}
 
     # 4. Persist messages
     _persist_messages(session, branch, gen_params, gen_calling)

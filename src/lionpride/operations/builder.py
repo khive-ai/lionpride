@@ -6,8 +6,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from pydantic import BaseModel
-
 from lionpride.core import Edge, Graph
 from lionpride.core._utils import to_uuid
 
@@ -63,34 +61,29 @@ class OperationGraphBuilder:
         self,
         name: str,
         operation: OperationType | str,
-        parameters: dict[str, Any] | BaseModel | None = None,
+        parameters: dict[str, Any] | Any | None = None,
         depends_on: list[str] | None = None,
         branch: str | UUID | Branch | None = None,
         inherit_context: bool = False,
         metadata: dict[str, Any] | None = None,
-        **kwargs,
     ) -> OperationGraphBuilder:
         """Add operation to graph. Returns self for chaining.
 
         Args:
             name: Operation name for reference
             operation: Operation type (communicate, operate, react, generate)
-            parameters: Operation parameters dict or model
+            parameters: Operation parameters (typed params or dict)
             depends_on: List of operation names this depends on
             branch: Branch object, UUID, or name to execute this operation on (None = default branch)
             inherit_context: Whether to inherit context from dependencies
             metadata: Optional metadata dict for the Operation node
-            **kwargs: Additional params merged into parameters (e.g., generate={...})
         """
         if name in self._nodes:
             raise ValueError(f"Operation with name '{name}' already exists")
 
-        # Merge kwargs into parameters (allows builder.add(..., generate={...}))
-        # Copy dict to avoid mutating caller's parameters
-        params = dict(parameters) if isinstance(parameters, dict) else {}
-        if parameters and isinstance(parameters, BaseModel):
-            params = parameters.model_dump()
-        params.update(kwargs)
+        # Pass typed params directly - no conversion
+        # Typed params (GenerateParams, OperateParams, etc.) are expected
+        params = parameters
 
         # Create unified Operation node (Node + Event)
         op = Operation(
@@ -200,24 +193,22 @@ class OperationGraphBuilder:
         self,
         name: str,
         operation: OperationType | str,
-        parameters: dict[str, Any] | BaseModel | None = None,
+        parameters: dict[str, Any] | Any | None = None,
         source_names: list[str] | None = None,
         branch: str | UUID | Branch | None = None,
         inherit_context: bool = False,
         inherit_from_source: int = 0,
-        **kwargs,
     ) -> OperationGraphBuilder:
         """Add aggregation operation that collects from multiple sources.
 
         Args:
             name: Operation name for reference
             operation: Operation type
-            parameters: Operation parameters dict or model
+            parameters: Operation parameters (typed params or dict)
             source_names: List of source operation names to aggregate from
             branch: Branch object, UUID, or name to execute this operation on (None = default branch)
             inherit_context: Whether to inherit context from sources
             inherit_from_source: Index of source to inherit context from
-            **kwargs: Additional params merged into parameters
         """
         sources = source_names or self._current_heads
         if not sources:
@@ -228,17 +219,8 @@ class OperationGraphBuilder:
             if source_name not in self._nodes:
                 raise ValueError(f"Source operation '{source_name}' not found")
 
-        # Handle parameters - keep as BaseModel if passed that way
-        if parameters is None:
-            params = {}
-        elif isinstance(parameters, BaseModel):
-            params = parameters  # Keep as BaseModel
-        else:
-            params = dict(parameters)  # Copy dict
-
-        # Merge kwargs into params if it's a dict
-        if isinstance(params, dict):
-            params.update(kwargs)
+        # Pass typed params directly - no conversion
+        params = parameters
 
         # Create operation node
         op = Operation(

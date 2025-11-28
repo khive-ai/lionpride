@@ -226,33 +226,32 @@ class TestBuilderBranchParameter:
 
 
 class TestBuilderParameterMutation:
-    """Test that add() doesn't mutate caller's parameters (B1 fix)."""
+    """Test that add() doesn't mutate caller's parameters."""
 
-    def test_add_does_not_mutate_dict_parameters(self):
-        """Test add() makes a copy of dict parameters (line 90)."""
+    def test_add_with_dict_params(self):
+        """Test add() passes dict parameters."""
         builder = Builder()
         original_params = {"instruction": "First", "model": "default"}
-        original_copy = dict(original_params)  # Keep a copy to compare
 
-        builder.add("task1", "generate", original_params, extra_key="extra_value")
+        builder.add("task1", "generate", original_params)
 
-        # Original params should be unchanged
-        assert original_params == original_copy
-        assert "extra_key" not in original_params
-
-    def test_add_with_kwargs_does_not_mutate(self):
-        """Test add() with kwargs doesn't mutate original dict."""
-        builder = Builder()
-        original = {"instruction": "Test"}
-
-        builder.add("task1", "generate", original, temperature=0.7, max_tokens=100)
-
-        # Verify kwargs were added to operation but not original
         task1 = builder.get("task1")
-        assert task1.parameters.get("temperature") == 0.7
-        assert task1.parameters.get("max_tokens") == 100
-        assert "temperature" not in original
-        assert "max_tokens" not in original
+        # Dict params are passed directly
+        assert task1.parameters == original_params
+
+    def test_add_with_typed_params(self):
+        """Test add() passes typed params as-is."""
+        from lionpride.operations.operate.types import GenerateParams
+
+        builder = Builder()
+        params = GenerateParams(instruction="Test", imodel="test_model")
+
+        builder.add("task1", "generate", params)
+
+        task1 = builder.get("task1")
+        # Typed params are passed directly
+        assert task1.parameters is params
+        assert task1.parameters.instruction == "Test"
 
 
 class TestBuilderContextInheritance:
