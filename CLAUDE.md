@@ -43,6 +43,7 @@ src/lionpride/
 ├── types/             # Type system (Spec, Operable, Params)
 │   └── spec_adapters/ # Pydantic field adaptation
 ├── lndl/              # LNDL (Lion Natural Description Language) parser
+├── work/              # Declarative workflow orchestration (Form, Report)
 ├── libs/              # Utility libraries
 │   ├── concurrency/   # Async patterns, cancellation, task management
 │   ├── schema_handlers/  # JSON schema, TypeScript conversion
@@ -403,6 +404,65 @@ result = resolve_lndl(ast, context={"name": "Alice", "age": 30})
 
 ---
 
+## Work System (work/)
+
+Declarative workflow orchestration. **Report = namespace, assignments = workflows.**
+
+### Form
+
+Pure data contract with assignment DSL.
+
+```python
+from lionpride.work import Form
+
+form = Form(assignment="branch: a, b -> c")
+form.branch_name   # "branch" (optional prefix)
+form.input_fields  # ["a", "b"]
+form.output_fields # ["c"]
+```
+
+### Report
+
+Workflow orchestrator. Subclass to define output schemas as class attributes.
+
+```python
+from lionpride.work import Report, flow_report
+from pydantic import BaseModel
+
+class Analysis(BaseModel):
+    summary: str
+    score: float
+
+class Insights(BaseModel):
+    patterns: list[str]
+
+class MyReport(Report):
+    # Output schemas as class attributes
+    analysis: Analysis | None = None
+    insights: Insights | None = None
+
+    # Workflow definition
+    assignment = "topic -> insights"
+    form_assignments = [
+        "topic -> analysis",
+        "analysis -> insights",
+    ]
+
+# Execute
+report = MyReport()
+report.initialize(topic="AI coding assistants")
+result = await flow_report(session, branch, report)
+```
+
+### Key Concepts
+
+- **Assignment DSL**: `"branch: input1, input2 -> output1, output2"`
+- **Dependencies inferred**: From field dataflow (no explicit graph)
+- **Parallel execution**: Independent forms run concurrently
+- **Type introspection**: `report.get_request_model("analysis")` returns the Pydantic model
+
+---
+
 ## Common Patterns
 
 ### Pattern 1: Basic Chat
@@ -483,12 +543,14 @@ result = await operate(session, branch, params)
 # Run all tests
 uv run pytest
 
-# With coverage
+# With coverage (run full suite - see note below)
 uv run pytest --cov=lionpride --cov-report=term-missing
 
 # Specific module
 uv run pytest tests/core/test_pile.py -v
 ```
+
+**Note**: Coverage instrumentation can interfere with Pydantic's thread locks. If you see `TypeError: 'ModelPrivateAttr' object does not support the context manager protocol`, run the **full test suite** with coverage (not individual test files). This is a known issue documented in CONTRIBUTING.md.
 
 ---
 
@@ -502,6 +564,9 @@ uv run pytest tests/core/test_pile.py -v
 | `src/lionpride/services/types/imodel.py` | iModel implementation |
 | `src/lionpride/core/pile.py` | Pile collection |
 | `src/lionpride/types/spec.py` | Spec and type system |
+| `src/lionpride/work/report.py` | Report orchestrator (class-attribute pattern) |
+| `src/lionpride/work/form.py` | Form data contract |
+| `src/lionpride/work/runner.py` | flow_report execution |
 
 ---
 

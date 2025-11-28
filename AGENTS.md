@@ -22,6 +22,9 @@ from lionpride.types import Spec, Operable, Params
 
 # Rules
 from lionpride.rules import Validator, NumberRule, StringRule, BooleanRule, ChoiceRule
+
+# Work (declarative workflows)
+from lionpride.work import Report, Form, flow_report
 ```
 
 ---
@@ -86,6 +89,33 @@ params = OperateParams(
 )
 ```
 
+### 6. Declarative Workflows (Report/Form)
+
+```python
+from pydantic import BaseModel
+from lionpride.work import Report, flow_report
+
+class Analysis(BaseModel):
+    summary: str
+    score: float
+
+class MyReport(Report):
+    # Schema attributes (filled during execution)
+    analysis: Analysis | None = None
+    insights: str | None = None
+
+    # Workflow definition
+    assignment: str = "topic -> insights"
+    form_assignments: list[str] = [
+        "topic -> analysis",
+        "analysis -> insights",
+    ]
+
+report = MyReport()
+report.initialize(topic="AI adoption")
+result = await flow_report(session, branch, report)
+```
+
 ---
 
 ## Key Classes
@@ -102,6 +132,8 @@ params = OperateParams(
 | `Flow` | Items + progressions | `from lionpride import Flow` |
 | `Spec` | Field spec | `from lionpride.types import Spec` |
 | `Operable` | Schema generator | `from lionpride.types import Operable` |
+| `Report` | Workflow namespace | `from lionpride.work import Report` |
+| `Form` | Assignment data contract | `from lionpride.work import Form` |
 
 ---
 
@@ -124,6 +156,7 @@ GenerateParams → CommunicateParams → OperateParams → ReactParams
 | Pile/Flow | `src/lionpride/core/` |
 | Spec/Operable | `src/lionpride/types/` |
 | Validation | `src/lionpride/rules/` |
+| Report/Form | `src/lionpride/work/` |
 
 ---
 

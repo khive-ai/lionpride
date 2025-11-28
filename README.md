@@ -15,6 +15,7 @@
 
 - **Model Agnostic** - Built-in providers for OpenAI-compatible APIs, Anthropic, Gemini
 - **LNDL** - Domain-specific language for LLM structured output and enhanced reasoning
+- **Declarative Workflows** - Report/Form system for multi-step agent pipelines
 - **Async Native** - Operation graph building, dependency-aware execution
 - **Modular Architecture** - Protocol-based composition, zero framework lock-in
 - **99%+ Test Coverage** - Production-hardened with comprehensive test suites
@@ -106,6 +107,29 @@ session = Session(services=registry)
 branch = session.create_branch(resources={"gpt4", "claude"})  # Access to both
 ```
 
+### Declarative Workflows
+
+`Report` and `Form` enable multi-step agent pipelines with automatic dependency resolution:
+
+```python
+from pydantic import BaseModel
+from lionpride.work import Report, flow_report
+
+class Analysis(BaseModel):
+    summary: str
+    score: float
+
+class MyReport(Report):
+    analysis: Analysis | None = None  # Schema attribute
+
+    assignment: str = "topic -> analysis"
+    form_assignments: list[str] = ["topic -> analysis"]
+
+report = MyReport()
+report.initialize(topic="AI coding assistants")
+result = await flow_report(session, branch, report)
+```
+
 ## Architecture
 
 ```text
@@ -114,6 +138,7 @@ lionpride/
 ├── session/        # Session, Branch, Message management
 ├── services/       # iModel, Tool, ServiceRegistry, MCP integration
 ├── operations/     # operate, react, communicate, generate, parse
+├── work/           # Declarative workflows: Report, Form, flow_report
 ├── rules/          # Validation rules and auto-correction
 ├── types/          # Spec, Operable, type system
 ├── lndl/           # LNDL parser and resolver
