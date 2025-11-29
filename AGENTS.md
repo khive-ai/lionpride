@@ -42,7 +42,8 @@ branch = session.create_branch(name="main")
 ### 2. Conduct Operation
 
 ```python
-result = await session.conduct("operate", branch, instruction="Your task")
+params = OperateParams(generate=GenerateParams(instruction="Your task"))
+result = await session.conduct("operate", branch, params=params)
 ```
 
 ### 3. Structured Output
@@ -55,11 +56,9 @@ class MyOutput(BaseModel):
     field2: int
 
 params = OperateParams(
-    communicate=CommunicateParams(
-        generate=GenerateParams(
-            instruction="...",
-            request_model=MyOutput,
-        )
+    generate=GenerateParams(
+        instruction="...",
+        request_model=MyOutput,
     )
 )
 result = await operate(session, branch, params)
@@ -80,12 +79,12 @@ branch = session.create_branch(resources={"gpt4", "claude"})
 ```python
 from lionpride import Tool
 
-tool = Tool.from_callable(my_function)
+tool = Tool(func_callable=my_function)
 session.services.register(tool)
 
 params = OperateParams(
-    communicate=CommunicateParams(...),
-    act=ActParams(tools=["my_function"]),
+    generate=GenerateParams(instruction="..."),
+    actions=True,
 )
 ```
 
@@ -113,7 +112,7 @@ class MyReport(Report):
 
 report = MyReport()
 report.initialize(topic="AI adoption")
-result = await flow_report(session, branch, report)
+result = await flow_report(session, report, branch=branch)
 ```
 
 ---

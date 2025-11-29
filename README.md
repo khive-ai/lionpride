@@ -9,7 +9,7 @@
 
 **Production-ready primitives for multi-agent workflow orchestration.**
 
-> **Alpha Release** - API stabilizing. Originated from [lionagi](https://github.com/khive-ai/lionagi) v0, elevated and hardened for production use.
+> ⚠️ **Alpha/Experimental** - API unstable. For research and development use. Originated from [lionagi](https://github.com/khive-ai/lionagi) v0.
 
 ## Features
 
@@ -41,12 +41,16 @@ branch = session.create_branch(name="main")
 
 # Conduct an operation
 async def main():
+    from lionpride.operations.operate import OperateParams, GenerateParams
+
     result = await session.conduct(
         "operate",
         branch,
-        instruction="What is 2 + 2?",
+        params=OperateParams(
+            generate=GenerateParams(instruction="What is 2 + 2?")
+        ),
     )
-    print(result)
+    print(result.response)
 
 asyncio.run(main())
 ```
@@ -76,15 +80,13 @@ branch = session.create_branch(
 Operations are composable building blocks for agent workflows:
 
 ```python
-from lionpride.operations.operate import operate, OperateParams, CommunicateParams, GenerateParams
+from lionpride.operations.operate import operate, OperateParams, GenerateParams
 
 # Structured output with validation
 params = OperateParams(
-    communicate=CommunicateParams(
-        generate=GenerateParams(
-            instruction="Analyze this data and return insights",
-            request_model=MyInsightsModel,  # Pydantic model for validation
-        )
+    generate=GenerateParams(
+        instruction="Analyze this data and return insights",
+        request_model=MyInsightsModel,  # Pydantic model for validation
     )
 )
 
@@ -127,7 +129,7 @@ class MyReport(Report):
 
 report = MyReport()
 report.initialize(topic="AI coding assistants")
-result = await flow_report(session, branch, report)
+result = await flow_report(session, report, branch=branch)
 ```
 
 ## Architecture
