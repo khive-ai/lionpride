@@ -2100,7 +2100,6 @@ The Processor/Executor pattern provides:
 
 - Review [Processor API Reference](../api/base/processor.md) for detailed API
 - Review [Executor API Reference](../api/base/executor.md) for detailed API
-- Try [Processor/Executor Notebook](../../notebooks/processor_executor.ipynb) for copy-paste examples
 
 ---
 
