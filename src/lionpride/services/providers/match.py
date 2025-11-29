@@ -47,6 +47,11 @@ def match_endpoint(
 
         return ClaudeCodeEndpoint(None, **kwargs)
 
+    if provider == "gemini_code":
+        from .gemini import GeminiCodeEndpoint
+
+        return GeminiCodeEndpoint(None, **kwargs)
+
     if provider in ("openai", "groq", "openrouter", "nvidia_nim") and "chat" in endpoint:
         from .oai_chat import OAIChatEndpoint
 
