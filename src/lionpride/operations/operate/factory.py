@@ -113,9 +113,10 @@ async def operate(
 
     required_capabilities = set(params.capabilities)
 
-    # System adds action_requests/reason if enabled
+    # System adds action_requests/action_responses/reason if enabled
     if params.actions:
         required_capabilities.add("action_requests")
+        required_capabilities.add("action_responses")
     if params.reason:
         required_capabilities.add("reason")
 
