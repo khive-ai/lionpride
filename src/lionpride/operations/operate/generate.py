@@ -9,52 +9,92 @@ No message persistence, no validation.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
-from lionpride.session.messages import AssistantResponseContent, Message
-from lionpride.types import is_sentinel
+from lionpride.errors import (
+    ConfigurationError,
+    ExecutionError,
+    NotFoundError,
+    ValidationError,
+)
 
-from .types import GenerateParams
+from .types import GenerateParams, ReturnAs
 
 if TYPE_CHECKING:
-    from lionpride.services.types.backend import Calling
+    from lionpride.services.types import APICalling
     from lionpride.session import Branch, Session
 
-__all__ = ("generate", "handle_return")
-
-ReturnAs = Literal["text", "raw", "message", "calling"]
+__all__ = ("_handle_return", "generate")
 
 
-def handle_return(calling: Calling, return_as: ReturnAs) -> Any:
-    """Handle return based on format.
+async def generate(
+    session: Session,
+    branch: Branch | str,
+    params: GenerateParams,
+    poll_timeout: float | None = None,
+    poll_interval: float | None = None,
+):
+    if not (_b := session.get_branch(branch, None)):
+        raise NotFoundError(f"Branch '{branch}' does not exist in session")
 
-    Args:
-        calling: Completed API calling
-        return_as: Output format
+    imodel = params.imodel or session.default_generate_model
+    imodel = session.services.get(imodel, None)
+    imodel_kw = params.imodel_kwargs or {}
 
-    Returns:
-        Formatted result based on return_as
+    if imodel is None:
+        raise ConfigurationError("No valid 'imodel' provided for generate")
+    if imodel.name not in _b.resources:
+        raise ConfigurationError(
+            f"Branch '{_b.name}' has no access to model '{imodel.name}'",
+            details={"branch": _b.name, "model": imodel.name, "resources": list(_b.resources)},
+        )
+    if not isinstance(imodel_kw, dict):
+        raise ValidationError("'imodel_kwargs' must be a dict if provided")
 
-    Raises:
-        RuntimeError: If calling failed and return_as requires data
-        ValueError: If return_as is unsupported
-    """
+    msgs = session.messages[_b]
+    from lionpride.session.messages import prepare_messages_for_chat
+
+    prepared_msgs = prepare_messages_for_chat(
+        msgs,
+        new_instruction=params.instruction_message,
+        to_chat=True,
+        structure_format=params.structure_format,
+    )
+    calling = await session.request(
+        imodel.name,
+        messages=prepared_msgs,
+        poll_interval=poll_interval,
+        poll_timeout=poll_timeout,
+        **imodel_kw,
+    )
+
+    return _handle_return(calling, params.return_as)
+
+
+def _handle_return(calling: APICalling, return_as: ReturnAs) -> Any:
     # For "calling", always return - caller handles status
     if return_as == "calling":
         return calling
 
     # For data formats, must succeed
-    if calling.execution.status.value != "completed":
-        error = calling.execution.error or f"status: {calling.execution.status}"
-        raise RuntimeError(f"Generation failed: {error}")
+    from lionpride.core.event import EventStatus
 
-    response = calling.execution.response
+    if calling.execution.status != EventStatus.COMPLETED:
+        raise ExecutionError(
+            "Generation did not complete successfully",
+            details=calling.execution.to_dict(),
+            retryable=True,  # API failures are often transient
+        )
+
+    response = calling.response
     match return_as:
         case "text":
             return response.data
         case "raw":
             return response.raw_response
         case "message":
+            from lionpride.session.messages import AssistantResponseContent, Message
+
             return Message(
                 content=AssistantResponseContent.create(
                     assistant_response=response.data,
@@ -65,65 +105,4 @@ def handle_return(calling: Calling, return_as: ReturnAs) -> Any:
                 },
             )
         case _:
-            raise ValueError(f"Unsupported return_as: {return_as}")
-
-
-async def generate(
-    session: Session,
-    branch: Branch | str,
-    params: GenerateParams,
-    poll_timeout: float | None = None,
-    poll_interval: float | None = None,
-):
-    """Stateless LLM call via session/branch context.
-
-    Prepares messages from branch history, calls model, returns result.
-    Does NOT persist any messages - caller handles persistence.
-
-    Args:
-        session: Session for services
-        branch: Branch for message context
-        params: Generate parameters
-        poll_timeout: Timeout for model polling
-        poll_interval: Interval for model polling
-
-    Returns:
-        Result in format specified by params.return_as
-    """
-    imodel_kw = params.imodel_kwargs or {}
-    if not isinstance(imodel_kw, dict):
-        raise ValueError(f"imodel_kwargs must be dict, got: {type(imodel_kw).__name__}")
-    if "messages" in imodel_kw:
-        raise ValueError("generate does not accept 'messages' in imodel_kwargs")
-
-    imodel = params.imodel or session.default_generate_model
-    imodel = session.services.get(imodel, None)
-
-    if is_sentinel(imodel, none_as_sentinel=True, empty_as_sentinel=True):
-        raise ValueError("generate requires 'imodel' parameter")
-
-    b_ = session.get_branch(branch)
-
-    if imodel.name not in b_.resources:
-        raise ValueError(f"Branch '{b_.name}' has no access to model '{imodel.name}'")
-
-    # Prepare messages from branch history + new instruction
-    msgs = session.messages[b_]
-    from lionpride.session.messages import prepare_messages_for_chat
-
-    prepared_msgs = prepare_messages_for_chat(
-        msgs,
-        new_instruction=params.instruction_message,
-        to_chat=True,
-        structure_format=params.structure_format,
-    )
-
-    # Call model (stateless - no message persistence)
-    calling = await imodel.invoke(
-        messages=prepared_msgs,
-        poll_interval=poll_interval,
-        poll_timeout=poll_timeout,
-        **imodel_kw,
-    )
-
-    return handle_return(calling, params.return_as)
+            raise ValidationError(f"Unsupported return_as: {return_as}")

@@ -1,24 +1,19 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Parse operation - JSON extraction with LLM fallback.
-
-Extracts JSON from raw LLM response text. Falls back to LLM reformatting
-if direct extraction fails. Returns dict - validation happens in Validator.
-
-Flow:
-    raw_text → parse() → dict → Validator.validate() → typed model
-"""
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from lionpride.errors import (
+    ConfigurationError,
+    ExecutionError,
+    LionprideError,
+    ValidationError,
+)
 from lionpride.libs.string_handlers import extract_json
 from lionpride.ln import fuzzy_validate_mapping
-from lionpride.services.types import iModel
 from lionpride.session.messages import InstructionContent, Message
-from lionpride.types import is_sentinel
 
 from .types import GenerateParams, HandleUnmatched, ParseParams
 
@@ -34,154 +29,135 @@ async def parse(
     params: ParseParams,
     poll_timeout: float | None = None,
     poll_interval: float | None = None,
-) -> dict[str, Any] | None:
-    """Parse raw text into JSON dict.
+):
+    if params._is_sentinel(params.text):
+        raise ValidationError("No text provided for parsing")
 
-    Tries direct JSON extraction first. Falls back to LLM reformatting
-    if direct extraction fails and imodel is provided.
+    try:
+        return _direct_parse(
+            text=params.text,
+            target_keys=params.target_keys,
+            similarity_threshold=params.similarity_threshold,
+            handle_unmatched=params.handle_unmatched,
+            structure_format=params.structure_format,
+            **params.match_kwargs,
+        )
+    except LionprideError as e:
+        if e.retryable is False:
+            raise
+    except Exception:
+        pass  # Direct parse failed, will try LLM reparse
 
-    Args:
-        session: Session for service access
-        branch: Branch for resource access control
-        params: Parse parameters
-
-    Returns:
-        Extracted dict, or None if extraction fails
-
-    Raises:
-        PermissionError: If branch doesn't have access to imodel
-    """
-    text = params.text
-    if is_sentinel(text, none_as_sentinel=True, empty_as_sentinel=True):
-        return None
-
-    # 1. Try direct JSON extraction
-    extracted = _try_direct_extract(
-        text=text,
-        target_keys=params.target_keys,
-        similarity_threshold=params.similarity_threshold,
-        handle_unmatched=params.handle_unmatched,
-    )
-    if extracted is not None:
-        return extracted
-
-    # 2. LLM fallback - check resource access first
-    if is_sentinel(params.imodel, none_as_sentinel=True, empty_as_sentinel=True):
-        return None  # No fallback available
-
-    model_name = params.imodel.name if isinstance(params.imodel, iModel) else params.imodel
-    if model_name not in branch.resources:
-        raise PermissionError(
-            f"Branch '{branch.name}' cannot access model '{model_name}' for reparse. "
-            f"Allowed: {branch.resources or 'none'}"
+    if params.max_retries < 1:
+        raise ConfigurationError(
+            "Direct parse failed and 'max_retries' is not enabled, no reparse attempted"
         )
 
-    # 3. Try LLM reparse with retries
-    for _attempt in range(params.max_retries):
+    if params.max_retries > 5:
+        raise ValidationError("'max_retries' for parse cannot exceed 5 to avoid long delays")
+
+    for _ in range(params.max_retries):
         try:
-            result = await _llm_reparse(
+            return await _llm_reparse(
                 session=session,
                 branch=branch,
-                text=text,
-                target_keys=params.target_keys,
-                model_name=model_name,
-                similarity_threshold=params.similarity_threshold,
-                handle_unmatched=params.handle_unmatched,
-                imodel_kwargs=params.imodel_kwargs,
+                params=params,
                 poll_timeout=poll_timeout,
                 poll_interval=poll_interval,
             )
-            if result is not None:
-                return result
-        except Exception:
-            continue
+        except LionprideError as e:
+            if e.retryable is False:
+                raise
 
-    return None
+    raise ExecutionError(
+        "All parse attempts (direct and LLM reparse) failed",
+        retryable=True,
+    )
 
 
-def _try_direct_extract(
+def _direct_parse(
     text: str,
     target_keys: list[str],
     similarity_threshold: float,
     handle_unmatched: HandleUnmatched,
-) -> dict[str, Any] | None:
-    """Try to extract JSON directly from text."""
-    extracted = extract_json(text)
+    structure_format: str,
+    **kwargs,
+) -> dict[str, Any]:
+    if structure_format == "lndl":
+        raise ConfigurationError("LNDL structure_format is not yet implemented in parse")
+    if structure_format != "json":
+        raise ValidationError(f"Unsupported structure_format '{structure_format}' in parse")
+    if not target_keys:
+        raise ValidationError("No target_keys provided for parse operation")
+
+    extracted = None
+    try:
+        extracted = extract_json(text, fuzzy_parse=True, return_one_if_single=False)
+    except Exception as e:
+        raise ExecutionError(
+            "Failed to extract JSON from text during parse",
+            retryable=True,
+            cause=e,
+        )
+
     if not extracted:
-        return None
+        raise ExecutionError(
+            "No JSON object could be extracted from text during parse",
+            retryable=True,
+        )
 
-    # Handle list results - take first dict
-    if isinstance(extracted, list):
-        extracted = extracted[0] if extracted else None
-    if not extracted or not isinstance(extracted, dict):
-        return None
-
-    # Fuzzy validate keys if target_keys provided
-    if target_keys:
-        extracted = fuzzy_validate_mapping(
-            extracted,
+    try:
+        return fuzzy_validate_mapping(
+            extracted[0],
             target_keys,
             similarity_threshold=similarity_threshold,
             handle_unmatched=handle_unmatched,
+            **kwargs,
         )
-
-    return extracted
+    except Exception as e:
+        raise ExecutionError(
+            "Failed to validate extracted JSON during parse",
+            retryable=True,
+            cause=e,
+        )
 
 
 async def _llm_reparse(
     session: Session,
     branch: Branch,
-    text: str,
-    target_keys: list[str],
-    model_name: str,
-    similarity_threshold: float,
-    handle_unmatched: HandleUnmatched,
-    imodel_kwargs: dict[str, Any],
+    params: ParseParams,
     poll_timeout: float | None = None,
     poll_interval: float | None = None,
 ) -> dict[str, Any] | None:
     """Use LLM to reformat text into valid JSON."""
     from .generate import generate
 
-    # Build instruction for reformatting
     instruction_text = (
         "Extract and reformat the following text into valid JSON. "
         "Return ONLY the JSON object, no other text or markdown formatting."
+        f"\n\nExpected fields: {', '.join(params.target_keys)}"
+        f"\n\nText to parse:\n{params.text}"
     )
-    if target_keys:
-        instruction_text += f"\n\nExpected fields: {', '.join(target_keys)}"
-
-    instruction_text += f"\n\nText to parse:\n{text}"
 
     instruction = Message(
         content=InstructionContent.create(instruction=instruction_text),
-        sender=branch.user,
-        recipient=session.id,
+        sender=session.id,
+        recipient=branch.id,
     )
 
-    # Generate reformatted response
     gen_params = GenerateParams(
-        imodel=model_name,
         instruction=instruction,
+        imodel=params.imodel,
         return_as="text",
-        imodel_kwargs=imodel_kwargs,
+        imodel_kwargs=params.imodel_kwargs,
     )
 
-    result = await generate(
-        session,
-        branch,
-        gen_params,
-        poll_timeout=poll_timeout,
-        poll_interval=poll_interval,
+    result = await generate(session, branch, gen_params, poll_timeout, poll_interval)
+    return _direct_parse(
+        result,
+        params.target_keys,
+        params.similarity_threshold,
+        params.handle_unmatched,
+        params.structure_format,
+        **params.match_kwargs,
     )
-
-    # Try to extract JSON from LLM response
-    if isinstance(result, str):
-        return _try_direct_extract(
-            text=result,
-            target_keys=target_keys,
-            similarity_threshold=similarity_threshold,
-            handle_unmatched=handle_unmatched,
-        )
-
-    return None
