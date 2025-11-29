@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a2] - 2025-11-29
+
+### Added
+
+- **Declarative multi-agent workflows**: Pydantic model docstrings as agent instructions, schema as output contract
+- **Explicit capability-based security**: Branch capabilities gate structured output fields
+- **code_review_report.py example**: Working multi-agent code review workflow
+
+### Changed
+
+- **flow_report**: Simplified to use Report's `next_forms()` scheduling instead of graph compilation
+- **Operations refactor**: Cleaner parameter hierarchy (GenerateParams → CommunicateParams → OperateParams → ReactParams)
+
+### Fixed
+
+- Include `action_responses` capability when `actions=True` (tool outputs now properly attached)
+- Fixed 5 API errors in README.md, CLAUDE.md, AGENTS.md documentation
+- Fixed broken notebook link in processor/executor docs
+
+### Removed
+
+- Pruned 44 redundant notebooks (51 → 7 essential primitives)
+- Removed buggy `form_report_demo.py` example
+
 ## [1.0.0a1] - 2025-11-28
 
 Initial alpha release of lionpride - foundational primitives for production AI agents.
@@ -74,5 +98,6 @@ Initial alpha release of lionpride - foundational primitives for production AI a
 - Interactive Jupyter notebooks
 - 99%+ test coverage
 
-[Unreleased]: https://github.com/khive-ai/lionpride/compare/v1.0.0a1...HEAD
+[Unreleased]: https://github.com/khive-ai/lionpride/compare/v1.0.0a2...HEAD
+[1.0.0a2]: https://github.com/khive-ai/lionpride/releases/tag/v1.0.0a2
 [1.0.0a1]: https://github.com/khive-ai/lionpride/releases/tag/v1.0.0a1
