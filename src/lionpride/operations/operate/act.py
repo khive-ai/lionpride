@@ -71,10 +71,27 @@ async def act(
     async def execute_single(req: ActionRequest) -> ActionResponse:
         try:
             result = await session.request(req.function, **(req.arguments or {}))
+            # Extract output from result - handle Event/Calling types
+            # Event subclasses (ToolCalling, etc.) have execution.response/error
+            if hasattr(result, "execution"):
+                if result.execution.error:
+                    return ActionResponse(
+                        function=req.function,
+                        arguments=req.arguments,
+                        output=f"{type(result.execution.error).__name__}: {result.execution.error}",
+                    )
+                response = result.execution.response
+                output = response.data if hasattr(response, "data") else response
+            elif hasattr(result, "response") and hasattr(result.response, "data"):
+                output = result.response.data
+            elif hasattr(result, "data"):
+                output = result.data
+            else:
+                output = result
             return ActionResponse(
                 function=req.function,
                 arguments=req.arguments,
-                output=result.response.data if hasattr(result, "response") else result,
+                output=output,
             )
         except Exception as e:
             return ActionResponse(

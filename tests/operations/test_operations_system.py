@@ -15,6 +15,7 @@ import asyncio
 import pytest
 from pydantic import BaseModel, Field
 
+from lionpride.errors import ExecutionError
 from lionpride.operations import Builder, OperationRegistry, flow
 from lionpride.operations.flow import DependencyAwareExecutor
 from lionpride.operations.node import create_operation
@@ -547,17 +548,17 @@ class TestFactories:
             name="test", capabilities={"exampleoutput"}, resources={model.name}
         )
 
+        # Use flat params pattern - OperateParams inherits from CommunicateParams
         params = OperateParams(
-            communicate=CommunicateParams(
-                generate=GenerateParams(
-                    instruction="Analyze",
-                    imodel=model,
-                    request_model=ExampleOutput,
-                    imodel_kwargs={"model_name": "gpt-4.1-mini"},
-                ),
-                parse=ParseParams(),
-                strict_validation=False,
+            generate=GenerateParams(
+                instruction="Analyze",
+                imodel=model,
+                request_model=ExampleOutput,
+                imodel_kwargs={"model_name": "gpt-4.1-mini"},
             ),
+            parse=ParseParams(),
+            strict_validation=False,
+            capabilities={"exampleoutput"},  # Explicit capabilities required
         )
         result = await operate(session, branch, params)
 
@@ -571,16 +572,14 @@ class TestFactories:
         session, model = session_with_model
         branch = session.create_branch(name="test", resources={model.name})
 
+        # skip_validation path doesn't need capabilities
         params = OperateParams(
-            communicate=CommunicateParams(
-                generate=GenerateParams(
-                    instruction="Test",
-                    imodel=model,
-                    request_model=ExampleOutput,
-                    imodel_kwargs={"model_name": "gpt-4.1-mini"},
-                ),
-                parse=ParseParams(),
+            generate=GenerateParams(
+                instruction="Test",
+                imodel=model,
+                imodel_kwargs={"model_name": "gpt-4.1-mini"},
             ),
+            parse=ParseParams(),
             skip_validation=True,
         )
         result = await operate(session, branch, params)
@@ -640,7 +639,7 @@ class TestFactories:
             return_as="text",
             imodel_kwargs={"model_name": "gpt-4.1-mini"},
         )
-        with pytest.raises(RuntimeError, match="Model invocation failed"):
+        with pytest.raises(ExecutionError, match="Generation did not complete"):
             await generate(session, branch, params)
 
 
@@ -945,17 +944,17 @@ class TestSessionConduct:
             capabilities={"exampleoutput"},  # Required for operate with response_model
         )
 
+        # Use flat params pattern - OperateParams inherits from CommunicateParams
         params = OperateParams(
-            communicate=CommunicateParams(
-                generate=GenerateParams(
-                    instruction="Analyze this",
-                    imodel=json_model.name,
-                    imodel_kwargs={"model_name": "gpt-4.1-mini"},
-                    request_model=ExampleOutput,  # request_model is on GenerateParams
-                ),
-                parse=ParseParams(),
-                strict_validation=False,
+            generate=GenerateParams(
+                instruction="Analyze this",
+                imodel=json_model.name,
+                imodel_kwargs={"model_name": "gpt-4.1-mini"},
+                request_model=ExampleOutput,
             ),
+            parse=ParseParams(),
+            strict_validation=False,
+            capabilities={"exampleoutput"},  # Explicit capabilities required
         )
         op = await session.conduct("operate", branch, params=params)
 

@@ -34,7 +34,8 @@ async def generate(
     poll_timeout: float | None = None,
     poll_interval: float | None = None,
 ):
-    if not (_b := session.get_branch(branch, None)):
+    # Use 'is None' check - empty Branch evaluates to False due to len() == 0
+    if (_b := session.get_branch(branch, None)) is None:
         raise NotFoundError(f"Branch '{branch}' does not exist in session")
 
     imodel = params.imodel or session.default_generate_model

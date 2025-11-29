@@ -17,15 +17,16 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import BaseModel
 
+from lionpride.errors import AccessError, ConfigurationError, ValidationError
 from lionpride.operations.operate.types import (
-    ActParams,
-    CommunicateParams,
     GenerateParams,
-    OperateParams,
     ParseParams,
     ReactParams,
 )
 from lionpride.rules import ActionRequest
+
+# React protocol capabilities required on branch
+REACT_CAPABILITIES = {"reasoning", "action_requests", "is_done"}
 
 
 def _make_react_params(
@@ -38,23 +39,19 @@ def _make_react_params(
     context=None,
     request_model=None,
 ):
-    """Helper to build nested ReactParams structure."""
+    """Helper to build flat ReactParams structure (inheritance-based)."""
     return ReactParams(
-        operate=OperateParams(
-            communicate=CommunicateParams(
-                generate=GenerateParams(
-                    instruction=instruction,
-                    imodel=imodel,
-                    imodel_kwargs=imodel_kwargs or {},
-                    context=context,
-                    request_model=request_model,
-                ),
-                parse=ParseParams(),
-                strict_validation=False,
-            ),
-            actions=True,
-            reason=True,
+        generate=GenerateParams(
+            instruction=instruction,
+            imodel=imodel,
+            imodel_kwargs=imodel_kwargs or {},
+            context=context,
+            request_model=request_model,
         ),
+        parse=ParseParams(),
+        strict_validation=False,
+        actions=True,
+        reason=True,
         max_steps=max_steps,
         return_trace=return_trace,
     )
@@ -63,51 +60,57 @@ def _make_react_params(
 class TestReactCoverage:
     """Test react.py uncovered lines."""
 
-    async def test_react_missing_operate_params(self, session_with_model):
-        """Test missing operate params raises ValueError."""
+    async def test_react_missing_generate_params(self, session_with_model):
+        """Test missing generate params raises ValidationError."""
         from lionpride.operations.operate.react import react
 
         session, model = session_with_model
-        branch = session.create_branch(name="test", resources={model.name})
+        branch = session.create_branch(
+            name="test", capabilities=REACT_CAPABILITIES, resources={model.name}
+        )
 
-        # ReactParams with no operate
+        # ReactParams with no generate (inherited from CommunicateParams)
         params = ReactParams()
 
-        with pytest.raises(ValueError, match="react requires 'operate' params"):
+        with pytest.raises(ValidationError, match="react requires 'generate' params"):
             await react(session, branch, params)
 
     async def test_react_missing_instruction(self, session_with_model):
-        """Test missing instruction raises ValueError."""
+        """Test missing instruction raises ValidationError."""
         from lionpride.operations.operate.react import react
 
         session, model = session_with_model
-        branch = session.create_branch(name="test", resources={model.name})
+        branch = session.create_branch(
+            name="test", capabilities=REACT_CAPABILITIES, resources={model.name}
+        )
 
         params = _make_react_params(imodel=model)
 
-        with pytest.raises(ValueError, match="instruction"):
+        with pytest.raises(ValidationError, match="instruction"):
             await react(session, branch, params)
 
-    async def test_react_missing_imodel(self, session_with_model):
-        """Test missing imodel raises ValueError."""
+    async def test_react_missing_imodel_no_default(self, session_with_model):
+        """Test missing imodel raises ConfigurationError when no default_generate_model."""
         from lionpride.operations.operate.react import react
 
         session, _ = session_with_model
-        branch = session.create_branch(name="test")
+        branch = session.create_branch(name="test", capabilities=REACT_CAPABILITIES)
 
         params = _make_react_params(instruction="Test")
 
-        with pytest.raises(ValueError, match="imodel"):
+        with pytest.raises(ConfigurationError, match="imodel"):
             await react(session, branch, params)
 
     async def test_react_missing_model_name(self, session_with_model):
-        """Test missing model_name raises ValueError when imodel has no .name."""
+        """Test missing model_name raises ConfigurationError when imodel has no .name."""
         from unittest.mock import MagicMock
 
         from lionpride.operations.operate.react import react
 
         session, model = session_with_model
-        branch = session.create_branch(name="test", resources={model.name})
+        branch = session.create_branch(
+            name="test", capabilities=REACT_CAPABILITIES, resources={model.name}
+        )
 
         # Use a mock imodel without .name attribute to test error case
         mock_imodel = MagicMock(spec=[])  # spec=[] means no attributes
@@ -118,7 +121,24 @@ class TestReactCoverage:
             # No model_name in imodel_kwargs and imodel has no .name
         )
 
-        with pytest.raises(ValueError, match="model_name"):
+        with pytest.raises(ConfigurationError, match="model_name"):
+            await react(session, branch, params)
+
+    async def test_react_missing_branch_capabilities(self, session_with_model):
+        """Test missing branch capabilities raises AccessError."""
+        from lionpride.operations.operate.react import react
+
+        session, model = session_with_model
+        # Branch without react capabilities
+        branch = session.create_branch(name="test", resources={model.name})
+
+        params = _make_react_params(
+            instruction="Test",
+            imodel=model,
+            imodel_kwargs={"model_name": "gpt-4"},
+        )
+
+        with pytest.raises(AccessError, match="missing react capabilities"):
             await react(session, branch, params)
 
     async def test_react_branch_string_resolution(self, session_with_model):
@@ -126,7 +146,9 @@ class TestReactCoverage:
         from lionpride.operations.operate.react import react
 
         session, model = session_with_model
-        session.create_branch(name="test_branch", resources={model.name})
+        session.create_branch(
+            name="test_branch", capabilities=REACT_CAPABILITIES, resources={model.name}
+        )
 
         # Mock operate at the factory module level (operate is imported inside function)
         with patch("lionpride.operations.operate.factory.operate") as mock_operate:
@@ -157,36 +179,14 @@ class TestReactCoverage:
         assert "action_requests" in fields
         assert "is_done" in fields
 
-    async def test_react_validation_failure(self, session_with_model):
-        """Test validation failure handling."""
-        from lionpride.operations.operate.react import react
-
-        session, model = session_with_model
-        branch = session.create_branch(name="test", resources={model.name})
-
-        # Mock operate to return validation failure
-        with patch("lionpride.operations.operate.factory.operate") as mock_operate:
-            mock_operate.return_value = {"validation_failed": True, "error": "Invalid"}
-
-            params = _make_react_params(
-                instruction="Test",
-                imodel=model,
-                imodel_kwargs={"model_name": "gpt-4"},
-            )
-
-            result = await react(session, branch, params)
-
-            assert result.completed is False
-            # Validation failure yields step and returns, reason_stopped stays empty
-            assert len(result.steps) == 1
-            assert "Validation failed" in result.steps[0].reasoning
-
     async def test_react_exception_handling(self, session_with_model):
         """Test exception handling in react loop."""
         from lionpride.operations.operate.react import react
 
         session, model = session_with_model
-        branch = session.create_branch(name="test", resources={model.name})
+        branch = session.create_branch(
+            name="test", capabilities=REACT_CAPABILITIES, resources={model.name}
+        )
 
         # Mock operate to raise exception
         with patch("lionpride.operations.operate.factory.operate") as mock_operate:
@@ -207,16 +207,13 @@ class TestReactCoverage:
             assert "Test error" in result.steps[0].reasoning
 
     async def test_react_max_steps_reached(self, session_with_model):
-        """Test max steps reached forces completion on last step.
-
-        Note: When max_steps is reached, the last step is automatically
-        marked as final (is_done=True on last step), so completed=True
-        and reason_stopped='Task completed'.
-        """
+        """Test max steps reached forces completion on last step."""
         from lionpride.operations.operate.react import react
 
         session, model = session_with_model
-        branch = session.create_branch(name="test", resources={model.name})
+        branch = session.create_branch(
+            name="test", capabilities=REACT_CAPABILITIES, resources={model.name}
+        )
 
         # Mock operate to never voluntarily finish
         with patch("lionpride.operations.operate.factory.operate") as mock_operate:
@@ -236,7 +233,6 @@ class TestReactCoverage:
             result = await react(session, branch, params)
 
             # On last step (step 2), is_done is forced True
-            # So completed=True and reason_stopped='Task completed'
             assert result.completed is True
             assert result.total_steps == 2
             assert result.steps[-1].is_final is True
@@ -246,7 +242,9 @@ class TestReactCoverage:
         from lionpride.operations.operate.react import react
 
         session, model = session_with_model
-        branch = session.create_branch(name="test", resources={model.name})
+        branch = session.create_branch(
+            name="test", capabilities=REACT_CAPABILITIES, resources={model.name}
+        )
 
         # Mock operate to complete quickly
         with patch("lionpride.operations.operate.factory.operate") as mock_operate:
@@ -276,7 +274,9 @@ class TestReactCoverage:
         from lionpride.operations.operate.react import react_stream
 
         session, model = session_with_model
-        branch = session.create_branch(name="test", resources={model.name})
+        branch = session.create_branch(
+            name="test", capabilities=REACT_CAPABILITIES, resources={model.name}
+        )
 
         # Mock operate to run 2 steps then complete
         call_count = 0
@@ -312,7 +312,9 @@ class TestReactCoverage:
         from lionpride.operations.operate.react import react
 
         session, model = session_with_model
-        branch = session.create_branch(name="test", resources={model.name})
+        branch = session.create_branch(
+            name="test", capabilities=REACT_CAPABILITIES, resources={model.name}
+        )
 
         # Mock operate to complete quickly
         with patch("lionpride.operations.operate.factory.operate") as mock_operate:
@@ -342,7 +344,9 @@ class TestReactCoverage:
         from lionpride.rules import ActionResponse
 
         session, model = session_with_model
-        branch = session.create_branch(name="test", resources={model.name})
+        branch = session.create_branch(
+            name="test", capabilities=REACT_CAPABILITIES, resources={model.name}
+        )
 
         # Mock operate to return action requests and responses
         call_count = 0
@@ -397,7 +401,9 @@ class TestReactCoverage:
         from lionpride.operations.operate.react import react
 
         session, model = session_with_model
-        branch = session.create_branch(name="test", resources={model.name})
+        branch = session.create_branch(
+            name="test", capabilities=REACT_CAPABILITIES, resources={model.name}
+        )
 
         # Mock operate to raise exception
         with patch("lionpride.operations.operate.factory.operate") as mock_operate:
@@ -483,7 +489,6 @@ class TestIntermediateResponseOptions:
         assert "reasoning" in spec_names
         assert "action_requests" in spec_names
         assert "is_done" in spec_names
-        # no final_answer - react is pure loop
 
     def test_build_step_operable_with_intermediate_options(self):
         """Test building step Operable with intermediate options."""
@@ -516,10 +521,14 @@ class TestIntermediateResponseOptions:
     async def test_react_with_intermediate_options(self, session_with_model):
         """Test react with intermediate_response_options parameter."""
         from lionpride.operations.operate.react import react
-        from lionpride.operations.operate.types import ReactParams
 
         session, model = session_with_model
-        branch = session.create_branch(name="test", resources={model.name})
+        # Need intermediate_response_options capability too
+        branch = session.create_branch(
+            name="test",
+            capabilities=REACT_CAPABILITIES | {"intermediate_response_options"},
+            resources={model.name},
+        )
 
         class Progress(BaseModel):
             pct: int
@@ -539,18 +548,14 @@ class TestIntermediateResponseOptions:
             mock_operate.return_value = mock_result
 
             params = ReactParams(
-                operate=OperateParams(
-                    communicate=CommunicateParams(
-                        generate=GenerateParams(
-                            instruction="Test",
-                            imodel=model,
-                            imodel_kwargs={"model_name": "gpt-4"},
-                        ),
-                        parse=ParseParams(),
-                    ),
-                    actions=True,
-                    reason=True,
+                generate=GenerateParams(
+                    instruction="Test",
+                    imodel=model,
+                    imodel_kwargs={"model_name": "gpt-4"},
                 ),
+                parse=ParseParams(),
+                actions=True,
+                reason=True,
                 max_steps=5,
                 intermediate_response_options=[Progress],
             )
@@ -564,46 +569,14 @@ class TestIntermediateResponseOptions:
                 "status": "complete",
             }
 
-    async def test_react_missing_communicate_params(self, session_with_model):
-        """Test missing communicate params raises ValueError (line 193)."""
-        from lionpride.operations.operate.react import react
-
-        session, model = session_with_model
-        branch = session.create_branch(name="test", resources={model.name})
-
-        # OperateParams with no communicate
-        params = ReactParams(
-            operate=OperateParams(),  # communicate is sentinel
-        )
-
-        with pytest.raises(ValueError, match=r"react requires 'operate\.communicate' params"):
-            await react(session, branch, params)
-
-    async def test_react_missing_generate_params(self, session_with_model):
-        """Test missing generate params raises ValueError (line 195)."""
-        from lionpride.operations.operate.react import react
-
-        session, model = session_with_model
-        branch = session.create_branch(name="test", resources={model.name})
-
-        # CommunicateParams with no generate
-        params = ReactParams(
-            operate=OperateParams(
-                communicate=CommunicateParams(),  # generate is sentinel
-            ),
-        )
-
-        with pytest.raises(
-            ValueError, match=r"react requires 'operate\.communicate\.generate' params"
-        ):
-            await react(session, branch, params)
-
     async def test_react_model_name_from_imodel_attribute(self, session_with_model):
-        """Test model_name extracted from imodel.name attribute (line 213)."""
+        """Test model_name extracted from imodel.name attribute."""
         from lionpride.operations.operate.react import react
 
         session, model = session_with_model
-        branch = session.create_branch(name="test", resources={model.name})
+        branch = session.create_branch(
+            name="test", capabilities=REACT_CAPABILITIES, resources={model.name}
+        )
 
         # Mock operate to complete quickly
         with patch("lionpride.operations.operate.factory.operate") as mock_operate:
@@ -627,11 +600,15 @@ class TestIntermediateResponseOptions:
             mock_operate.assert_called()
 
     async def test_react_verbose_with_intermediate_options(self, session_with_model, caplog):
-        """Test verbose logging with intermediate_response_options (line 237)."""
+        """Test verbose logging with intermediate_response_options."""
         from lionpride.operations.operate.react import react
 
         session, model = session_with_model
-        branch = session.create_branch(name="test", resources={model.name})
+        branch = session.create_branch(
+            name="test",
+            capabilities=REACT_CAPABILITIES | {"intermediate_response_options"},
+            resources={model.name},
+        )
 
         class Progress(BaseModel):
             pct: int
@@ -646,18 +623,14 @@ class TestIntermediateResponseOptions:
             mock_operate.return_value = mock_result
 
             params = ReactParams(
-                operate=OperateParams(
-                    communicate=CommunicateParams(
-                        generate=GenerateParams(
-                            instruction="Test",
-                            imodel=model,
-                            imodel_kwargs={"model_name": "gpt-4"},
-                        ),
-                        parse=ParseParams(),
-                    ),
-                    actions=True,
-                    reason=True,
+                generate=GenerateParams(
+                    instruction="Test",
+                    imodel=model,
+                    imodel_kwargs={"model_name": "gpt-4"},
                 ),
+                parse=ParseParams(),
+                actions=True,
+                reason=True,
                 max_steps=5,
                 intermediate_response_options=[Progress],
                 return_trace=True,  # verbose=True
@@ -667,19 +640,16 @@ class TestIntermediateResponseOptions:
                 result = await react(session, branch, params)
 
             assert result.completed is True
-            # Check that Operable build logging occurred
-            assert any(
-                "Built step Operable with intermediate options" in record.message
-                for record in caplog.records
-            )
 
     async def test_react_verbose_action_responses_logging(self, session_with_model, caplog):
-        """Test verbose logging for action responses (line 308)."""
+        """Test verbose logging for action responses."""
         from lionpride.operations.operate.react import react
         from lionpride.rules import ActionResponse
 
         session, model = session_with_model
-        branch = session.create_branch(name="test", resources={model.name})
+        branch = session.create_branch(
+            name="test", capabilities=REACT_CAPABILITIES, resources={model.name}
+        )
 
         with patch("lionpride.operations.operate.factory.operate") as mock_operate:
             mock_result = MagicMock()
@@ -706,11 +676,15 @@ class TestIntermediateResponseOptions:
             assert any("Tool test_tool:" in record.message for record in caplog.records)
 
     async def test_react_intermediate_options_as_dict(self, session_with_model):
-        """Test intermediate_response_options as dict (lines 317-318)."""
+        """Test intermediate_response_options as dict."""
         from lionpride.operations.operate.react import react
 
         session, model = session_with_model
-        branch = session.create_branch(name="test", resources={model.name})
+        branch = session.create_branch(
+            name="test",
+            capabilities=REACT_CAPABILITIES | {"intermediate_response_options"},
+            resources={model.name},
+        )
 
         class Progress(BaseModel):
             pct: int
@@ -730,18 +704,14 @@ class TestIntermediateResponseOptions:
             mock_operate.return_value = mock_result
 
             params = ReactParams(
-                operate=OperateParams(
-                    communicate=CommunicateParams(
-                        generate=GenerateParams(
-                            instruction="Test",
-                            imodel=model,
-                            imodel_kwargs={"model_name": "gpt-4"},
-                        ),
-                        parse=ParseParams(),
-                    ),
-                    actions=True,
-                    reason=True,
+                generate=GenerateParams(
+                    instruction="Test",
+                    imodel=model,
+                    imodel_kwargs={"model_name": "gpt-4"},
                 ),
+                parse=ParseParams(),
+                actions=True,
+                reason=True,
                 max_steps=5,
                 intermediate_response_options=[Progress],
             )

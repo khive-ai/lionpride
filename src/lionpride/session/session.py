@@ -44,14 +44,12 @@ class Branch(Progression):
 
     Attributes:
         session_id: Parent session UUID (frozen).
-        user: Entity commanding this branch (default: session_id).
         system_message: System message UUID, always at order[0] if set.
         capabilities: Allowed structured output schema names.
         resources: Allowed backend service names.
     """
 
     session_id: UUID = Field(..., frozen=True)
-    user: str | UUID | None = None
     system_message: UUID | None = None
     capabilities: set[str] = Field(default_factory=set)
     resources: set[str] = Field(default_factory=set)
@@ -246,7 +244,6 @@ class Session(Element):
 
         branch = Branch(
             session_id=self.id,
-            user=self.id,
             name=name or f"branch_{len(self.branches)}",
             capabilities=capabilities or set(),
             resources=resources or set(),

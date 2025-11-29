@@ -195,6 +195,9 @@ async def react_stream(
 
     gen_params = params.generate
     instruction = gen_params.instruction
+    if not instruction:
+        raise ValidationError("react requires 'instruction' in generate params")
+
     imodel = gen_params.imodel or session.default_generate_model
     imodel_kwargs = gen_params.imodel_kwargs or {}
     context = gen_params.context

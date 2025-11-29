@@ -561,3 +561,73 @@ def test_edge_cases_parametrized(messages, progression, expected_count):
     """Parametrized tests for edge cases."""
     result = prepare_messages_for_chat(messages, progression=progression)
     assert len(result) == expected_count
+
+
+# Additional Edge Case Tests for Coverage
+class TestToChatWithEmptyPile:
+    """Tests for to_chat with empty pile and new_instruction.
+
+    Covers prepare_msg.py lines 70-71.
+    """
+
+    def test_empty_pile_with_new_instruction_to_chat_true(self):
+        """Test empty pile with new_instruction and to_chat=True returns dict (covers line 70)."""
+        new_instr = Message(content=InstructionContent.create(instruction="What is 2+2?"))
+        result = prepare_messages_for_chat(
+            messages=Pile([]),
+            new_instruction=new_instr,
+            to_chat=True,
+        )
+
+        assert len(result) == 1
+        assert isinstance(result[0], dict)
+        assert result[0]["role"] == "user"
+        assert "2+2" in result[0]["content"]
+
+    def test_empty_pile_with_new_instruction_to_chat_false(self):
+        """Test empty pile with new_instruction and to_chat=False returns MessageContent (covers line 71)."""
+        new_instr = Message(content=InstructionContent.create(instruction="What is 3+3?"))
+        result = prepare_messages_for_chat(
+            messages=Pile([]),
+            new_instruction=new_instr,
+            to_chat=False,  # Explicitly False
+        )
+
+        assert len(result) == 1
+        assert isinstance(result[0], InstructionContent)
+        assert result[0].instruction == "What is 3+3?"
+
+
+class TestSystemWithPendingActions:
+    """Tests for system message with pending actions embedded into new_instruction.
+
+    Covers prepare_msg.py lines 136-137.
+    """
+
+    def test_system_message_with_pending_actions_no_history(self):
+        """Test system message with action response but no other history.
+
+        When system exists, action exists, but no other instructions in history,
+        both system text and action outputs should be embedded into new_instruction.
+        (covers lines 136-137)
+        """
+        system_msg = Message(content=SystemContent.create(system_message="You are helpful."))
+        action_msg = Message(
+            content=ActionResponseContent.create(request_id="act_123", result="Result: 42")
+        )
+        new_instr = Message(content=InstructionContent.create(instruction="What was the result?"))
+
+        messages = Pile([system_msg, action_msg])
+        result = prepare_messages_for_chat(
+            messages=messages,
+            new_instruction=new_instr,
+        )
+
+        # Should have single instruction with system embedded and action in context
+        assert len(result) == 1
+        assert isinstance(result[0], InstructionContent)
+        # System embedded into instruction
+        assert "You are helpful." in result[0].instruction
+        # Action output in context
+        assert result[0].context is not None
+        assert any("Result: 42" in str(ctx) for ctx in result[0].context)

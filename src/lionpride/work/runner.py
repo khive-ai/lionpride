@@ -12,7 +12,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from lionpride.operations.operate import (
-    CommunicateParams,
     GenerateParams,
     OperateParams,
 )
@@ -92,13 +91,15 @@ async def flow_report(
         # Build instruction from assignment
         instruction = f"Execute: {form.assignment}"
 
+        # Determine capability from request_model name (lowercase convention)
+        capability = request_model.__name__.lower() if request_model else primary_output
+
         params = OperateParams(
-            communicate=CommunicateParams(
-                generate=GenerateParams(
-                    instruction=instruction,
-                    request_model=request_model,
-                )
+            generate=GenerateParams(
+                instruction=instruction,
+                request_model=request_model,
             ),
+            capabilities={capability},  # Explicit capability for security model
             reason=reason,
             actions=actions,
         )

@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from lionpride import Event, EventStatus
+from lionpride.errors import ConfigurationError, ExecutionError, ValidationError
 from lionpride.operations.operate.generate import generate
 from lionpride.operations.operate.types import GenerateParams
 from lionpride.session import Session
@@ -72,13 +73,13 @@ class TestGenerateValidation:
     """Test parameter validation."""
 
     async def test_missing_imodel_raises_error(self, session_with_model):
-        """Test that missing imodel parameter raises ValueError."""
+        """Test that missing imodel parameter raises ConfigurationError."""
         session, _ = session_with_model
         branch = session.create_branch(name="test", resources={"mock_model"})
 
         params = GenerateParams(instruction="test")
 
-        with pytest.raises(ValueError, match="generate requires 'imodel' parameter"):
+        with pytest.raises(ConfigurationError, match="No valid 'imodel' provided"):
             await generate(session, branch, params)
 
 
@@ -191,8 +192,8 @@ class TestStatelessBehavior:
 class TestErrorHandling:
     """Test error handling for various failure modes."""
 
-    async def test_failed_invocation_raises_runtime_error(self, session_with_model):
-        """Test RuntimeError raised when model invocation fails."""
+    async def test_failed_invocation_raises_execution_error(self, session_with_model):
+        """Test ExecutionError raised when model invocation fails."""
         session, model = session_with_model
         branch = session.create_branch(name="test", resources={"mock_model"})
 
@@ -213,11 +214,11 @@ class TestErrorHandling:
             return_as="text",
         )
 
-        with pytest.raises(RuntimeError, match="Generation failed"):
+        with pytest.raises(ExecutionError, match="Generation did not complete"):
             await generate(session, branch, params)
 
     async def test_failed_invocation_without_error_message(self, session_with_model):
-        """Test RuntimeError includes status when no error message."""
+        """Test ExecutionError when invocation fails without error message."""
         session, model = session_with_model
         branch = session.create_branch(name="test", resources={"mock_model"})
 
@@ -238,7 +239,7 @@ class TestErrorHandling:
             return_as="text",
         )
 
-        with pytest.raises(RuntimeError, match=r"Generation failed.*status"):
+        with pytest.raises(ExecutionError, match="Generation did not complete"):
             await generate(session, branch, params)
 
 
@@ -246,7 +247,7 @@ class TestBranchResourceAccess:
     """Test branch resource access control."""
 
     async def test_branch_without_model_access_raises_error(self, session_with_model):
-        """Test that branch without model access raises ValueError."""
+        """Test that branch without model access raises ConfigurationError."""
         session, _ = session_with_model
         branch = session.create_branch(name="test", resources=set())  # No resources
 
@@ -255,7 +256,7 @@ class TestBranchResourceAccess:
             instruction="test",
         )
 
-        with pytest.raises(ValueError, match="has no access to model"):
+        with pytest.raises(ConfigurationError, match="has no access to model"):
             await generate(session, branch, params)
 
 
@@ -284,14 +285,14 @@ class TestParameterPassthrough:
 
 
 class TestHandleReturnEdgeCases:
-    """Test handle_return() edge cases for 100% coverage."""
+    """Test _handle_return() edge cases for 100% coverage."""
 
-    def test_invalid_return_as_raises_value_error(self):
-        """Test handle_return raises ValueError for unsupported return_as.
+    def test_invalid_return_as_raises_validation_error(self):
+        """Test _handle_return raises ValidationError for unsupported return_as.
 
         Coverage: generate.py lines 67-68 (match default case)
         """
-        from lionpride.operations.operate.generate import handle_return
+        from lionpride.operations.operate.generate import _handle_return
 
         # Create a mock completed calling
         class MockCalling(Event):
@@ -302,24 +303,21 @@ class TestHandleReturnEdgeCases:
 
         calling = MockCalling()
 
-        # Call handle_return with invalid return_as (bypass Literal type check)
-        with pytest.raises(ValueError, match="Unsupported return_as"):
-            handle_return(calling, "invalid_type")  # type: ignore
+        # Call _handle_return with invalid return_as (bypass Literal type check)
+        with pytest.raises(ValidationError, match="Unsupported return_as"):
+            _handle_return(calling, "invalid_type")  # type: ignore
 
 
 class TestImodelKwargsValidation:
     """Test imodel_kwargs validation for 100% coverage."""
 
     async def test_imodel_kwargs_non_dict_raises_error(self, session_with_model):
-        """Test that non-dict imodel_kwargs raises ValueError.
+        """Test that non-dict imodel_kwargs raises ValidationError.
 
-        Coverage: generate.py line 95
+        Coverage: generate.py imodel_kwargs dict check
         """
         session, _ = session_with_model
         branch = session.create_branch(name="test", resources={"mock_model"})
-
-        # Create params with non-dict imodel_kwargs (bypass type checking)
-        from dataclasses import replace
 
         params = GenerateParams(
             imodel="mock_model",
@@ -328,22 +326,27 @@ class TestImodelKwargsValidation:
         # Force set imodel_kwargs to a list (normally blocked by type system)
         object.__setattr__(params, "imodel_kwargs", ["not", "a", "dict"])
 
-        with pytest.raises(ValueError, match="imodel_kwargs must be dict"):
+        with pytest.raises(ValidationError, match=r"imodel_kwargs.*must be.*dict"):
             await generate(session, branch, params)
 
-    async def test_imodel_kwargs_with_messages_key_raises_error(self, session_with_model):
-        """Test that 'messages' key in imodel_kwargs raises ValueError.
+    async def test_imodel_kwargs_forwarded_correctly(self, session_with_model):
+        """Test that imodel_kwargs are forwarded to the model.
 
-        Coverage: generate.py line 97
+        The new API forwards imodel_kwargs directly without validation
+        of specific keys like 'messages'.
         """
-        session, _ = session_with_model
+        session, model = session_with_model
         branch = session.create_branch(name="test", resources={"mock_model"})
 
         params = GenerateParams(
             imodel="mock_model",
             instruction="test",
-            imodel_kwargs={"messages": [{"role": "user", "content": "test"}]},
+            imodel_kwargs={"temperature": 0.5},
         )
 
-        with pytest.raises(ValueError, match="does not accept 'messages'"):
-            await generate(session, branch, params)
+        await generate(session, branch, params)
+
+        # Verify kwargs were forwarded
+        model.invoke.assert_called_once()
+        call_kwargs = model.invoke.call_args.kwargs
+        assert call_kwargs.get("temperature") == 0.5

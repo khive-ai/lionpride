@@ -34,7 +34,8 @@ from pydantic import BaseModel, Field
 
 from lionpride.core import Element, Pile
 
-from .form import Form, parse_assignment
+from .capabilities import parse_assignment
+from .form import Form
 
 __all__ = ("Report",)
 
@@ -101,10 +102,10 @@ class Report(Element):
         if not self.assignment:
             return
 
-        # Parse overall assignment (ignore branch for report-level)
-        _, inputs, outputs = parse_assignment(self.assignment)
-        self.input_fields = inputs
-        self.output_fields = outputs
+        # Parse overall assignment (ignore branch/operation/resources for report-level)
+        parsed = parse_assignment(self.assignment)
+        self.input_fields = parsed.input_fields
+        self.output_fields = parsed.output_fields
 
         # Create forms from form_assignments
         for fa in self.form_assignments:

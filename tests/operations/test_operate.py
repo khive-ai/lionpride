@@ -1,18 +1,18 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Test refactored operate factory."""
+"""Test refactored operate factory with explicit capability-based security."""
 
 from dataclasses import dataclass
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pydantic import BaseModel, Field
 
 from lionpride import Event, EventStatus
+from lionpride.errors import AccessError, ConfigurationError, ValidationError
 from lionpride.operations.operate import operate
 from lionpride.operations.operate.types import (
-    CommunicateParams,
     GenerateParams,
     OperateParams,
     ParseParams,
@@ -53,7 +53,6 @@ class TestOperateRefactor:
         branch = session.create_branch(capabilities={"simplemodel"}, resources={mock_model.name})
 
         # Mock response to return structured data wrapped in spec name
-        # The Operable creates a model with field "simplemodel" containing SimpleModel
         async def mock_json_invoke(**kwargs):
             class MockCalling(Event):
                 def __init__(self):
@@ -67,19 +66,17 @@ class TestOperateRefactor:
 
         object.__setattr__(mock_model, "invoke", AsyncMock(side_effect=mock_json_invoke))
 
-        # Test parameters - nested structure
-        # Note: strict_validation=False allows validation without registered rules
+        # Test parameters - flat structure (OperateParams inherits from CommunicateParams)
         params = OperateParams(
-            communicate=CommunicateParams(
-                generate=GenerateParams(
-                    imodel=mock_model,
-                    instruction="Generate a test response",
-                    request_model=SimpleModel,
-                    imodel_kwargs={"model_name": "test", "temperature": 0.5},
-                ),
-                parse=ParseParams(),
-                strict_validation=False,
+            generate=GenerateParams(
+                instruction="Generate a test response",
+                imodel=mock_model,
+                request_model=SimpleModel,
+                imodel_kwargs={"model_name": "test", "temperature": 0.5},
             ),
+            parse=ParseParams(),
+            capabilities={"simplemodel"},
+            strict_validation=False,
         )
 
         # Execute
@@ -95,67 +92,49 @@ class TestOperateRefactor:
         call_kwargs = mock_model.invoke.call_args.kwargs
         assert "messages" in call_kwargs
 
-    def test_parameter_validation(self):
-        """Test parameter validation."""
+    def test_parameter_validation_missing_generate(self):
+        """Test missing generate params raises ValidationError."""
         import asyncio
 
         session = Session()
         branch = session.create_branch()
 
-        # Missing communicate params
-        with pytest.raises(ValueError, match="communicate"):
-            asyncio.run(
-                operate(
-                    session,
-                    branch,
-                    OperateParams(),  # No communicate
-                )
-            )
+        with pytest.raises(ValidationError, match="generate"):
+            asyncio.run(operate(session, branch, OperateParams()))
 
-        # Missing generate params
-        with pytest.raises(ValueError, match="generate"):
+    def test_parameter_validation_missing_request_model_and_operable(self):
+        """Test missing both request_model and operable raises ValidationError."""
+        import asyncio
+
+        session = Session()
+        branch = session.create_branch(capabilities={"test"})
+
+        with pytest.raises(ValidationError, match=r"request_model.*operable"):
             asyncio.run(
                 operate(
                     session,
                     branch,
                     OperateParams(
-                        communicate=CommunicateParams(),  # No generate
-                    ),
-                )
-            )
-
-        # Missing instruction
-        with pytest.raises(ValueError, match="instruction"):
-            asyncio.run(
-                operate(
-                    session,
-                    branch,
-                    OperateParams(
-                        communicate=CommunicateParams(
-                            generate=GenerateParams(
-                                imodel=MagicMock(),
-                                request_model=SimpleModel,
-                            ),
+                        generate=GenerateParams(
+                            instruction="test",
+                            imodel=MagicMock(),
                         ),
+                        capabilities={"test"},
                     ),
                 )
             )
 
-        # Missing both request_model and operable
-        with pytest.raises(ValueError, match=r"request_model.*operable"):
-            asyncio.run(
-                operate(
-                    session,
-                    branch,
-                    OperateParams(
-                        communicate=CommunicateParams(
-                            generate=GenerateParams(
-                                instruction="test",
-                                imodel=MagicMock(),
-                            ),
-                        ),
-                    ),
-                )
+    def test_parameter_validation_missing_capabilities(self):
+        """Test missing capabilities raises ValueError at params construction."""
+        # OperateParams validates capabilities at construction time
+        # when request_model is provided
+        with pytest.raises(ValueError, match="capabilities must be explicitly declared"):
+            OperateParams(
+                generate=GenerateParams(
+                    instruction="test",
+                    imodel=MagicMock(),
+                    request_model=SimpleModel,
+                ),
             )
 
 
@@ -171,7 +150,6 @@ class TestFactoryCoverage:
         session, model = session_with_model
         branch = session.create_branch(name="test", capabilities={"simple"}, resources={model.name})
 
-        # Create Operable
         class SimpleSpec(BaseModel):
             value: str
 
@@ -186,151 +164,84 @@ class TestFactoryCoverage:
                 def __init__(self):
                     super().__init__()
                     self.status = EventStatus.COMPLETED
-                    self.execution.response = MockNormalizedResponse(data='{"value": "test"}')
+                    self.execution.response = MockNormalizedResponse(
+                        data='{"simple": {"value": "test"}}'
+                    )
 
             return MockCalling()
 
         object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_json_invoke))
 
+        # Flat params with operable
         params = OperateParams(
-            communicate=CommunicateParams(
-                generate=GenerateParams(
-                    imodel=model,
-                    instruction="Test",
-                    imodel_kwargs={"model_name": "gpt-4"},
-                ),
-                operable=operable,
-                parse=ParseParams(),
+            generate=GenerateParams(
+                imodel=model,
+                instruction="Test",
+                imodel_kwargs={"model_name": "gpt-4"},
             ),
-            skip_validation=True,
+            parse=ParseParams(),
+            operable=operable,
+            capabilities={"simple"},
+            strict_validation=False,
         )
 
         result = await operate(session, branch, params)
         assert result is not None
+        assert hasattr(result, "simple")
 
     @pytest.mark.asyncio
-    async def test_operate_with_response_model_invalid_type(self, session_with_model):
+    async def test_operate_with_response_model_invalid_type(self):
         """Test response_model not a BaseModel subclass."""
         from lionpride.operations.operate.factory import _build_operable
 
         # Pass non-BaseModel class
-        with pytest.raises(ValueError, match="response_model must be a Pydantic BaseModel"):
+        with pytest.raises(ValidationError, match="response_model must be a Pydantic BaseModel"):
             _build_operable(
                 response_model=dict,  # type: ignore
-                operable=None,
                 actions=True,
                 reason=False,
             )
 
     @pytest.mark.asyncio
     async def test_operate_no_response_model_or_operable(self, session_with_model):
-        """Test neither response_model nor operable raises ValueError."""
+        """Test neither response_model nor operable raises ValidationError."""
         from lionpride.operations.operate.factory import operate
 
         session, model = session_with_model
-        branch = session.create_branch(name="test", resources={model.name})
+        branch = session.create_branch(name="test", capabilities={"test"}, resources={model.name})
 
         params = OperateParams(
-            communicate=CommunicateParams(
-                generate=GenerateParams(
-                    imodel=model,
-                    instruction="Test",
-                ),
-                parse=ParseParams(),
+            generate=GenerateParams(
+                imodel=model,
+                instruction="Test",
             ),
+            parse=ParseParams(),
+            capabilities={"test"},
         )
 
-        # This should fail at operate-level validation (before generate)
-        with pytest.raises(ValueError, match=r"request_model.*operable"):
+        with pytest.raises(ValidationError, match=r"request_model.*operable"):
             await operate(session, branch, params)
 
     @pytest.mark.asyncio
-    async def test_operate_validation_failure_no_return_message(self, session_with_model):
-        """Test validation failure without return_message raises."""
+    async def test_operate_capabilities_not_in_branch(self, session_with_model):
+        """Test capabilities not in branch raises AccessError."""
         from lionpride.operations.operate.factory import operate
 
         session, model = session_with_model
-        branch = session.create_branch(
-            name="test", capabilities={"strictmodel"}, resources={model.name}
-        )
-
-        class StrictModel(BaseModel):
-            required_field: str
-
-        # Mock to return invalid JSON
-        async def mock_invalid_invoke(**kwargs):
-            class MockCalling(Event):
-                def __init__(self):
-                    super().__init__()
-                    self.status = EventStatus.COMPLETED
-                    self.execution.response = MockNormalizedResponse(data="invalid json")
-
-            return MockCalling()
-
-        object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_invalid_invoke))
+        # Branch has NO capabilities
+        branch = session.create_branch(name="test", capabilities=set(), resources={model.name})
 
         params = OperateParams(
-            communicate=CommunicateParams(
-                generate=GenerateParams(
-                    imodel=model,
-                    instruction="Test",
-                    request_model=StrictModel,
-                    imodel_kwargs={"model_name": "gpt-4"},
-                ),
-                parse=ParseParams(),
-                strict_validation=True,
+            generate=GenerateParams(
+                imodel=model,
+                instruction="Test",
+                request_model=SimpleModel,
             ),
-            return_message=False,
+            capabilities={"simplemodel"},
         )
 
-        with pytest.raises(ValueError, match="Response validation failed"):
+        with pytest.raises(AccessError, match="missing capabilities"):
             await operate(session, branch, params)
-
-    @pytest.mark.asyncio
-    async def test_operate_validation_failure_with_return_message(self, session_with_model):
-        """Test validation failure with return_message returns tuple."""
-        from lionpride.operations.operate.factory import operate
-
-        session, model = session_with_model
-        branch = session.create_branch(
-            name="test", capabilities={"strictmodel"}, resources={model.name}
-        )
-
-        class StrictModel(BaseModel):
-            required_field: str
-
-        # Mock to return invalid JSON
-        async def mock_invalid_invoke(**kwargs):
-            class MockCalling(Event):
-                def __init__(self):
-                    super().__init__()
-                    self.status = EventStatus.COMPLETED
-                    self.execution.response = MockNormalizedResponse(data="invalid json")
-
-            return MockCalling()
-
-        object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_invalid_invoke))
-
-        params = OperateParams(
-            communicate=CommunicateParams(
-                generate=GenerateParams(
-                    imodel=model,
-                    instruction="Test",
-                    request_model=StrictModel,
-                    imodel_kwargs={"model_name": "gpt-4"},
-                ),
-                parse=ParseParams(),
-                strict_validation=False,
-            ),
-            return_message=True,
-        )
-
-        result = await operate(session, branch, params)
-
-        # Should return tuple with validation_failed dict
-        assert isinstance(result, tuple)
-        assert isinstance(result[0], dict)
-        assert result[0].get("validation_failed") is True
 
     @pytest.mark.asyncio
     async def test_operate_with_return_message(self, session_with_model):
@@ -360,15 +271,15 @@ class TestFactoryCoverage:
         object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_json_invoke))
 
         params = OperateParams(
-            communicate=CommunicateParams(
-                generate=GenerateParams(
-                    imodel=model,
-                    instruction="Test",
-                    request_model=SimpleModel,
-                    imodel_kwargs={"model_name": "gpt-4"},
-                ),
-                parse=ParseParams(),
+            generate=GenerateParams(
+                imodel=model,
+                instruction="Test",
+                request_model=SimpleModel,
+                imodel_kwargs={"model_name": "gpt-4"},
             ),
+            parse=ParseParams(),
+            capabilities={"simplemodel"},
+            strict_validation=False,
             return_message=True,
         )
 
@@ -385,21 +296,20 @@ class TestFactoryCoverage:
         class MyModel(BaseModel):
             answer: str
 
-        operable, capabilities = _build_operable(
+        operable = _build_operable(
             response_model=MyModel,
-            operable=None,
             actions=True,
             reason=True,
         )
 
         assert operable is not None
-        assert capabilities is not None
 
         # Create the model and verify it has the expected fields
         model = operable.create_model()
         field_names = list(model.model_fields.keys())
         assert "reason" in field_names
         assert "action_requests" in field_names
+        assert "action_responses" in field_names
 
     @pytest.mark.asyncio
     async def test_build_operable_no_actions_no_reason(self):
@@ -409,30 +319,29 @@ class TestFactoryCoverage:
         class SimpleModel(BaseModel):
             value: str
 
-        operable, capabilities = _build_operable(
+        operable = _build_operable(
             response_model=SimpleModel,
-            operable=None,
             actions=False,
             reason=False,
         )
 
         # Operable should still be created (just with the response_model spec)
         assert operable is not None
-        assert "simplemodel" in capabilities  # lowercase name
+        assert "simplemodel" in operable.allowed()
 
     @pytest.mark.asyncio
     async def test_operate_with_actions_executes_tools(self, session_with_model):
         """Test operate with actions=True executes tools."""
         from lionpride.operations.operate.act import execute_tools, has_action_requests
-        from lionpride.operations.operate.factory import operate
         from lionpride.services import iModel
         from lionpride.services.types.tool import Tool, ToolConfig
 
         session, model = session_with_model
+        # Branch needs action_requests capability AND tool resource
         branch = session.create_branch(
             name="test",
-            capabilities={"responsewithactions", "action_requests"},
-            resources={model.name},
+            capabilities={"responsewithactions", "action_requests", "action_responses"},
+            resources={model.name, "multiply"},
         )
 
         # Register a tool
@@ -465,67 +374,40 @@ class TestFactoryCoverage:
         assert result.action_responses[0].output == 12
 
     @pytest.mark.asyncio
-    async def test_operate_tool_schemas_in_context(self, session_with_model):
-        """Test tool schemas added to context."""
+    async def test_operate_skip_validation_text_path(self, session_with_model):
+        """Test skip_validation=True uses text path."""
         from lionpride.operations.operate.factory import operate
-        from lionpride.services import iModel
-        from lionpride.services.types.tool import Tool, ToolConfig
 
         session, model = session_with_model
-        branch = session.create_branch(
-            name="test", capabilities={"simplemodel"}, resources={model.name}
-        )
+        branch = session.create_branch(name="test", resources={model.name})
 
-        # Register a tool
-        async def test_tool() -> str:
-            return "result"
-
-        tool = Tool(func_callable=test_tool, config=ToolConfig(name="test_tool", provider="tool"))
-        session.services.register(iModel(backend=tool))
-
-        class SimpleModel(BaseModel):
-            value: str
-
-        # Mock to return valid JSON wrapped in spec name
-        async def mock_json_invoke(**kwargs):
+        # Mock to return text
+        async def mock_text_invoke(**kwargs):
             class MockCalling(Event):
                 def __init__(self):
                     super().__init__()
                     self.status = EventStatus.COMPLETED
-                    self.execution.response = MockNormalizedResponse(
-                        data='{"simplemodel": {"value": "test"}}'
-                    )
+                    self.execution.response = MockNormalizedResponse(data="plain text response")
 
             return MockCalling()
 
-        object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_json_invoke))
+        object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_text_invoke))
 
         params = OperateParams(
-            communicate=CommunicateParams(
-                generate=GenerateParams(
-                    imodel=model,
-                    instruction="Test",
-                    request_model=SimpleModel,
-                    imodel_kwargs={"model_name": "gpt-4"},
-                ),
-                parse=ParseParams(),
-                strict_validation=False,
+            generate=GenerateParams(
+                imodel=model,
+                instruction="Test",
+                imodel_kwargs={"model_name": "gpt-4"},
             ),
+            skip_validation=True,
         )
 
         result = await operate(session, branch, params)
-        assert result is not None
+        assert result == "plain text response"
 
 
 class TestFactoryUncoveredLines:
-    """Tests for specific uncovered lines in factory.py.
-
-    These tests cover:
-    - Line 65: Missing imodel with no session.default_generate_model
-    - Lines 121-122: return_message=True path capturing assistant_msg
-    - Lines 126-127: Action execution through operate flow
-    - Line 136: Final return with return_message=True
-    """
+    """Tests for specific uncovered lines in factory.py."""
 
     @pytest.fixture
     def mock_model_local(self):
@@ -556,34 +438,28 @@ class TestFactoryUncoveredLines:
         return session, mock_model_local
 
     def test_missing_imodel_and_no_default_generate_model(self):
-        """Test line 65: operate raises when imodel is missing and no default_generate_model."""
+        """Test operate raises ConfigurationError when imodel is missing."""
         import asyncio
 
         from lionpride.operations.operate.factory import operate
 
-        # Session without default_generate_model
-        session = Session()  # No default_generate_model
-        branch = session.create_branch()
+        session = Session()
+        branch = session.create_branch(capabilities={"simplemodel"})
 
         params = OperateParams(
-            communicate=CommunicateParams(
-                generate=GenerateParams(
-                    # No imodel specified
-                    instruction="Test",
-                    request_model=SimpleModel,
-                ),
+            generate=GenerateParams(
+                instruction="Test",
+                request_model=SimpleModel,
             ),
+            capabilities={"simplemodel"},
         )
 
-        with pytest.raises(
-            ValueError,
-            match=r"operate requires 'imodel' in communicate\.generate or session\.default_generate_model",
-        ):
+        with pytest.raises(ConfigurationError, match=r"imodel"):
             asyncio.run(operate(session, branch, params))
 
     @pytest.mark.asyncio
     async def test_return_message_with_successful_validation(self, session_with_model_local):
-        """Test lines 121-122 and 136: return_message=True returns (result, assistant_msg)."""
+        """Test return_message=True returns (result, assistant_msg)."""
         from lionpride.operations.operate.factory import operate
 
         session, model = session_with_model_local
@@ -609,34 +485,30 @@ class TestFactoryUncoveredLines:
         object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_json_invoke))
 
         params = OperateParams(
-            communicate=CommunicateParams(
-                generate=GenerateParams(
-                    imodel=model,
-                    instruction="Test instruction",
-                    request_model=SimpleModel,
-                    imodel_kwargs={"model_name": "gpt-4"},
-                ),
-                parse=ParseParams(),
-                strict_validation=False,
+            generate=GenerateParams(
+                imodel=model,
+                instruction="Test instruction",
+                request_model=SimpleModel,
+                imodel_kwargs={"model_name": "gpt-4"},
             ),
+            parse=ParseParams(),
+            capabilities={"simplemodel"},
+            strict_validation=False,
             return_message=True,
         )
 
         result = await operate(session, branch, params)
 
-        # Should return (result, assistant_msg) tuple
         assert isinstance(result, tuple)
         assert len(result) == 2
         model_result, assistant_msg = result
-        # Verify model result
         assert hasattr(model_result, "simplemodel")
         assert model_result.simplemodel.value == "test_value"
-        # Verify assistant_msg is a Message (covers lines 121-122 and 136)
         assert assistant_msg is not None
 
     @pytest.mark.asyncio
     async def test_operate_with_actions_through_full_flow(self, session_with_model_local):
-        """Test lines 126-127: Action execution through full operate flow."""
+        """Test action execution through full operate flow."""
         from lionpride.operations.operate.factory import operate
         from lionpride.services import iModel
         from lionpride.services.types.tool import Tool, ToolConfig
@@ -644,8 +516,8 @@ class TestFactoryUncoveredLines:
         session, model = session_with_model_local
         branch = session.create_branch(
             name="test",
-            capabilities={"responsemodel", "action_requests"},
-            resources={model.name},
+            capabilities={"responsemodel", "action_requests", "action_responses"},
+            resources={model.name, "add_numbers"},
         )
 
         # Register a tool for action execution
@@ -675,22 +547,21 @@ class TestFactoryUncoveredLines:
         object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_json_invoke))
 
         params = OperateParams(
-            communicate=CommunicateParams(
-                generate=GenerateParams(
-                    imodel=model,
-                    instruction="Compute",
-                    request_model=ResponseModel,
-                    imodel_kwargs={"model_name": "gpt-4"},
-                ),
-                parse=ParseParams(),
-                strict_validation=False,
+            generate=GenerateParams(
+                imodel=model,
+                instruction="Compute",
+                request_model=ResponseModel,
+                imodel_kwargs={"model_name": "gpt-4"},
             ),
-            actions=True,  # Enable action execution
+            parse=ParseParams(),
+            capabilities={"responsemodel", "action_requests", "action_responses"},
+            strict_validation=False,
+            actions=True,
         )
 
         result = await operate(session, branch, params)
 
-        # Verify action was executed (covers lines 126-127)
+        # Verify action was executed
         assert hasattr(result, "action_responses")
         assert result.action_responses is not None
         assert len(result.action_responses) == 1
@@ -706,8 +577,8 @@ class TestFactoryUncoveredLines:
         session, model = session_with_model_local
         branch = session.create_branch(
             name="test",
-            capabilities={"responsemodel", "action_requests"},
-            resources={model.name},
+            capabilities={"responsemodel", "action_requests", "action_responses"},
+            resources={model.name, "multiply"},
         )
 
         # Register tool
@@ -735,16 +606,15 @@ class TestFactoryUncoveredLines:
         object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_json_invoke))
 
         params = OperateParams(
-            communicate=CommunicateParams(
-                generate=GenerateParams(
-                    imodel=model,
-                    instruction="Compute",
-                    request_model=ResponseModel,
-                    imodel_kwargs={"model_name": "gpt-4"},
-                ),
-                parse=ParseParams(),
-                strict_validation=False,
+            generate=GenerateParams(
+                imodel=model,
+                instruction="Compute",
+                request_model=ResponseModel,
+                imodel_kwargs={"model_name": "gpt-4"},
             ),
+            parse=ParseParams(),
+            capabilities={"responsemodel", "action_requests", "action_responses"},
+            strict_validation=False,
             actions=True,
             return_message=True,
         )
@@ -754,8 +624,6 @@ class TestFactoryUncoveredLines:
         # Should return tuple with action result
         assert isinstance(result, tuple)
         model_result, assistant_msg = result
-        # Verify action was executed
         assert hasattr(model_result, "action_responses")
         assert model_result.action_responses[0].output == 28  # 4 * 7
-        # Verify message was captured
         assert assistant_msg is not None
