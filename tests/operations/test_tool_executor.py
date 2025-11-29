@@ -61,7 +61,7 @@ class TestToolExecutorCoverage:
         assert responses == []
 
     async def test_execute_tools_with_actions(self):
-        """Test lines 29-44: Execute tools and update response."""
+        """Test execute_tools updates response with tool results."""
         from lionpride.operations.operate.act import execute_tools
         from lionpride.services import iModel
         from lionpride.services.types.tool import Tool, ToolConfig
@@ -74,7 +74,8 @@ class TestToolExecutorCoverage:
 
         session = Session()
         session.services.register(model)
-        branch = session.create_branch(name="test")
+        # Branch must have access to the tool in its resources
+        branch = session.create_branch(name="test", resources={"multiply"})
 
         # Create response with action_requests
         class MockResponse(BaseModel):
@@ -93,51 +94,85 @@ class TestToolExecutorCoverage:
         assert result.action_responses is not None
         assert len(result.action_responses) == 1
 
-    async def test_update_response_with_actions_with_model_copy(self):
-        """Test lines 52-54: Update response using model_copy (Pydantic v2)."""
-        from lionpride.operations.operate.act import _update_response_with_actions
+    async def test_update_response_with_model_copy(self):
+        """Test execute_tools updates response using model_copy (Pydantic v2)."""
+        from lionpride.operations.operate.act import execute_tools
+        from lionpride.services import iModel
+        from lionpride.services.types.tool import Tool, ToolConfig
+
+        async def add_nums(a: int, b: int) -> int:
+            return a + b
+
+        tool = Tool(func_callable=add_nums, config=ToolConfig(name="add_nums", provider="tool"))
+        model = iModel(backend=tool)
+
+        session = Session()
+        session.services.register(model)
+        branch = session.create_branch(name="test", resources={"add_nums"})
 
         class TestResponse(BaseModel):
             value: str
+            action_requests: list[ActionRequest]
             action_responses: list[ActionResponse] | None = None
 
-        response = TestResponse(value="test")
+        response = TestResponse(
+            value="test",
+            action_requests=[ActionRequest(function="add_nums", arguments={"a": 1, "b": 2})],
+        )
 
-        action_responses = [ActionResponse(function="tool", arguments={}, output="result")]
+        result, _responses = await execute_tools(response, session, branch)
 
-        result = _update_response_with_actions(response, action_responses)
-
-        assert result.action_responses == action_responses
+        assert result.action_responses is not None
         assert result.value == "test"
         # Should be a new object (model_copy returns new instance)
         assert result is not response
 
     async def test_update_response_fallback_path(self):
-        """Test lines 57-59: Fallback when model_copy is unavailable (duck-typed object)."""
-        from lionpride.operations.operate.act import _update_response_with_actions
+        """Test execute_tools fallback when model_copy unavailable."""
+        from lionpride.operations.operate.act import execute_tools
+        from lionpride.services import iModel
+        from lionpride.services.types.tool import Tool, ToolConfig
 
-        # Create a simple object that looks like a pydantic model but doesn't have model_copy
+        async def subtract(a: int, b: int) -> int:
+            return a - b
+
+        tool = Tool(func_callable=subtract, config=ToolConfig(name="subtract", provider="tool"))
+        model = iModel(backend=tool)
+
+        session = Session()
+        session.services.register(model)
+        branch = session.create_branch(name="test", resources={"subtract"})
+
+        # Use a class that implements model_dump and model_validate but NOT model_copy
+        # to test the fallback path
         class DuckTypedResponse:
-            def __init__(self):
-                self.value = "test"
-                self.action_responses = None
+            def __init__(self, value="test", action_requests=None, action_responses=None):
+                self.value = value
+                self.action_requests = action_requests or []
+                self.action_responses = action_responses
 
             def model_dump(self):
-                return {"value": self.value, "action_responses": self.action_responses}
+                return {
+                    "value": self.value,
+                    "action_requests": self.action_requests,
+                    "action_responses": self.action_responses,
+                }
 
             @classmethod
             def model_validate(cls, data):
-                obj = cls()
-                obj.value = data.get("value", "test")
-                obj.action_responses = data.get("action_responses")
-                return obj
+                return cls(
+                    value=data.get("value", "test"),
+                    action_requests=data.get("action_requests", []),
+                    action_responses=data.get("action_responses"),
+                )
 
-        response = DuckTypedResponse()
-        action_responses = [ActionResponse(function="tool", arguments={}, output="result")]
+        response = DuckTypedResponse(
+            action_requests=[ActionRequest(function="subtract", arguments={"a": 5, "b": 3})]
+        )
 
-        result = _update_response_with_actions(response, action_responses)
+        result, _responses = await execute_tools(response, session, branch)
 
-        assert result.action_responses == action_responses
+        assert result.action_responses is not None
         assert result.value == "test"
 
     def test_has_action_requests_no_attr(self):

@@ -34,7 +34,8 @@ from pydantic import BaseModel, Field
 
 from lionpride.core import Element, Pile
 
-from .form import Form, parse_assignment
+from .capabilities import parse_assignment
+from .form import Form
 
 __all__ = ("Report",)
 
@@ -45,6 +46,7 @@ _REPORT_FIELDS = {
     "metadata",
     "assignment",
     "form_assignments",
+    "instruction",
     "input_fields",
     "output_fields",
     "forms",
@@ -77,6 +79,10 @@ class Report(Element):
         default_factory=list,
         description="List of form assignments: ['a,b->c', 'c->d', ...]",
     )
+    instruction: str = Field(
+        default="",
+        description="Overall workflow goal/instruction for LLM context",
+    )
 
     # Derived
     input_fields: list[str] = Field(default_factory=list)
@@ -101,10 +107,10 @@ class Report(Element):
         if not self.assignment:
             return
 
-        # Parse overall assignment (ignore branch for report-level)
-        _, inputs, outputs = parse_assignment(self.assignment)
-        self.input_fields = inputs
-        self.output_fields = outputs
+        # Parse overall assignment (ignore branch/operation/resources for report-level)
+        parsed = parse_assignment(self.assignment)
+        self.input_fields = parsed.input_fields
+        self.output_fields = parsed.output_fields
 
         # Create forms from form_assignments
         for fa in self.form_assignments:
@@ -150,15 +156,19 @@ class Report(Element):
                 pass
         return None
 
-    def initialize(self, **inputs: Any) -> None:
-        """Provide initial input data.
+    def initialize(self, *, instruction: str | None = None, **inputs: Any) -> None:
+        """Provide initial input data and optional workflow instruction.
 
         Args:
+            instruction: Overall workflow goal (passed to LLM for context)
             **inputs: Initial field values
 
         Raises:
             ValueError: If required input is missing
         """
+        if instruction:
+            self.instruction = instruction
+
         for field in self.input_fields:
             if field not in inputs:
                 raise ValueError(f"Missing required input: '{field}'")

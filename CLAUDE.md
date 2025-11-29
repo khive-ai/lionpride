@@ -21,7 +21,9 @@ session = Session(default_generate_model=model)
 branch = session.create_branch(name="main")
 
 # Conduct operation
-result = await session.conduct("operate", branch, instruction="Your task here")
+from lionpride.operations.operate import OperateParams, GenerateParams
+params = OperateParams(generate=GenerateParams(instruction="Your task here"))
+result = await session.conduct("operate", branch, params=params)
 ```
 
 ---
@@ -148,7 +150,9 @@ branch = session.create_branch(
 )
 
 # Conduct operations
-result = await session.conduct("operate", branch, instruction="Analyze this")
+from lionpride.operations.operate import OperateParams, GenerateParams
+params = OperateParams(generate=GenerateParams(instruction="Analyze this"))
+result = await session.conduct("operate", branch, params=params)
 ```
 
 ### Branch
@@ -224,7 +228,7 @@ from lionpride import Tool
 def my_function(arg1: str, arg2: int) -> str:
     return f"{arg1}: {arg2}"
 
-tool = Tool.from_callable(my_function)
+tool = Tool(func_callable=my_function)
 result = await tool.invoke({"arg1": "test", "arg2": 42})
 ```
 
@@ -291,11 +295,11 @@ result = await communicate(session, branch, params)
 Full structured output with validation and auto-correction.
 
 ```python
-from lionpride.operations.operate import operate, OperateParams
+from lionpride.operations.operate import operate, OperateParams, GenerateParams
 
 params = OperateParams(
-    communicate=CommunicateParams(...),
-    act=ActParams(tools=[my_tool]),  # Optional tool use
+    generate=GenerateParams(instruction="..."),
+    actions=True,  # Enable tool use
 )
 result = await operate(session, branch, params)
 ```
@@ -451,7 +455,7 @@ class MyReport(Report):
 # Execute
 report = MyReport()
 report.initialize(topic="AI coding assistants")
-result = await flow_report(session, branch, report)
+result = await flow_report(session, report, branch=branch)
 ```
 
 ### Key Concepts
@@ -469,30 +473,30 @@ result = await flow_report(session, branch, report)
 
 ```python
 from lionpride import Session, iModel
+from lionpride.operations.operate import OperateParams, GenerateParams
 
 model = iModel(provider="openai", model="gpt-4o-mini")
 session = Session(default_generate_model=model)
 branch = session.create_branch()
 
-result = await session.conduct("operate", branch, instruction="Hello!")
+params = OperateParams(generate=GenerateParams(instruction="Hello!"))
+result = await session.conduct("operate", branch, params=params)
 ```
 
 ### Pattern 2: Structured Output
 
 ```python
 from pydantic import BaseModel
-from lionpride.operations.operate import operate, OperateParams, CommunicateParams, GenerateParams
+from lionpride.operations.operate import operate, OperateParams, GenerateParams
 
 class Analysis(BaseModel):
     summary: str
     score: float
 
 params = OperateParams(
-    communicate=CommunicateParams(
-        generate=GenerateParams(
-            instruction="Analyze this text",
-            request_model=Analysis,
-        )
+    generate=GenerateParams(
+        instruction="Analyze this text",
+        request_model=Analysis,
     )
 )
 
@@ -519,17 +523,17 @@ params = GenerateParams(imodel="claude", instruction="...")
 
 ```python
 from lionpride import Tool
-from lionpride.operations.operate import operate, OperateParams, ActParams
+from lionpride.operations.operate import operate, OperateParams, GenerateParams
 
 def search(query: str) -> str:
     return f"Results for: {query}"
 
-tool = Tool.from_callable(search)
+tool = Tool(func_callable=search)
 session.services.register(tool)
 
 params = OperateParams(
-    communicate=CommunicateParams(...),
-    act=ActParams(tools=["search"]),
+    generate=GenerateParams(instruction="Search for Python tutorials"),
+    actions=True,
 )
 
 result = await operate(session, branch, params)

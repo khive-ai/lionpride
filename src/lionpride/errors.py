@@ -8,12 +8,14 @@ from typing import Any
 from .protocols import Serializable, implements
 
 __all__ = (
+    "AccessError",
     "ConfigurationError",
     "ConnectionError",
     "ExecutionError",
     "ExistsError",
     "LionprideError",
     "NotFoundError",
+    "OperationError",
     "QueueFullError",
     "TimeoutError",
     "ValidationError",
@@ -79,6 +81,13 @@ class ValidationError(LionprideError):
     default_retryable = False  # Validation errors won't fix themselves
 
 
+class AccessError(LionprideError):
+    """Access denied - capability or resource not permitted. Not retryable."""
+
+    default_message = "Access denied"
+    default_retryable = False  # Access control won't change on retry
+
+
 class ConfigurationError(LionprideError):
     """Configuration error. Not retryable."""
 
@@ -126,3 +135,10 @@ class QueueFullError(LionprideError):
 
     default_message = "Queue is full"
     default_retryable = True  # Queue might have space later
+
+
+class OperationError(LionprideError):
+    """Generic operation failure. Retryable by default."""
+
+    default_message = "Operation failed"
+    default_retryable = False

@@ -4,6 +4,12 @@
 """Operate operation - structured output with optional actions.
 
 Operate = Communicate + optional Act (tool execution).
+
+Security model:
+    - User declares capabilities (field names they want in output)
+    - System adds action_requests/reason if enabled
+    - Total capabilities must be ⊆ branch.capabilities
+    - Communicate validates and builds model from capabilities
 """
 
 from __future__ import annotations
@@ -12,12 +18,13 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
+from lionpride.errors import AccessError, ConfigurationError, ValidationError
 from lionpride.rules import ActionRequest, ActionResponse, Reason, Validator
 from lionpride.types import Operable, Spec
 
 from .act import execute_tools, has_action_requests
 from .communicate import communicate
-from .types import OperateParams
+from .types import CommunicateParams, OperateParams, ParseParams
 
 if TYPE_CHECKING:
     from lionpride.session import Branch, Session
@@ -35,71 +42,121 @@ async def operate(
 ) -> Any:
     """Structured output with optional actions.
 
+    Security model:
+        1. User declares capabilities in params (field names they want)
+        2. System adds action_requests/reason if enabled
+        3. Total capabilities validated against branch.capabilities
+        4. Communicate validates and builds model from operable + capabilities
+
     Args:
         session: Session for services and message storage.
         branch: Branch for conversation history.
-        params: OperateParams with nested communicate params.
+        params: OperateParams with generate/parse params and operate flags.
         poll_timeout: Timeout for model polling.
         poll_interval: Interval for model polling.
-        validator: Optional validator instance (uses default if None).
+        validator: Optional validator instance.
 
     Returns:
         Validated model instance, or (result, message) tuple if return_message=True.
 
     Raises:
-        ValueError: If validation fails and strict_validation=True.
+        ValidationError: If params invalid or capabilities not declared.
+        ConfigurationError: If model not configured.
+        AccessError: If branch lacks required capabilities.
     """
-    # 1. Validate params - need communicate with generate
-    if params._is_sentinel(params.communicate):
-        raise ValueError("operate requires 'communicate' params")
-    if params._is_sentinel(params.communicate.generate):
-        raise ValueError("operate requires 'communicate.generate' params")
+    # 1. Validate required params
+    if params._is_sentinel(params.generate):
+        raise ValidationError("operate requires 'generate' params")
 
-    comm_params = params.communicate
-    gen_params = comm_params.generate
+    gen_params = params.generate
 
-    # Check instruction and imodel
-    if params._is_sentinel(gen_params.instruction):
-        raise ValueError("operate requires 'instruction' in communicate.generate")
     if params._is_sentinel(gen_params.imodel) and session.default_generate_model is None:
-        raise ValueError(
-            "operate requires 'imodel' in communicate.generate or session.default_generate_model"
+        raise ConfigurationError(
+            "operate requires 'imodel' in generate params or session.default_generate_model"
         )
 
-    # 2. Build Operable from response_model + action/reason specs
-    # Get response_model from generate params if present
-    response_model = gen_params.request_model
-    operable = comm_params.operable
-
-    if response_model is None and operable is None:
-        raise ValueError(
-            "operate requires 'request_model' in generate or 'operable' in communicate"
-        )
-
-    operable, capabilities = _build_operable(
-        response_model=response_model,
-        operable=operable,
-        actions=params.actions,
-        reason=params.reason,
-    )
-
-    # 3. Update CommunicateParams with built operable/capabilities
-    communicate_params = comm_params.with_updates(
-        operable=operable,
-        capabilities=capabilities,
-    )
-
-    # 4. Handle skip_validation (text path)
-    if params.skip_validation:
-        communicate_params = communicate_params.with_updates(
-            operable=None,
-            capabilities=None,
-        )
-
-    # 5. Resolve branch
+    # 2. Resolve branch
     b_ = session.get_branch(branch)
 
-    # 6. Call communicate
+    # 3. Handle skip_validation (text path - no structured output)
+    if params.skip_validation:
+        from .generate import generate
+
+        result = await generate(
+            session=session,
+            branch=b_,
+            params=gen_params.with_updates(return_as="text"),
+            poll_timeout=poll_timeout,
+            poll_interval=poll_interval,
+        )
+        if params.return_message:
+            branch_msgs = session.messages[b_]
+            return result, branch_msgs[-1] if branch_msgs else None
+        return result
+
+    # 4. Structured output path - validate capability design
+    response_model = gen_params.request_model
+    operable = params.operable
+
+    if response_model is None and operable is None:
+        raise ValidationError(
+            "operate requires 'request_model' in generate or 'operable' in params"
+        )
+
+    # 5. Build required capabilities
+    # User declares capabilities for their model fields
+    if params.capabilities is None:
+        raise ValidationError(
+            "capabilities must be explicitly declared when using structured output. "
+            "This ensures explicit access control over what fields the LLM can produce."
+        )
+
+    required_capabilities = set(params.capabilities)
+
+    # System adds action_requests/action_responses/reason if enabled
+    if params.actions:
+        required_capabilities.add("action_requests")
+        required_capabilities.add("action_responses")
+    if params.reason:
+        required_capabilities.add("reason")
+
+    # 6. Validate capabilities against branch (security gate)
+    if not required_capabilities.issubset(b_.capabilities):
+        missing = required_capabilities - b_.capabilities
+        raise AccessError(
+            f"Branch '{b_.name}' missing capabilities: {missing}",
+            details={
+                "requested": sorted(required_capabilities),
+                "available": sorted(b_.capabilities),
+            },
+        )
+
+    # 7. Build operable (if not provided)
+    if operable is None:
+        operable = _build_operable(response_model, params.actions, params.reason)
+
+    # 8. Validate capabilities against operable (can only request what exists)
+    if not required_capabilities.issubset(operable.allowed()):
+        missing = required_capabilities - operable.allowed()
+        raise ValidationError(
+            f"Requested capabilities not in operable: {missing}",
+            details={
+                "requested": sorted(required_capabilities),
+                "available": sorted(operable.allowed()),
+            },
+        )
+
+    # 9. Call communicate with validated capabilities
+    parse_params = params.parse if not params._is_sentinel(params.parse) else ParseParams()
+    communicate_params = CommunicateParams(
+        generate=gen_params,
+        parse=parse_params,
+        operable=operable,
+        capabilities=required_capabilities,
+        auto_fix=params.auto_fix,
+        strict_validation=params.strict_validation,
+    )
+
     result = await communicate(
         session=session,
         branch=b_,
@@ -109,30 +166,19 @@ async def operate(
         validator=validator,
     )
 
-    # 7. Handle validation failure
-    if isinstance(result, dict) and result.get("validation_failed"):
-        if not params.return_message:
-            raise ValueError(f"Response validation failed: {result.get('error')}")
-        return result, None
-
-    # 8. Capture assistant message before action execution (if return_message)
-    assistant_msg = None
-    if params.return_message:
-        branch_msgs = session.messages[b_]
-        assistant_msg = branch_msgs[-1] if branch_msgs else None
-
-    # 9. Execute actions if enabled and present
+    # 10. Execute actions if enabled and present
     if params.actions and has_action_requests(result):
-        act_params = params.act
-        result, _action_responses = await execute_tools(
+        result, _ = await execute_tools(
             result,
             session,
             b_,
-            concurrent=act_params.concurrent if act_params else True,
+            max_concurrent=10 if params.tool_concurrent else 1,
         )
 
-    # 10. Return result
+    # 11. Return
     if params.return_message:
+        branch_msgs = session.messages[b_]
+        assistant_msg = branch_msgs[-1] if branch_msgs else None
         return result, assistant_msg
 
     return result
@@ -140,76 +186,43 @@ async def operate(
 
 def _build_operable(
     response_model: type[BaseModel] | None,
-    operable: Operable | None,
     actions: bool,
     reason: bool,
-) -> tuple[Operable, set[str]]:
+) -> Operable:
     """Build Operable from response_model + action/reason specs.
 
+    Creates an Operable with:
+    - response_model as a field (name = lowercase class name)
+    - reason spec if enabled
+    - action_requests/action_responses specs if enabled
+
+    Args:
+        response_model: User's Pydantic model for structured output.
+        actions: Whether to include action specs.
+        reason: Whether to include reason spec.
+
     Returns:
-        (operable, capabilities) tuple.
+        Operable with all required specs.
     """
-    # If operable provided, use it directly
-    if operable:
-        # Determine capabilities from operable's allowed field names
-        capabilities = operable.allowed()
-        return operable, capabilities
-
-    # Validate response_model
-    if response_model and (
-        not isinstance(response_model, type) or not issubclass(response_model, BaseModel)
-    ):
-        raise ValueError(
-            f"response_model must be a Pydantic BaseModel subclass, got {response_model}"
-        )
-
-    # Build specs list
     specs = []
-    capabilities = set()
 
-    # Add base model as a spec
+    # Add response model as a field (lowercase name convention)
     if response_model:
-        spec_name = response_model.__name__.lower()
-        specs.append(
-            Spec(
-                base_type=response_model,
-                name=spec_name,
+        if not isinstance(response_model, type) or not issubclass(response_model, BaseModel):
+            raise ValidationError(
+                f"response_model must be a Pydantic BaseModel subclass, got {response_model}"
             )
-        )
-        capabilities.add(spec_name)
+        specs.append(Spec.from_model(response_model))
 
-    # Add reason spec
+    # Add reason spec (optional - can be None)
     if reason:
-        specs.append(
-            Spec(
-                base_type=Reason,
-                name="reason",
-                default=None,
-            )
-        )
-        capabilities.add("reason")
+        specs.append(Spec(Reason, name="reason").as_optional())
 
-    # Add action specs
+    # Add action specs (default to empty list)
     if actions:
-        specs.append(
-            Spec(
-                base_type=list[ActionRequest],
-                name="action_requests",
-                default=None,
-            )
-        )
-        specs.append(
-            Spec(
-                base_type=list[ActionResponse],
-                name="action_responses",
-                default=None,
-            )
-        )
-        capabilities.add("action_requests")
-        # Note: action_responses not in capabilities - filled after execution
+        specs.append(Spec(list[ActionRequest], name="action_requests", default_factory=list))
+        specs.append(Spec(list[ActionResponse], name="action_responses", default_factory=list))
 
-    # Create Operable
+    # Create operable
     name = response_model.__name__ if response_model else "OperateResponse"
-    operable = Operable(specs=tuple(specs), name=name)
-
-    return operable, capabilities
+    return Operable(specs=tuple(specs), name=name)

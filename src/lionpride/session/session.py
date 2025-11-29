@@ -44,14 +44,12 @@ class Branch(Progression):
 
     Attributes:
         session_id: Parent session UUID (frozen).
-        user: Entity commanding this branch (default: session_id).
         system_message: System message UUID, always at order[0] if set.
         capabilities: Allowed structured output schema names.
         resources: Allowed backend service names.
     """
 
     session_id: UUID = Field(..., frozen=True)
-    user: str | UUID | None = None
     system_message: UUID | None = None
     capabilities: set[str] = Field(default_factory=set)
     resources: set[str] = Field(default_factory=set)
@@ -246,7 +244,6 @@ class Session(Element):
 
         branch = Branch(
             session_id=self.id,
-            user=self.id,
             name=name or f"branch_{len(self.branches)}",
             capabilities=capabilities or set(),
             resources=resources or set(),
@@ -447,17 +444,19 @@ class Session(Element):
         graph: Graph,
         branch: Branch | UUID | str | None = None,
         *,
-        context: dict | None = None,
         max_concurrent: int | None = None,
         stop_on_error: bool = True,
         verbose: bool = False,
     ) -> dict:
         """Execute operation graph with dependency scheduling.
 
+        Operations are executed with their given parameters - no context injection.
+        For context passing between operations, use flow_report or manage context
+        explicitly before adding operations to the graph.
+
         Args:
             graph: Operation DAG from Builder.
             branch: Default branch for operations (uses default if None).
-            context: Shared context dict.
             max_concurrent: Concurrency limit (None=unlimited).
             stop_on_error: Stop on first error.
             verbose: Print progress.
@@ -471,7 +470,6 @@ class Session(Element):
             session=self,
             branch=self._resolve_branch(branch),
             graph=graph,
-            context=context,
             max_concurrent=max_concurrent,
             stop_on_error=stop_on_error,
             verbose=verbose,

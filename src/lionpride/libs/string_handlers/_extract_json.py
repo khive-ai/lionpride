@@ -35,11 +35,9 @@ def extract_json(
     input_str = "\n".join(input_data) if isinstance(input_data, list) else input_data
 
     # 1. Try direct parsing
-
     with contextlib.suppress(Exception):
-        if fuzzy_parse:
-            return fuzzy_json(input_str)
-        return orjson.loads(input_str)
+        parsed = fuzzy_json(input_str) if fuzzy_parse else orjson.loads(input_str)
+        return parsed if return_one_if_single else [parsed]
 
     # 2. Attempt extracting JSON blocks from markdown
     matches = _JSON_BLOCK_PATTERN.findall(input_str)

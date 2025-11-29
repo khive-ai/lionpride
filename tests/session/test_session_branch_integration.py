@@ -302,7 +302,7 @@ class TestBranchForking:
         # Verify forked branch has same message UUIDs
         assert len(forked) == len(original)
         assert list(forked.order) == list(original.order)
-        assert forked.user == session.id  # User is session id
+        # Note: Branch no longer has user field - session.id is the user identity
 
 
 class TestMultiBranchWorkflows:

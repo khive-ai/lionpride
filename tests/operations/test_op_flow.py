@@ -102,7 +102,7 @@ class TestFlowErrorHandling:
         graph.add_edge(Edge(head=op2.id, tail=op1.id))
 
         with pytest.raises(ValueError, match=r"cycle.*DAG"):
-            await flow(session, branch, graph)
+            await flow(session, graph, branch=branch)
 
     async def test_non_operation_node_raises_error(self, session_with_model):
         """Test line 99: Non-Operation node raises ValueError."""
@@ -117,7 +117,7 @@ class TestFlowErrorHandling:
         graph.add_node(invalid_node)
 
         with pytest.raises(ValueError, match="non-Operation node"):
-            await flow(session, branch, graph)
+            await flow(session, graph, branch=branch)
 
     async def test_branch_as_string_resolution(self, session_with_model):
         """Test line 131: String branch name resolution."""
@@ -136,7 +136,7 @@ class TestFlowErrorHandling:
         graph = builder.build()
 
         # Pass branch as string (not object)
-        results = await flow(session, branch_name, graph)
+        results = await flow(session, graph, branch=branch_name)
 
         assert "task1" in results
 
@@ -197,7 +197,7 @@ class TestFlowErrorHandling:
         )
         graph = builder.build()
 
-        await flow(session, branch, graph, verbose=True)
+        await flow(session, graph, branch=branch, verbose=True)
 
         captured = capsys.readouterr()
         assert "Pre-allocated branches for 2 operations" in captured.out
@@ -229,7 +229,7 @@ class TestFlowStopConditions:
 
         # With stop_on_error=True, error should propagate
         # But gather(return_exceptions=True) catches it
-        results = await flow(session, branch, graph, stop_on_error=True)
+        results = await flow(session, graph, branch=branch, stop_on_error=True)
 
         # Verify task failed (no result)
         assert "task1" not in results
@@ -253,245 +253,14 @@ class TestFlowStopConditions:
         # Test with stop_on_error=True to hit lines 179-182
         # The exception will be caught by gather(return_exceptions=True)
         # But the error path will execute
-        await flow(session, branch, graph, verbose=True, stop_on_error=True)
+        await flow(session, graph, branch=branch, verbose=True, stop_on_error=True)
 
         captured = capsys.readouterr()
         # The error message appears in verbose output (lines 172-176)
         assert "Test error for logging" in captured.out or "failed:" in captured.out
 
-    async def test_aggregation_verbose_logging(self, session_with_model, capsys):
-        """Test line 200: Verbose logging for aggregation sources."""
-        session, model = session_with_model
-        branch = session.create_branch(name="test", resources={"mock"})
-
-        builder = Builder()
-        builder.add(
-            "source1",
-            "generate",
-            {
-                "instruction": "First",
-                "imodel": model,
-                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
-            },
-        )
-        builder.add(
-            "source2",
-            "generate",
-            {
-                "instruction": "Second",
-                "imodel": model,
-                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
-            },
-        )
-        builder.add_aggregation(
-            "aggregated",
-            "generate",
-            {
-                "instruction": "Aggregate",
-                "imodel": model,
-                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
-            },
-            source_names=["source1", "source2"],
-        )
-
-        graph = builder.build()
-        await flow(session, branch, graph, verbose=True)
-
-        captured = capsys.readouterr()
-        assert "Aggregation" in captured.out
-        assert "waiting for" in captured.out
-        assert "2 sources" in captured.out
-
-    async def test_graph_dependencies_verbose_logging(self, session_with_model, capsys):
-        """Test line 217: Verbose logging for graph dependencies."""
-        session, model = session_with_model
-        branch = session.create_branch(name="test", resources={"mock"})
-
-        builder = Builder()
-        builder.add(
-            "task1",
-            "generate",
-            {
-                "instruction": "First",
-                "imodel": model,
-                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
-            },
-        )
-        builder.add(
-            "task2",
-            "generate",
-            {
-                "instruction": "Second",
-                "imodel": model,
-                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
-            },
-            depends_on=["task1"],
-        )
-
-        graph = builder.build()
-        await flow(session, branch, graph, verbose=True)
-
-        captured = capsys.readouterr()
-        assert "waiting for" in captured.out
-        assert "graph dependencies" in captured.out
-
-
-# -------------------------------------------------------------------------
-# Execution Event Tests (Lines 242, 250, 261, 270-275)
-# -------------------------------------------------------------------------
-
-
-class TestFlowExecutionEvents:
-    """Test execution event handling and context management."""
-
-    async def test_no_dependencies_with_shared_context(self, session_with_model):
-        """Test line 242: Operation with no dependencies receives shared context."""
-        session, _model = session_with_model
-        branch = session.create_branch(name="test", resources={"mock"})
-
-        received_context = None
-
-        async def context_receiver(session, branch, parameters):
-            nonlocal received_context
-            received_context = parameters.get("context")
-            return "done"
-
-        # Register to session's per-session registry
-        session.operations.register("context_receiver", context_receiver)
-
-        builder = Builder()
-        builder.add("task1", "context_receiver", {})
-        graph = builder.build()
-
-        # Pass shared context
-        await flow(session, branch, graph, context={"shared_key": "shared_value"})
-
-        # Verify shared context was added
-        assert received_context == {"shared_key": "shared_value"}
-
-    async def test_skipped_predecessor_not_in_context(self, session_with_model):
-        """Test line 250: Skipped or failed predecessors excluded from context."""
-        session, _model = session_with_model
-        branch = session.create_branch(name="test", resources={"mock"})
-
-        received_context = None
-
-        # Factory that fails
-        async def failing_factory(session, branch, parameters):
-            raise RuntimeError("Intentional failure")
-
-        # Factory that receives context
-        async def context_receiver(session, branch, parameters):
-            nonlocal received_context
-            received_context = parameters.get("context", {})
-            return "done"
-
-        # Register to session's per-session registry
-        session.operations.register("failing_pred", failing_factory)
-        session.operations.register("context_receiver2", context_receiver)
-
-        builder = Builder()
-        builder.add("failed_task", "failing_pred", {})
-        builder.add("dependent_task", "context_receiver2", {}, depends_on=["failed_task"])
-        graph = builder.build()
-
-        # Run with stop_on_error=False to let dependent run
-        await flow(session, branch, graph, stop_on_error=False)
-
-        # Verify failed predecessor is NOT in context
-        assert "failed_task_result" not in received_context
-
-    async def test_context_merge_with_existing_dict(self, session_with_model):
-        """Test lines 261, 270-272: Merging predecessor context with existing dict context."""
-        session, _model = session_with_model
-        branch = session.create_branch(name="test", resources={"mock"})
-
-        # First task produces result
-        async def producer(session, branch, parameters):
-            return "producer_result"
-
-        # Second task has existing context that should be merged
-        received_context = None
-
-        async def consumer_with_context(session, branch, parameters):
-            nonlocal received_context
-            received_context = parameters.get("context", {})
-            return "consumer_result"
-
-        # Register to session's per-session registry
-        session.operations.register("producer", producer)
-        session.operations.register("consumer_ctx", consumer_with_context)
-
-        # Build operations manually to control parameters
-        op1 = create_operation(operation="producer", parameters={})
-        op1.metadata["name"] = "prod"
-        op2 = create_operation(
-            operation="consumer_ctx",
-            parameters={"context": {"existing_key": "existing_value"}},
-        )
-        op2.metadata["name"] = "cons"
-
-        graph = Graph()
-        graph.add_node(op1)
-        graph.add_node(op2)
-        graph.add_edge(Edge(head=op1.id, tail=op2.id))
-
-        await flow(session, branch, graph)
-
-        # Verify existing context was merged with predecessor result
-        assert received_context.get("existing_key") == "existing_value"
-        assert "prod_result" in received_context
-
-    async def test_context_wrap_non_dict_existing(self, session_with_model):
-        """Test lines 270-275: Non-dict existing context gets wrapped."""
-        session, _model = session_with_model
-        branch = session.create_branch(name="test", resources={"mock"})
-
-        # Producer
-        async def producer(session, branch, parameters):
-            return "prod_value"
-
-        # Consumer with non-dict context
-        received_context = None
-
-        async def consumer(session, branch, parameters):
-            nonlocal received_context
-            received_context = parameters.get("context")
-            return "done"
-
-        # Register to session's per-session registry
-        session.operations.register("prod2", producer)
-        session.operations.register("cons2", consumer)
-
-        # Create operation with non-dict context
-        op1 = create_operation(operation="prod2", parameters={})
-        op1.metadata["name"] = "p1"
-        op2 = create_operation(operation="cons2", parameters={"context": "string_context"})
-        op2.metadata["name"] = "c1"
-
-        graph = Graph()
-        graph.add_node(op1)
-        graph.add_node(op2)
-        graph.add_edge(Edge(head=op1.id, tail=op2.id))
-
-        await flow(session, branch, graph)
-
-        # Verify non-dict context was wrapped
-        assert isinstance(received_context, dict)
-        assert received_context.get("original_context") == "string_context"
-        assert "p1_result" in received_context
-
-
-# -------------------------------------------------------------------------
-# Result Processing Tests (Lines 281, 292, 297, 311-313, 320, 323, 332)
-# -------------------------------------------------------------------------
-
-
-class TestFlowResultProcessing:
-    """Test result processing and verbose logging."""
-
-    async def test_verbose_context_preparation(self, session_with_model, capsys):
-        """Test line 281: Verbose logging for context preparation."""
+    async def test_dependencies_verbose_logging(self, session_with_model, capsys):
+        """Test verbose logging for dependencies."""
         session, model = session_with_model
         branch = session.create_branch(name="test", resources={model.name})
 
@@ -513,120 +282,85 @@ class TestFlowResultProcessing:
         builder.add("task2", "generate", params2, depends_on=["task1"])
 
         graph = builder.build()
-        await flow(session, branch, graph, verbose=True)
+        await flow(session, graph, branch=branch, verbose=True)
 
         captured = capsys.readouterr()
-        assert "prepared with" in captured.out
-        assert "context items" in captured.out
+        assert "waiting for" in captured.out
+        assert "dependencies" in captured.out
 
-    async def test_verbose_operation_execution(self, session_with_model, capsys):
-        """Test line 292: Verbose logging for operation execution."""
-        session, model = session_with_model
-        branch = session.create_branch(name="test", resources={"mock"})
 
-        builder = Builder()
-        builder.add(
-            "task1",
-            "generate",
-            {
-                "instruction": "Test",
-                "imodel": model,
-                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
-            },
-        )
-        graph = builder.build()
+# -------------------------------------------------------------------------
+# Execution Event Tests
+# -------------------------------------------------------------------------
 
-        await flow(session, branch, graph, verbose=True)
 
-        captured = capsys.readouterr()
-        assert "Executing operation:" in captured.out
+class TestFlowExecutionEvents:
+    """Test execution event handling."""
 
-    async def test_missing_branch_allocation_raises_error(self, session_with_model):
-        """Test line 297: Missing branch allocation raises ValueError."""
-        session, model = session_with_model
-
-        # Create operation
-        op = create_operation(
-            operation="generate",
-            parameters={
-                "instruction": "Test",
-                "imodel": model,
-                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
-            },
-        )
-        op.metadata["name"] = "test"
-        graph = Graph()
-        graph.add_node(op)
-
-        # Create executor and manually bypass pre-allocation
-        executor = DependencyAwareExecutor(session=session, graph=graph, default_branch=None)
-
-        # Don't call _preallocate_branches, so operation_branches is empty
-        # Execute will try to get branch and fail with line 297
-        # However, gather(return_exceptions=True) catches the error
-        # So we need to test the internal _invoke_operation directly
-
-        # Trigger line 297 by calling _invoke_operation without branch allocation
-        with pytest.raises(ValueError, match="No branch allocated"):
-            await executor._invoke_operation(op)
-
-    async def test_verbose_execution_status_and_error(self, session_with_model, capsys):
-        """Test lines 311-313: Verbose logging for execution status and errors."""
+    async def test_operation_receives_its_parameters(self, session_with_model):
+        """Test that operations receive their parameters unchanged."""
         session, _model = session_with_model
         branch = session.create_branch(name="test", resources={"mock"})
 
-        # Create factory that fails during execution
-        async def execution_fail(session, branch, parameters):
-            raise ValueError("Execution failed")
+        received_params = None
 
-        # Register to session's per-session registry
-        session.operations.register("exec_fail", execution_fail)
-
-        builder = Builder()
-        builder.add("task1", "exec_fail", {})
-        graph = builder.build()
-
-        await flow(session, branch, graph, verbose=True, stop_on_error=False)
-
-        captured = capsys.readouterr()
-        assert "status after invoke:" in captured.out
-        # Error logging happens in executor
-        assert "Execution error:" in captured.out or "failed:" in captured.out
-
-    async def test_context_update_from_result(self, session_with_model):
-        """Test line 320: Shared context updated when result contains 'context'."""
-        session, _model = session_with_model
-        branch = session.create_branch(name="test", resources={"mock"})
-
-        # First task returns result with context
-        async def context_producer(session, branch, parameters):
-            return {"data": "result", "context": {"new_key": "new_value"}}
-
-        # Second task receives updated context
-        received_context = None
-
-        async def context_consumer(session, branch, parameters):
-            nonlocal received_context
-            received_context = parameters.get("context", {})
+        async def param_receiver(session, branch, parameters):
+            nonlocal received_params
+            received_params = parameters
             return "done"
 
-        # Register to session's per-session registry
-        session.operations.register("ctx_prod", context_producer)
-        session.operations.register("ctx_cons", context_consumer)
+        session.operations.register("param_receiver", param_receiver)
 
         builder = Builder()
-        builder.add("prod", "ctx_prod", {})
-        builder.add("cons", "ctx_cons", {}, depends_on=["prod"])
+        builder.add("task1", "param_receiver", {"my_key": "my_value"})
         graph = builder.build()
 
-        await flow(session, branch, graph)
+        await flow(session, graph, branch=branch)
 
-        # Verify shared context was updated
-        assert "new_key" in received_context
-        assert received_context["new_key"] == "new_value"
+        # Verify parameters are passed unchanged
+        assert received_params == {"my_key": "my_value"}
 
-    async def test_verbose_operation_completion(self, session_with_model, capsys):
-        """Test line 323: Verbose logging for operation completion."""
+    async def test_failed_predecessor_does_not_block_with_stop_on_error_false(
+        self, session_with_model
+    ):
+        """Test that with stop_on_error=False, dependent tasks still run."""
+        session, _model = session_with_model
+        branch = session.create_branch(name="test", resources={"mock"})
+
+        dependent_ran = False
+
+        async def failing_factory(session, branch, parameters):
+            raise RuntimeError("Intentional failure")
+
+        async def dependent_factory(session, branch, parameters):
+            nonlocal dependent_ran
+            dependent_ran = True
+            return "done"
+
+        session.operations.register("failing_pred", failing_factory)
+        session.operations.register("dependent_task", dependent_factory)
+
+        builder = Builder()
+        builder.add("failed_task", "failing_pred", {})
+        builder.add("dependent_task", "dependent_task", {}, depends_on=["failed_task"])
+        graph = builder.build()
+
+        await flow(session, graph, branch=branch, stop_on_error=False)
+
+        # Dependent task should have run (after predecessor completed/failed)
+        assert dependent_ran
+
+
+# -------------------------------------------------------------------------
+# Result Processing Tests
+# -------------------------------------------------------------------------
+
+
+class TestFlowResultProcessing:
+    """Test result processing and verbose logging."""
+
+    async def test_verbose_operation_execution(self, session_with_model, capsys):
+        """Test verbose logging for operation execution."""
         session, model = session_with_model
         branch = session.create_branch(name="test", resources={model.name})
 
@@ -641,36 +375,71 @@ class TestFlowResultProcessing:
         builder.add("task1", "generate", params)
         graph = builder.build()
 
-        await flow(session, branch, graph, verbose=True)
+        await flow(session, graph, branch=branch, verbose=True)
 
         captured = capsys.readouterr()
-        assert "Completed operation:" in captured.out
+        assert "Executing operation:" in captured.out
+
+    async def test_missing_branch_allocation_raises_error(self, session_with_model):
+        """Test missing branch allocation raises ValueError."""
+        session, model = session_with_model
+
+        op = create_operation(
+            operation="generate",
+            parameters={
+                "instruction": "Test",
+                "imodel": model,
+                "imodel_kwargs": {"model_name": "gpt-4.1-mini"},
+            },
+        )
+        op.metadata["name"] = "test"
+        graph = Graph()
+        graph.add_node(op)
+
+        executor = DependencyAwareExecutor(session=session, graph=graph, default_branch=None)
+
+        with pytest.raises(ValueError, match="No branch allocated"):
+            await executor._invoke_operation(op)
 
     async def test_verbose_operation_failure(self, session_with_model, capsys):
-        """Test line 332: Verbose logging for operation failure."""
+        """Test verbose logging for operation failure."""
         session, _model = session_with_model
         branch = session.create_branch(name="test", resources={"mock"})
 
-        # Create factory that simulates EventStatus.FAILED
-        from lionpride import Event
-
         async def status_failed_factory(session, branch, parameters):
-            # Return Event that will have FAILED status
-            # Actually, the factory raises an error which ExecutableOperation catches
             raise RuntimeError("Operation failed with error status")
 
-        # Register to session's per-session registry
         session.operations.register("status_fail", status_failed_factory)
 
         builder = Builder()
         builder.add("task1", "status_fail", {})
         graph = builder.build()
 
-        await flow(session, branch, graph, verbose=True, stop_on_error=False)
+        await flow(session, graph, branch=branch, verbose=True, stop_on_error=False)
 
         captured = capsys.readouterr()
-        # Verbose logging should show failure
         assert "failed:" in captured.out
+
+    async def test_verbose_operation_completion(self, session_with_model, capsys):
+        """Test verbose logging for operation completion."""
+        session, model = session_with_model
+        branch = session.create_branch(name="test", resources={model.name})
+
+        params = GenerateParams(
+            instruction="Test",
+            imodel=model.name,
+            imodel_kwargs={"model_name": "gpt-4.1-mini"},
+            return_as="text",
+        )
+
+        builder = Builder()
+        builder.add("task1", "generate", params)
+        graph = builder.build()
+
+        await flow(session, graph, branch=branch, verbose=True)
+
+        captured = capsys.readouterr()
+        assert "Completed operation:" in captured.out
 
 
 # -------------------------------------------------------------------------
@@ -702,7 +471,7 @@ class TestFlowIntegration:
         builder.add("task4", "generate", gen_params("Merge"), depends_on=["task2", "task3"])
 
         graph = builder.build()
-        results = await flow(session, branch, graph)
+        results = await flow(session, graph, branch=branch)
 
         # All tasks should complete
         assert all(f"task{i}" in results for i in range(1, 5))
@@ -730,7 +499,7 @@ class TestFlowIntegration:
         builder.add("task2", "generate", params)  # Independent
 
         graph = builder.build()
-        results = await flow(session, branch, graph, stop_on_error=False)
+        results = await flow(session, graph, branch=branch, stop_on_error=False)
 
         # task2 should still execute
         assert "task2" in results
@@ -760,7 +529,7 @@ class TestFlowIntegration:
             builder.add(f"task{i}", "track", {})
 
         graph = builder.build()
-        await flow(session, branch, graph, max_concurrent=2)
+        await flow(session, graph, branch=branch, max_concurrent=2)
 
         # Should not exceed 2 concurrent
         assert max_seen <= 2
@@ -799,7 +568,7 @@ class TestFlowExceptionPaths:
         graph = builder.build()
 
         # Execute with stop_on_error=False, verbose=False
-        results = await flow(session, branch, graph, stop_on_error=False, verbose=False)
+        results = await flow(session, graph, branch=branch, stop_on_error=False, verbose=False)
 
         # task1 should fail, task2 should succeed
         assert "task1" not in results
@@ -887,7 +656,7 @@ class TestFlowExceptionPaths:
         # Execute with stop_on_error=True, verbose=False
         # The exception will be caught by gather(return_exceptions=True)
         # but the re-raise path (lines 179-182) should still execute
-        results = await flow(session, branch, graph, stop_on_error=True, verbose=False)
+        results = await flow(session, graph, branch=branch, stop_on_error=True, verbose=False)
 
         # Task failed, no result
         assert "task1" not in results
@@ -908,7 +677,7 @@ class TestFlowExceptionPaths:
         graph = builder.build()
 
         # Execute with both verbose=True and stop_on_error=True
-        results = await flow(session, branch, graph, verbose=True, stop_on_error=True)
+        results = await flow(session, graph, branch=branch, verbose=True, stop_on_error=True)
 
         captured = capsys.readouterr()
         # Verify verbose logging executed
@@ -1167,7 +936,7 @@ class TestFlowStreamExecute:
         graph = builder.build()
 
         results = []
-        async for result in flow_stream(session, branch, graph):
+        async for result in flow_stream(session, graph, branch=branch):
             results.append(result)
 
         assert len(results) == 1
@@ -1222,7 +991,7 @@ class TestFlowBranchAwareExecution:
 
         # Execute with a different default branch
         default_branch = session.create_branch(name="default")
-        await flow(session, default_branch, graph)
+        await flow(session, graph, branch=default_branch)
 
         # Verify operations ran on their specified branches
         assert execution_branches["task1"] == branch1
@@ -1257,7 +1026,7 @@ class TestFlowBranchAwareExecution:
 
         # Execute with different default branch
         default_branch = session.create_branch(name="default")
-        await flow(session, default_branch, graph)
+        await flow(session, graph, branch=default_branch)
 
         # Verify operation ran on target branch (by UUID)
         assert execution_branches["uuid_task"] == target_branch
@@ -1288,7 +1057,7 @@ class TestFlowBranchAwareExecution:
         graph = Graph()
         graph.add_node(op)
 
-        await flow(session, default_branch, graph)
+        await flow(session, graph, branch=default_branch)
 
         # Verify operation ran on default branch
         assert execution_branches["no_branch_task"] == default_branch
@@ -1319,7 +1088,7 @@ class TestFlowBranchAwareExecution:
         graph = Graph()
         graph.add_node(op)
 
-        await flow(session, default_branch, graph)
+        await flow(session, graph, branch=default_branch)
 
         # Should fall back to default branch
         assert execution_branches["fallback_task"] == default_branch
@@ -1368,7 +1137,7 @@ class TestFlowBranchAwareExecution:
 
         # Execute with a different default branch
         default_branch = session.create_branch(name="default")
-        results = await flow(session, default_branch, graph)
+        results = await flow(session, graph, branch=default_branch)
 
         # Verify all operations completed
         assert "extract" in results

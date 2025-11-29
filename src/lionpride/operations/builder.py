@@ -111,7 +111,9 @@ class OperationGraphBuilder:
         self._nodes[name] = op
 
         # Handle dependencies
-        if depends_on:
+        # Empty list [] = no dependencies (independent operation)
+        # None = auto-link to current heads (sequential execution)
+        if depends_on is not None:
             for dep_name in depends_on:
                 if dep_name not in self._nodes:
                     raise ValueError(f"Dependency '{dep_name}' not found")
@@ -119,7 +121,7 @@ class OperationGraphBuilder:
                 edge = Edge(head=dep_node.id, tail=op.id, label=["depends_on"])
                 self.graph.add_edge(edge)
         elif self._current_heads:
-            # Auto-link from current heads if no explicit dependencies
+            # Auto-link from current heads only if depends_on is None
             for head_name in self._current_heads:
                 if head_name in self._nodes:
                     head_node = self._nodes[head_name]

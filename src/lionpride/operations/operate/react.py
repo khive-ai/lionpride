@@ -13,6 +13,11 @@ Stream-first architecture:
 Composition:
     react() → react_stream() → operate() → communicate() → generate()
                                         → act() (via actions=True)
+
+Security model:
+    React requires these capabilities on branch:
+    - reasoning, action_requests, is_done (react protocol fields)
+    - Plus any intermediate_response_options field names
 """
 
 from __future__ import annotations
@@ -23,16 +28,11 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
+from lionpride.errors import AccessError, ConfigurationError, ValidationError
 from lionpride.rules import ActionRequest, ActionResponse
 from lionpride.types import Operable, Spec
 
-from .types import (
-    CommunicateParams,
-    GenerateParams,
-    OperateParams,
-    ParseParams,
-    ReactParams,
-)
+from .types import GenerateParams, OperateParams, ParseParams, ReactParams
 
 if TYPE_CHECKING:
     from lionpride.session import Branch, Session
@@ -48,6 +48,8 @@ __all__ = (
 
 logger = logging.getLogger(__name__)
 
+# React protocol capabilities (required for react to function)
+REACT_PROTOCOL_CAPABILITIES = {"reasoning", "action_requests", "is_done"}
 
 REACT_FIRST_STEP_PROMPT = """You can perform multiple reason-action steps.
 Set is_done=false to continue. You have {steps_remaining} steps remaining."""
@@ -88,8 +90,8 @@ class ReactStepResponse(BaseModel):
     """Response model for each ReAct step (LLM output)."""
 
     reasoning: str | None = Field(default=None, description="Reasoning for this step")
-    action_requests: list[ActionRequest] | None = Field(
-        default=None, description="Tool calls to execute"
+    action_requests: list[ActionRequest] = Field(
+        default_factory=list, description="Tool calls to execute"
     )
     is_done: bool = Field(default=False, description="Set true when complete")
 
@@ -112,10 +114,6 @@ def build_intermediate_operable(
 
     Returns:
         Operable for the IntermediateOptions nested model
-
-    Example:
-        >>> operable = build_intermediate_operable([ProgressReport, PartialResult])
-        >>> Model = operable.create_model()  # IntermediateOptions with nullable fields
     """
     if not isinstance(options, list):
         options = [options]
@@ -150,7 +148,7 @@ def build_step_operable(
     """
     specs = [
         Spec(str, name="reasoning", description="Your reasoning").as_optional(),
-        Spec(list[ActionRequest], name="action_requests", description="Tool calls").as_optional(),
+        Spec(list[ActionRequest], name="action_requests", default_factory=list),
         Spec(bool, name="is_done", default=False, description="Set true when complete"),
     ]
 
@@ -179,67 +177,78 @@ async def react_stream(
     Args:
         session: Session for services and message storage.
         branch: Branch for conversation history.
-        params: ReactParams with nested operate params.
+        params: ReactParams with flat params (inherits from OperateParams).
 
     Yields:
         ReactStep for each step in the ReAct loop.
+
+    Raises:
+        ValidationError: If params invalid.
+        ConfigurationError: If model not configured.
+        AccessError: If branch lacks required capabilities.
     """
     from .factory import operate
 
-    # Validate nested params structure
-    if params._is_sentinel(params.operate):
-        raise ValueError("react requires 'operate' params")
-    if params._is_sentinel(params.operate.communicate):
-        raise ValueError("react requires 'operate.communicate' params")
-    if params._is_sentinel(params.operate.communicate.generate):
-        raise ValueError("react requires 'operate.communicate.generate' params")
+    # 1. Validate params
+    if params._is_sentinel(params.generate):
+        raise ValidationError("react requires 'generate' params")
 
-    gen_params = params.operate.communicate.generate
-
-    # Extract base params
+    gen_params = params.generate
     instruction = gen_params.instruction
+    if not instruction:
+        raise ValidationError("react requires 'instruction' in generate params")
+
     imodel = gen_params.imodel or session.default_generate_model
     imodel_kwargs = gen_params.imodel_kwargs or {}
     context = gen_params.context
 
-    if params._is_sentinel(instruction):
-        raise ValueError("react requires 'instruction' in operate.communicate.generate")
     if params._is_sentinel(imodel) and session.default_generate_model is None:
-        raise ValueError("react requires 'imodel' in operate.communicate.generate")
+        raise ConfigurationError(
+            "react requires 'imodel' in generate params or session.default_generate_model"
+        )
 
     # Extract model_name for API calls
     model_name = imodel_kwargs.get("model_name") or imodel_kwargs.get("model")
     if not model_name and hasattr(imodel, "name"):
         model_name = imodel.name
     if not model_name:
-        raise ValueError(
+        raise ConfigurationError(
             "react requires 'model_name' in imodel_kwargs or imodel with .name attribute"
         )
 
-    # Resolve branch
+    # 2. Resolve branch
     b_ = session.get_branch(branch)
 
-    # Prepare kwargs without model_name duplication
-    step_kwargs = {k: v for k, v in imodel_kwargs.items() if k not in ("model_name", "model")}
+    # 3. Build step operable and determine required capabilities
+    step_operable = build_step_operable(
+        intermediate_options=params.intermediate_response_options,
+        intermediate_listable=params.intermediate_listable,
+        intermediate_nullable=params.intermediate_nullable,
+    )
 
+    # Required capabilities = all fields in step operable
+    required_capabilities = step_operable.allowed()
+
+    # 4. Validate capabilities against branch (security gate)
+    if not required_capabilities.issubset(b_.capabilities):
+        missing = required_capabilities - b_.capabilities
+        raise AccessError(
+            f"Branch '{b_.name}' missing react capabilities: {missing}",
+            details={
+                "requested": sorted(required_capabilities),
+                "available": sorted(b_.capabilities),
+            },
+        )
+
+    # 5. Prepare step kwargs
+    step_kwargs = {k: v for k, v in imodel_kwargs.items() if k not in ("model_name", "model")}
     verbose = params.return_trace
     max_steps = params.max_steps
 
-    # Build step Operable with intermediate options if provided
-    step_operable = None
-    if params.intermediate_response_options is not None:
-        step_operable = build_step_operable(
-            intermediate_options=params.intermediate_response_options,
-            intermediate_listable=params.intermediate_listable,
-            intermediate_nullable=params.intermediate_nullable,
-        )
-        if verbose:
-            logger.info(
-                f"Built step Operable with intermediate options: "
-                f"{[s.name for s in step_operable.get_specs()]}"
-            )
+    if verbose:
+        logger.info(f"React starting with capabilities: {required_capabilities}")
 
-    # ReAct loop
+    # 6. ReAct loop
     for step_num in range(1, max_steps + 1):
         steps_remaining = max_steps - step_num
         is_last_step = steps_remaining == 0
@@ -258,39 +267,27 @@ async def react_stream(
             step_instruction = REACT_CONTINUE_PROMPT.format(steps_remaining=steps_remaining)
 
         try:
-            # Build OperateParams for this step
-            # Use step_operable if we have intermediate options, else default ReactStepResponse
+            # Build OperateParams for this step (flat inheritance)
             operate_params = OperateParams(
-                communicate=CommunicateParams(
-                    generate=GenerateParams(
-                        imodel=imodel,
-                        instruction=step_instruction,
-                        context=context,
-                        # Use operable-built model if available, else static ReactStepResponse
-                        request_model=None if step_operable else ReactStepResponse,
-                        imodel_kwargs={"model": model_name, **step_kwargs},
-                    ),
-                    # Pass operable for dynamic schema
-                    operable=step_operable,
-                    capabilities=step_operable.allowed() if step_operable else None,
-                    parse=ParseParams(),
-                    strict_validation=False,
+                generate=GenerateParams(
+                    imodel=imodel,
+                    instruction=step_instruction,
+                    context=context,
+                    imodel_kwargs={"model": model_name, **step_kwargs},
                 ),
+                parse=ParseParams(),
+                operable=step_operable,
+                capabilities=required_capabilities,
+                auto_fix=params.auto_fix,
+                strict_validation=False,
                 actions=True,
-                reason=True,
             )
 
-            # Call operate
+            # Call operate (raises on error - no dict handling)
             operate_result = await operate(session, b_, operate_params)
 
             if verbose:
                 logger.debug(f"Operate result: {operate_result}")
-
-            # Handle validation failure
-            if isinstance(operate_result, dict) and operate_result.get("validation_failed"):
-                step.reasoning = f"Validation failed: {operate_result.get('error')}"
-                yield step
-                return
 
             # Extract step data
             if hasattr(operate_result, "reasoning"):
@@ -311,7 +308,6 @@ async def react_stream(
             if hasattr(operate_result, "intermediate_response_options"):
                 iro = operate_result.intermediate_response_options
                 if iro is not None:
-                    # Convert to dict for storage in ReactStep
                     if hasattr(iro, "model_dump"):
                         step.intermediate_options = iro.model_dump(exclude_none=True)
                     elif isinstance(iro, dict):

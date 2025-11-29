@@ -115,7 +115,6 @@ class Operation(Node, Event):
         session, branch = self._require_binding()
 
         # Get factory from session's operation registry
-        # Let KeyError propagate directly - registry.get() provides good error message
         factory = session.operations.get(self.operation_type)
 
         # Execute operation via factory

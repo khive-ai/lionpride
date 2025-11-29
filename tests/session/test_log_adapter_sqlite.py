@@ -573,3 +573,88 @@ class TestSQLiteWALLogAdapterEdgeCases:
             assert len(result) == 1, f"Expected 1 log of type {log_type.value}"
 
         await adapter.close()
+
+
+@pytest.mark.integration
+class TestSQLiteLogAdapterCorruptData:
+    """Tests for SQLite adapter handling of corrupt/invalid JSON data.
+
+    Covers log_adapter.py lines 288-289 (json decode error handling).
+    """
+
+    @pytest.mark.asyncio
+    async def test_read_handles_corrupt_json_silently(self, tmp_path: Path):
+        """Corrupt JSON rows should be skipped without raising errors."""
+        import aiosqlite
+
+        db_path = tmp_path / "corrupt_data.db"
+        adapter = SQLiteWALLogAdapter(db_path=db_path)
+
+        # First write a valid log to create the table
+        valid_log = Log(log_type=LogType.INFO, source="valid", message="valid message")
+        await adapter.write([valid_log])
+
+        # Directly insert corrupt JSON into the database
+        async with aiosqlite.connect(str(db_path)) as conn:
+            await conn.execute(
+                """
+                INSERT INTO logs (id, created_at, log_type, source, content, metadata)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "corrupt-id-123",
+                    datetime.now(UTC).isoformat(),
+                    "info",
+                    "corrupt_source",
+                    "not valid json {{{",  # Invalid JSON
+                    "{}",
+                ),
+            )
+            await conn.commit()
+
+        # Read should succeed but skip the corrupt row
+        result = await adapter.read(limit=10)
+
+        # Should only return the valid log (corrupt one is skipped)
+        assert len(result) == 1
+        assert result[0]["message"] == "valid message"
+
+        await adapter.close()
+
+    @pytest.mark.asyncio
+    async def test_read_handles_empty_json_object(self, tmp_path: Path):
+        """Empty JSON object rows should be returned as empty dicts."""
+        import aiosqlite
+
+        db_path = tmp_path / "empty_json.db"
+        adapter = SQLiteWALLogAdapter(db_path=db_path)
+
+        # First write a valid log to create the table
+        valid_log = Log(log_type=LogType.INFO, source="valid", message="valid message")
+        await adapter.write([valid_log])
+
+        # Directly insert empty JSON object
+        async with aiosqlite.connect(str(db_path)) as conn:
+            await conn.execute(
+                """
+                INSERT INTO logs (id, created_at, log_type, source, content, metadata)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "empty-id-456",
+                    datetime.now(UTC).isoformat(),
+                    "info",
+                    "empty_source",
+                    "{}",  # Valid empty JSON object
+                    "{}",
+                ),
+            )
+            await conn.commit()
+
+        # Read should succeed and include both logs
+        result = await adapter.read(limit=10)
+
+        # Should return both logs
+        assert len(result) == 2
+
+        await adapter.close()

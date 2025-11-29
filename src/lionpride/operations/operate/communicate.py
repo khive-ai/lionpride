@@ -6,11 +6,13 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from lionpride.errors import AccessError, ValidationError
 from lionpride.rules import Validator
 from lionpride.services.types import APICalling
 from lionpride.session.messages import AssistantResponseContent, Message
 
 from .generate import generate
+from .parse import parse
 from .types import CommunicateParams, GenerateParams, ParseParams
 
 if TYPE_CHECKING:
@@ -29,27 +31,10 @@ async def communicate(
     poll_interval: float | None = None,
     validator: Validator | None = None,
 ) -> str | Any:
-    """Stateful chat with optional structured output.
-
-    Two paths:
-    1. Text path (no operable): Generate → persist → return text
-    2. IPU path (operable set): Generate → parse → validate → persist → return model
-
-    Args:
-        session: Session for services and message storage
-        branch: Branch for conversation history
-        params: Communicate parameters
-        poll_timeout: Timeout for model polling
-        poll_interval: Interval for model polling
-        validator: Optional validator instance (uses default if None)
-
-    Returns:
-        Text (no operable) or validated model instance (with operable)
-    """
     b_ = session.get_branch(branch)
 
     if params._is_sentinel(params.generate):
-        raise ValueError("communicate requires 'generate' params")
+        raise ValidationError("communicate requires 'generate' params")
 
     # Determine path based on operable
     has_operable = not params._is_sentinel(params.operable)
@@ -116,33 +101,32 @@ async def _communicate_with_operable(
     poll_interval: float | None,
     validator: Validator | None,
 ) -> Any:
-    """IPU path: Generate → parse → validate → persist → return model.
+    """IPU path: Generate → Parse → Validate → Persist → Return.
 
-    Requires operable and capabilities.
+    Requires operable and capabilities. All failures raise errors.
     """
-    # Validate capabilities
-    capabilities = params.capabilities or branch.capabilities
-    if not capabilities:
-        raise ValueError(
-            "communicate with operable requires explicit capabilities "
-            "(set params.capabilities or branch.capabilities)"
-        )
+    # 1. Validate capabilities (security gate)
+    if params._is_sentinel(params.capabilities):
+        raise ValidationError("capabilities must be declared when using structured output")
+
+    capabilities = set(params.capabilities)
     if not capabilities.issubset(branch.capabilities):
-        raise PermissionError(
-            f"Branch '{branch.name}' does not have all required capabilities: "
-            f"requested {capabilities}, allowed {branch.capabilities}"
+        missing = capabilities - branch.capabilities
+        raise AccessError(
+            f"Branch '{branch.name}' missing capabilities: {missing}",
+            details={"requested": list(capabilities), "available": list(branch.capabilities)},
         )
 
-    # Generate with schema from operable
+    # 2. Build request_model from operable + capabilities
     request_model = params.operable.create_model(include=capabilities)
+
+    # 3. Generate (with schema)
     gen_params = params.generate.with_updates(
         copy_containers="deep",
         return_as="calling",
         request_model=request_model,
         imodel=params.generate.imodel or session.default_generate_model,
     )
-
-    # 1. Generate
     gen_calling: APICalling = await generate(
         session=session,
         branch=branch,
@@ -151,10 +135,7 @@ async def _communicate_with_operable(
         poll_interval=poll_interval,
     )
 
-    # 2. Parse
-    from .parse import parse
-
-    # Handle sentinel parse params - use defaults if not provided
+    # 4. Parse (extract structured data) - raises ExecutionError on failure
     parse_params = params.parse if not params._is_sentinel(params.parse) else ParseParams()
     parsed = await parse(
         session=session,
@@ -164,31 +145,23 @@ async def _communicate_with_operable(
             text=gen_calling.response.data,
             target_keys=list(capabilities),
             imodel=parse_params.imodel or session.default_parse_model,
+            structure_format=gen_params.structure_format,  # Must match generate format
         ),
+        poll_timeout=poll_timeout,
+        poll_interval=poll_interval,
     )
 
-    # Handle parse failure - return error dict for operate to handle
-    if parsed is None:
-        error_msg = "Failed to parse JSON from LLM response"
-        _persist_messages(session, branch, gen_params, gen_calling)
-        return {"validation_failed": True, "error": error_msg}
-
-    # 3. Validate via security microkernel
+    # 5. Validate (security microkernel) - raises ValidationError on failure
     val_ = validator or Validator()
-    try:
-        validated = await val_.validate(
-            parsed,
-            params.operable,
-            capabilities,
-            params.auto_fix,
-            params.strict_validation,
-        )
-    except Exception as e:
-        # Return validation failure dict for operate to handle
-        _persist_messages(session, branch, gen_params, gen_calling)
-        return {"validation_failed": True, "error": str(e)}
+    validated = await val_.validate(
+        parsed,
+        params.operable,
+        capabilities,
+        params.auto_fix,
+        params.strict_validation,
+    )
 
-    # 4. Persist messages
+    # 6. Persist messages (only on success)
     _persist_messages(session, branch, gen_params, gen_calling)
 
     return validated

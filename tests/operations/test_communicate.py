@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from lionpride import Event, EventStatus
+from lionpride.errors import AccessError, ValidationError
 from lionpride.operations.operate.communicate import communicate
 from lionpride.operations.operate.types import CommunicateParams, GenerateParams, ParseParams
 from lionpride.session import Session
@@ -71,13 +72,13 @@ class TestCommunicateValidation:
     """Test parameter validation."""
 
     async def test_missing_generate_params_raises_error(self, session_with_model):
-        """Test that missing generate params raises ValueError."""
+        """Test that missing generate params raises ValidationError."""
         session, _ = session_with_model
         branch = session.create_branch(name="test", resources={"mock_model"})
 
         params = CommunicateParams()  # No generate params
 
-        with pytest.raises(ValueError, match="communicate requires 'generate' params"):
+        with pytest.raises(ValidationError, match="communicate requires 'generate' params"):
             await communicate(session, branch, params)
 
 
@@ -155,23 +156,19 @@ class TestIPUPath:
         )
 
     async def test_operable_requires_capabilities(self, session_with_model, simple_operable):
-        """Test that operable path requires explicit capabilities."""
-        session, _ = session_with_model
-        # Branch with NO capabilities
-        branch = session.create_branch(name="test", resources={"mock_model"}, capabilities=set())
-
-        params = CommunicateParams(
-            generate=GenerateParams(
-                imodel="mock_model",
-                instruction="Return JSON",
-            ),
-            parse=ParseParams(),
-            operable=simple_operable,
-            # No capabilities set
-        )
-
-        with pytest.raises(ValueError, match="requires explicit capabilities"):
-            await communicate(session, branch, params)
+        """Test that operable path requires explicit capabilities at params construction."""
+        # CommunicateParams validates capabilities at construction time
+        # when operable is provided
+        with pytest.raises(ValueError, match="capabilities must be explicitly declared"):
+            CommunicateParams(
+                generate=GenerateParams(
+                    imodel="mock_model",
+                    instruction="Return JSON",
+                ),
+                parse=ParseParams(),
+                operable=simple_operable,
+                # No capabilities set - raises ValueError at construction
+            )
 
     async def test_capabilities_must_be_subset_of_branch(self, session_with_model, simple_operable):
         """Test that requested capabilities must be subset of branch capabilities."""
@@ -193,7 +190,7 @@ class TestIPUPath:
             capabilities={"name", "value"},  # Requesting more than allowed
         )
 
-        with pytest.raises(PermissionError, match="does not have all required capabilities"):
+        with pytest.raises(AccessError, match="missing capabilities"):
             await communicate(session, branch, params)
 
     async def test_operable_path_with_valid_json(

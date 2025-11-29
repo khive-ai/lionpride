@@ -45,18 +45,15 @@ class TestGenerateParamsInstructionMessage:
         # Should return the same Message object
         assert msg is original_msg
 
-    def test_instruction_message_with_sentinel_returns_none(self):
-        """Test instruction_message returns None when instruction is sentinel.
+    def test_instruction_is_required(self):
+        """Test that instruction is a required parameter.
 
-        Coverage: types.py line 94 (return None when sentinel)
+        GenerateParams.instruction is required - no default value.
         """
-        # Create params without instruction (uses sentinel default)
-        params = GenerateParams()
-
-        msg = params.instruction_message
-
-        # Should return None for sentinel instruction
-        assert msg is None
+        with pytest.raises(
+            TypeError, match="missing 1 required positional argument: 'instruction'"
+        ):
+            GenerateParams()
 
     def test_instruction_message_with_context(self):
         """Test instruction_message includes context in Message."""

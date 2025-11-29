@@ -3,76 +3,50 @@
 
 """Form - declarative unit of work with assignment-based field contracts.
 
-Assignment DSL: "input1, input2 -> output1, output2"
-- Inputs: fields required before work can start
-- Outputs: fields produced by the work
+Assignment DSL: "[branch:] [operation(] inputs -> outputs [)] [| resources]"
+
+Examples:
+    "context -> plan"
+    "orchestrator: operate(context -> plan) | api:gpt4mini"
+    "planner: react(a, b -> c) | api_gen:gpt5, api_parse:gpt4, tool:*"
 
 Forms derive execution order from field dependencies, not explicit graph edges.
+Resource declarations specify what APIs and tools each step can access.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import ConfigDict, Field
 
 from lionpride.core import Element
 
+from .capabilities import FormResources, parse_assignment
+
+if TYPE_CHECKING:
+    from lionpride.session import Branch
+
 __all__ = ("Form", "parse_assignment")
-
-
-def parse_assignment(assignment: str) -> tuple[str | None, list[str], list[str]]:
-    """Parse assignment DSL into (branch, inputs, outputs).
-
-    Supports optional branch prefix:
-    - "a, b -> c" -> (None, ["a", "b"], ["c"])
-    - "orchestrator: a, b -> c" -> ("orchestrator", ["a", "b"], ["c"])
-
-    Args:
-        assignment: DSL string like "branch: a, b -> c, d" or "a, b -> c, d"
-
-    Returns:
-        Tuple of (branch_name, input_fields, output_fields)
-
-    Raises:
-        ValueError: If assignment is invalid
-    """
-    if not assignment or "->" not in assignment:
-        raise ValueError(f"Invalid assignment: '{assignment}'. Must contain '->'")
-
-    # Check for branch prefix (colon before arrow)
-    branch_name = None
-    work_assignment = assignment
-
-    arrow_pos = assignment.find("->")
-    colon_pos = assignment.find(":")
-
-    if colon_pos != -1 and colon_pos < arrow_pos:
-        # Has branch prefix
-        branch_name = assignment[:colon_pos].strip()
-        work_assignment = assignment[colon_pos + 1 :].strip()
-
-    parts = work_assignment.split("->", 1)
-    if len(parts) != 2:  # pragma: no cover - defensive check, "->" validated above
-        raise ValueError(f"Invalid assignment: '{assignment}'")
-
-    inputs_str, outputs_str = parts
-    inputs = [x.strip() for x in inputs_str.split(",") if x.strip()]
-    outputs = [y.strip() for y in outputs_str.split(",") if y.strip()]
-
-    if not outputs:
-        raise ValueError(f"Assignment must have at least one output: '{assignment}'")
-
-    return branch_name, inputs, outputs
 
 
 class Form(Element):
     """Declarative unit of work with assignment-based field contracts.
 
     A Form declares:
-    - assignment: "branch: input1, input2 -> output1" (what fields it needs and produces)
+    - assignment: Full DSL string with operation, data flow, and resources
+    - Derived: branch_name, operation, input/output fields, resources
 
-    Forms are pure data contracts. Schema/validation comes from Report.form_specs.
+    Forms are data contracts with capability declarations.
+    Schema/validation comes from Report class attributes.
+
+    Example:
+        form = Form(assignment="orchestrator: react(context -> plan) | api:gpt4, tool:*")
+        form.operation      # "react"
+        form.input_fields   # ["context"]
+        form.output_fields  # ["plan"]
+        form.resources.api  # "gpt4"
+        form.resources.tools  # "*"
     """
 
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
@@ -80,13 +54,15 @@ class Form(Element):
     # Declaration
     assignment: str = Field(
         ...,
-        description="Assignment DSL: 'branch: input1, input2 -> output1, output2'",
+        description="Assignment DSL: '[branch:] [op(] inputs -> outputs [)] [| resources]'",
     )
 
     # Derived fields (computed from assignment)
     branch_name: str | None = Field(default=None)
+    operation: str = Field(default="operate")
     input_fields: list[str] = Field(default_factory=list)
     output_fields: list[str] = Field(default_factory=list)
+    resources: FormResources = Field(default_factory=FormResources)
 
     # Runtime state
     output: Any = Field(
@@ -99,11 +75,13 @@ class Form(Element):
     )
 
     def model_post_init(self, _: Any) -> None:
-        """Parse assignment to derive branch, input/output fields."""
-        branch, inputs, outputs = parse_assignment(self.assignment)
-        self.branch_name = branch
-        self.input_fields = inputs
-        self.output_fields = outputs
+        """Parse assignment to derive all fields."""
+        parsed = parse_assignment(self.assignment)
+        self.branch_name = parsed.branch_name
+        self.operation = parsed.operation
+        self.input_fields = parsed.input_fields
+        self.output_fields = parsed.output_fields
+        self.resources = parsed.resources
 
     def is_workable(self, available_data: dict[str, Any]) -> bool:
         """Check if all input fields are available.
@@ -164,6 +142,27 @@ class Form(Element):
 
         return result
 
+    def validate_resources(self, branch: Branch) -> None:
+        """Validate form resources are subset of branch resources.
+
+        Args:
+            branch: Branch to validate against
+
+        Raises:
+            CapabilityError: If any resource not in branch
+        """
+        self.resources.validate_against(branch)
+
     def __repr__(self) -> str:
         status = "filled" if self.filled else "pending"
-        return f"Form('{self.assignment}', {status})"
+        op_str = f" op={self.operation}" if self.operation != "operate" else ""
+        res_parts = []
+        if self.resources.api:
+            res_parts.append(f"api:{self.resources.api}")
+        if self.resources.tools:
+            tools_str = (
+                "*" if self.resources.tools == "*" else ",".join(sorted(self.resources.tools))
+            )
+            res_parts.append(f"tools:{tools_str}")
+        res_str = f" [{', '.join(res_parts)}]" if res_parts else ""
+        return f"Form('{self.assignment}'{op_str}{res_str}, {status})"

@@ -98,7 +98,7 @@ class ClaudeCodeRequest(BaseModel):
         default=False,
         description="Automatically finish the conversation after the first response",
     )
-    verbose_output: bool = Field(default=False)
+    verbose: bool = Field(default=False)
     cli_display_theme: Literal["light", "dark"] = "dark"
     cli_include_summary: bool = Field(default=False)
 
@@ -567,7 +567,7 @@ async def stream_claude_code_cli(
             session.session_id = data.get("session_id", session.session_id)
             session.model = data.get("model", session.model)
             await _maybe_await(on_system, data)
-            if request.verbose_output:
+            if request.verbose:
                 _pp_system(data, theme)
             yield data
 
@@ -583,14 +583,14 @@ async def stream_claude_code_cli(
                     chunk.thinking = thought
                     session.thinking_log.append(thought)
                     await _maybe_await(on_thinking, thought)
-                    if request.verbose_output:
+                    if request.verbose:
                         _pp_thinking(thought, theme)
 
                 elif btype == "text":
                     text = blk.get("text", "")
                     chunk.text = text
                     await _maybe_await(on_text, text)
-                    if request.verbose_output:
+                    if request.verbose:
                         _pp_assistant_text(text, theme)
 
                 elif btype == "tool_use":
@@ -602,7 +602,7 @@ async def stream_claude_code_cli(
                     chunk.tool_use = tu
                     session.tool_uses.append(tu)
                     await _maybe_await(on_tool_use, tu)
-                    if request.verbose_output:
+                    if request.verbose:
                         _pp_tool_use(tu, theme)
 
                 elif btype == "tool_result":
@@ -614,7 +614,7 @@ async def stream_claude_code_cli(
                     chunk.tool_result = tr
                     session.tool_results.append(tr)
                     await _maybe_await(on_tool_result, tr)
-                    if request.verbose_output:
+                    if request.verbose:
                         _pp_tool_result(tr, theme)
             yield chunk
 
@@ -632,7 +632,7 @@ async def stream_claude_code_cli(
                     chunk.tool_result = tr
                     session.tool_results.append(tr)
                     await _maybe_await(on_tool_result, tr)
-                    if request.verbose_output:
+                    if request.verbose:
                         _pp_tool_result(tr, theme)
             yield chunk
 
@@ -652,7 +652,7 @@ async def stream_claude_code_cli(
 
     # final pretty print
     await _maybe_await(on_final, session)
-    if request.verbose_output:
+    if request.verbose:
         _pp_final(session, theme)
 
     yield session
