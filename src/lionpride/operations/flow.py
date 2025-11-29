@@ -42,13 +42,22 @@ class OperationResult:
 
 
 class DependencyAwareExecutor:
-    """Executes operation graphs with dependency management and context inheritance."""
+    """Executes operation graphs with dependency management.
+
+    This executor:
+    - Waits for predecessor operations to complete before executing
+    - Respects concurrency limits
+    - Tracks results and errors
+
+    Note: Context management is NOT handled here. Operations should
+    have their context set before being added to the graph, or the
+    caller should use a higher-level abstraction like flow_report.
+    """
 
     def __init__(
         self,
         session: Session,
         graph: Graph,
-        context: dict[str, Any] | None = None,
         max_concurrent: int | None = None,
         stop_on_error: bool = True,
         verbose: bool = False,
@@ -57,7 +66,6 @@ class DependencyAwareExecutor:
         """Initialize executor."""
         self.session = session
         self.graph = graph
-        self.context = context or {}
         self.max_concurrent = max_concurrent
         self.stop_on_error = stop_on_error
         self.verbose = verbose
@@ -68,10 +76,8 @@ class DependencyAwareExecutor:
         self.errors: dict[UUID, Exception] = {}
         self.completion_events: dict[UUID, concurrency.Event] = {}
         self.operation_branches: dict[UUID, Branch] = {}
-        self.skipped_operations: set[UUID] = set()
 
         # Concurrency limiter - acquired AFTER dependencies resolve
-        # This ensures only ready-to-execute tasks hold limiter slots
         self._limiter: CapacityLimiter | None = (
             CapacityLimiter(max_concurrent) if max_concurrent else None
         )
@@ -236,23 +242,17 @@ class DependencyAwareExecutor:
             await self._wait_for_dependencies(operation)
 
             # Acquire limiter slot ONLY when ready to execute
-            # This prevents blocked tasks from holding slots
             if self._limiter:
                 await self._limiter.acquire()
 
             try:
-                # Prepare operation context with predecessor results
-                self._prepare_operation_context(operation)
-
-                # Execute the operation
+                # Execute the operation (no context injection - use params as-is)
                 await self._invoke_operation(operation)
             finally:
-                # Release limiter slot
                 if self._limiter:
                     self._limiter.release()
 
         except Exception as e:
-            # Store error
             self.errors[operation.id] = e
             if self.verbose:
                 import traceback
@@ -260,169 +260,76 @@ class DependencyAwareExecutor:
                 print(f"Operation {str(operation.id)[:8]} failed: {e}")
                 print(f"Traceback: {traceback.format_exc()}")
 
-            # Re-raise if stop_on_error is enabled
             if self.stop_on_error:
-                # Still signal completion before re-raising
                 self.completion_events[operation.id].set()
                 raise
 
         finally:
-            # Signal completion regardless of success/failure
             self.completion_events[operation.id].set()
 
         return operation
 
     async def _wait_for_dependencies(self, operation: Operation) -> None:
         """Wait for all predecessor operations to complete."""
-        # Check for aggregation sources (special handling)
-        is_aggregation = operation.metadata.get("aggregation", False)
-        if is_aggregation:
-            # Aggregation sources are stored in metadata, not parameters
-            aggregation_sources = operation.metadata.get("aggregation_sources", [])
-            if aggregation_sources:
-                if self.verbose:
-                    print(
-                        f"Aggregation {str(operation.id)[:8]} waiting for "
-                        f"{len(aggregation_sources)} sources"
-                    )
-
-                # Wait for all aggregation sources
-                for source_id_str in aggregation_sources:
-                    # Find matching operation by ID string
-                    for op_id, event in self.completion_events.items():
-                        if str(op_id) == source_id_str:
-                            await event.wait()
-                            break
-
-        # Wait for graph predecessors (normal dependency edges)
         predecessors = self.graph.get_predecessors(operation)
 
         if self.verbose and predecessors:
-            print(
-                f"Operation {str(operation.id)[:8]} waiting for "
-                f"{len(predecessors)} graph dependencies"
-            )
+            print(f"Operation {str(operation.id)[:8]} waiting for {len(predecessors)} dependencies")
 
-        # Wait for all predecessors to complete
         for pred in predecessors:
             if pred.id in self.completion_events:
                 await self.completion_events[pred.id].wait()
 
-    def _prepare_operation_context(self, operation: Operation) -> None:
-        """Prepare operation parameters with predecessor results."""
-        predecessors = self.graph.get_predecessors(operation)
-
-        # Build context from predecessor results
-        pred_context = {}
-        for pred in predecessors:
-            # Skip if predecessor was skipped or failed
-            if pred.id in self.skipped_operations or pred.id in self.errors:
-                continue
-
-            # Add predecessor result to context
-            if pred.id in self.results:
-                result = self.results[pred.id]
-                # Use a clean key name
-                pred_name = pred.metadata.get("name", str(pred.id))
-                pred_context[f"{pred_name}_result"] = result
-
-        # Merge with shared execution context
-        if self.context:
-            pred_context.update(self.context)
-
-        # Skip if no context to add
-        if not pred_context and not self.context:
-            return
-
-        # Handle None parameters - convert to dict
-        if operation.parameters is None:
-            operation.parameters = {"context": pred_context}
-        elif isinstance(operation.parameters, dict):
-            # If parameters is a dict, merge context
-            if "context" not in operation.parameters:
-                operation.parameters["context"] = pred_context
-            else:
-                # Merge with existing context
-                existing = operation.parameters["context"]
-                if isinstance(existing, dict):
-                    existing.update(pred_context)
-                else:
-                    # Existing context is not a dict - wrap it
-                    operation.parameters["context"] = {
-                        "original_context": existing,
-                        **pred_context,
-                    }
-        else:
-            # Typed params object - store context in metadata for custom operations
-            operation.metadata["flow_context"] = pred_context
-
-        if self.verbose:
-            print(
-                f"Operation {str(operation.id)[:8]} prepared with {len(pred_context)} context items"
-            )
-
     async def _invoke_operation(self, operation: Operation) -> None:
-        """Invoke operation and store result.
-
-        Operation is both Node (graph) and Event (lifecycle), so it
-        can invoke itself directly after binding to session/branch.
-        """
+        """Invoke operation and store result."""
         if self.verbose:
-            print(f"Executing operation: {str(operation.id)[:8]}")
+            name = operation.metadata.get("name", str(operation.id)[:8])
+            print(f"Executing operation: {name}")
 
-        # Get branch for this operation
         branch = self.operation_branches.get(operation.id)
         if branch is None:
             raise ValueError(f"No branch allocated for operation {operation.id}")
 
-        # Bind operation to session/branch and invoke
-        # Operation is both Node and Event, so it handles its own execution
         operation.bind(self.session, branch)
         await operation.invoke()
 
-        # Check execution status
-        if self.verbose:
-            print(f"Operation {str(operation.id)[:8]} status after invoke: {operation.status}")
-            if hasattr(operation.execution, "error"):
-                print(f"  Execution error: {operation.execution.error}")
-
         if operation.status == EventStatus.COMPLETED:
-            # Event stores result in response property
-            result = operation.response
-            self.results[operation.id] = result
-
-            # Update shared context if result contains context
-            if isinstance(result, dict) and "context" in result:
-                self.context.update(result["context"])
-
+            self.results[operation.id] = operation.response
             if self.verbose:
-                print(f"Completed operation: {str(operation.id)[:8]}")
+                name = operation.metadata.get("name", str(operation.id)[:8])
+                print(f"Completed operation: {name}")
         else:
-            # Execution failed
             error_msg = f"Execution status: {operation.status}"
             if hasattr(operation.execution, "error") and operation.execution.error:
                 error_msg += f" - {operation.execution.error}"
-            error = RuntimeError(error_msg)
-            self.errors[operation.id] = error
+            self.errors[operation.id] = RuntimeError(error_msg)
             if self.verbose:
-                print(f"Operation {str(operation.id)[:8]} failed: {error_msg}")
+                name = operation.metadata.get("name", str(operation.id)[:8])
+                print(f"Operation {name} failed: {error_msg}")
 
 
 async def flow(
     session: Session,
-    branch: Branch | str,
     graph: Graph,
     *,
-    context: dict[str, Any] | None = None,
+    branch: Branch | str | None = None,
     max_concurrent: int | None = None,
     stop_on_error: bool = True,
     verbose: bool = False,
 ) -> dict[str, Any]:
     """Execute operation graph with dependency-aware scheduling.
 
+    Operations are executed with their given parameters - no context injection.
+    For context passing between operations, use flow_report or manage context
+    explicitly before adding operations to the graph.
+
     Args:
+        session: Session for services and branches.
         graph: Operation graph (DAG) to execute.
+        branch: Default branch (operations can override via metadata).
         max_concurrent: Max concurrent operations (None = unlimited).
+        stop_on_error: Stop on first error.
+        verbose: Print progress.
 
     Returns:
         Dictionary mapping operation names to their results.
@@ -430,7 +337,6 @@ async def flow(
     executor = DependencyAwareExecutor(
         session=session,
         graph=graph,
-        context=context,
         max_concurrent=max_concurrent,
         stop_on_error=stop_on_error,
         verbose=verbose,
@@ -442,10 +348,9 @@ async def flow(
 
 async def flow_stream(
     session: Session,
-    branch: Branch | str,
     graph: Graph,
     *,
-    context: dict[str, Any] | None = None,
+    branch: Branch | str | None = None,
     max_concurrent: int | None = None,
     stop_on_error: bool = True,
 ) -> AsyncGenerator[OperationResult, None]:
@@ -453,7 +358,6 @@ async def flow_stream(
     executor = DependencyAwareExecutor(
         session=session,
         graph=graph,
-        context=context,
         max_concurrent=max_concurrent,
         stop_on_error=stop_on_error,
         verbose=False,

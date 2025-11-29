@@ -271,7 +271,7 @@ class TestDependencyAwareExecutor:
         )
         graph = builder.build()
 
-        results = await flow(session, branch, graph, verbose=False)
+        results = await flow(session, graph, branch=branch, verbose=False)
 
         assert "task1" in results
         assert "mock response" in results["task1"]
@@ -299,7 +299,7 @@ class TestDependencyAwareExecutor:
         builder.add("task2", "tracked", {"task_name": "task2"}, depends_on=["task1"])
         graph = builder.build()
 
-        await flow(session, branch, graph, verbose=False)
+        await flow(session, graph, branch=branch, verbose=False)
 
         # Verify task1 executed before task2
         assert execution_order.index("task1") < execution_order.index("task2")
@@ -327,7 +327,7 @@ class TestDependencyAwareExecutor:
         import time
 
         start = time.time()
-        results = await flow(session, branch, graph, verbose=False)
+        results = await flow(session, graph, branch=branch, verbose=False)
         elapsed = time.time() - start
 
         # Both should complete
@@ -337,38 +337,6 @@ class TestDependencyAwareExecutor:
         # If truly parallel, should be faster than sequential
         # (This is a weak assertion but demonstrates parallelism)
         assert elapsed < 1.0  # Very generous timeout
-
-    async def test_context_inheritance(self, session_with_model):
-        """Test operations receive predecessor results in context."""
-        session, model = session_with_model
-        branch = session.create_branch(name="test", resources={model.name})
-
-        # Create factory that uses context - accepts typed params or any params
-        async def context_consumer(session, branch, parameters):
-            # Parameters can be a dict with context added by the executor
-            context = getattr(parameters, "context", None) or (
-                parameters.get("context", {}) if isinstance(parameters, dict) else {}
-            )
-            return {"received_context": context}
-
-        # Register to session's per-session registry
-        session.operations.register("context_consumer", context_consumer)
-
-        builder = Builder()
-        builder.add(
-            "task1",
-            "generate",
-            GenerateParams(instruction="First", imodel=model, return_as="text"),
-        )
-        builder.add("task2", "context_consumer", None, depends_on=["task1"])
-        graph = builder.build()
-
-        results = await flow(session, branch, graph, verbose=False)
-
-        # Verify task2 received task1's result in context
-        assert "task2" in results
-        context = results["task2"]["received_context"]
-        assert "task1_result" in context
 
     async def test_aggregation_support(self, session_with_model):
         """Test aggregation operations wait for all sources."""
@@ -394,7 +362,7 @@ class TestDependencyAwareExecutor:
         )
 
         graph = builder.build()
-        results = await flow(session, branch, graph, verbose=False)
+        results = await flow(session, graph, branch=branch, verbose=False)
 
         # All tasks should complete
         assert "task1" in results
@@ -419,7 +387,7 @@ class TestDependencyAwareExecutor:
 
         # Note: gather(return_exceptions=True) means exceptions don't propagate
         # The executor captures the error but returns empty results
-        results = await flow(session, branch, graph, stop_on_error=True, verbose=False)
+        results = await flow(session, graph, branch=branch, stop_on_error=True, verbose=False)
 
         # Verify operation failed (no result for task1)
         assert "task1" not in results
@@ -452,7 +420,7 @@ class TestDependencyAwareExecutor:
         graph = builder.build()
 
         # Limit to 3 concurrent
-        await flow(session, branch, graph, max_concurrent=3, verbose=False)
+        await flow(session, graph, branch=branch, max_concurrent=3, verbose=False)
 
         # Should never exceed 3 concurrent
         assert max_concurrent_seen <= 3
@@ -1276,7 +1244,7 @@ class TestOperationsIntegration:
         )
 
         graph = builder.build()
-        results = await flow(session, branch, graph, verbose=False)
+        results = await flow(session, graph, branch=branch, verbose=False)
 
         # All operations should complete
         assert len(results) == 6
@@ -1312,7 +1280,7 @@ class TestOperationsIntegration:
         )
         graph = builder.build()
 
-        await flow(session, branch, graph, verbose=False)
+        await flow(session, graph, branch=branch, verbose=False)
 
         # Verify only system message remains (generate is stateless)
         messages = session.messages[branch]

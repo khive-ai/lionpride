@@ -786,7 +786,7 @@ class TestStreamClaudeCodeCli:
 
             mock.return_value = mock_gen(None)
 
-            request = ClaudeCodeRequest(prompt="test", verbose_output=True)
+            request = ClaudeCodeRequest(prompt="test", verbose=True)
 
             async for _ in stream_claude_code_cli(request):
                 pass
