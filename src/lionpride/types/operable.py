@@ -5,13 +5,15 @@ from __future__ import annotations
 
 import functools
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal, Self, get_args, get_origin
 
 from lionpride.protocols import Allowable, Hashable, implements
 
 from ._sentinel import MaybeUnset, Unset
 
 if TYPE_CHECKING:
+    from pydantic import BaseModel
+
     from .spec import Spec
     from .spec_adapters._protocol import SpecAdapter
 
@@ -204,3 +206,161 @@ class Operable:
             exclude=exclude,
             **kw,
         )
+
+    @classmethod
+    def from_model(
+        cls,
+        model: type[BaseModel],
+        *,
+        name: str | None = None,
+        adapter: AdapterType = "pydantic",
+    ) -> Self:
+        """Create Operable from a Pydantic model's fields.
+
+        Disassembles a model and returns an Operable with Specs
+        representing top-level fields of that model.
+
+        Args:
+            model: Pydantic BaseModel class to disassemble
+            name: Optional operable name (defaults to model class name)
+            adapter: Adapter type for model generation
+
+        Returns:
+            Operable with Specs for each top-level field
+
+        Example:
+            >>> class MyModel(BaseModel):
+            ...     name: str
+            ...     age: int = 0
+            ...     tags: list[str] | None = None
+            >>> op = Operable.from_model(MyModel)
+            >>> op.allowed()  # {'name', 'age', 'tags'}
+        """
+        from pydantic import BaseModel
+
+        if not isinstance(model, type) or not issubclass(model, BaseModel):
+            raise TypeError(f"model must be a Pydantic BaseModel subclass, got {type(model)}")
+
+        specs: list[Spec] = []
+
+        for field_name, field_info in model.model_fields.items():
+            spec = _field_info_to_spec(field_name, field_info)
+            specs.append(spec)
+
+        return cls(
+            specs=tuple(specs),
+            name=name or model.__name__,
+            adapter=adapter,
+        )
+
+
+def _is_nullable_type(annotation: Any) -> tuple[bool, Any]:
+    """Check if annotation is Optional/nullable and extract inner type.
+
+    Returns:
+        Tuple of (is_nullable, inner_type_or_original)
+    """
+    import types
+
+    origin = get_origin(annotation)
+
+    # Handle Union types (including Optional which is Union[X, None])
+    if origin is type(None):
+        return True, type(None)
+
+    if origin in (type(int | str), types.UnionType):  # Python 3.10+ union syntax
+        args = get_args(annotation)
+        non_none_args = [a for a in args if a is not type(None)]
+        if len(args) != len(non_none_args):  # None was in the union
+            if len(non_none_args) == 1:
+                return True, non_none_args[0]
+            # Multiple non-None types in union, keep as union minus None
+            if non_none_args:
+                from functools import reduce
+
+                return True, reduce(lambda a, b: a | b, non_none_args)
+        return False, annotation
+
+    # typing.Union
+    try:
+        from typing import Union
+
+        if origin is Union:
+            args = get_args(annotation)
+            non_none_args = [a for a in args if a is not type(None)]
+            if len(args) != len(non_none_args):
+                if len(non_none_args) == 1:
+                    return True, non_none_args[0]
+                if non_none_args:
+                    from functools import reduce
+
+                    return True, reduce(lambda a, b: a | b, non_none_args)
+            return False, annotation
+    except ImportError:
+        pass
+
+    return False, annotation
+
+
+def _is_list_type(annotation: Any) -> tuple[bool, Any]:
+    """Check if annotation is a list type and extract element type.
+
+    Returns:
+        Tuple of (is_list, element_type_or_original)
+    """
+    origin = get_origin(annotation)
+
+    if origin is list:
+        args = get_args(annotation)
+        if args:
+            return True, args[0]
+        return True, Any
+
+    return False, annotation
+
+
+def _field_info_to_spec(field_name: str, field_info: Any) -> Spec:
+    """Convert a Pydantic FieldInfo to a Spec.
+
+    Args:
+        field_name: Name of the field
+        field_info: Pydantic FieldInfo object
+
+    Returns:
+        Spec representing the field
+    """
+    from pydantic_core import PydanticUndefined
+
+    from .spec import Spec
+
+    annotation = field_info.annotation
+
+    # Check for nullable (Optional) types
+    is_nullable, inner_type = _is_nullable_type(annotation)
+
+    # Check for list types (after unwrapping Optional)
+    is_listable, element_type = _is_list_type(inner_type)
+
+    # Determine the base type
+    base_type = element_type if is_listable else inner_type
+
+    # Build the spec
+    spec = Spec(base_type=base_type, name=field_name)
+
+    if is_listable:
+        spec = spec.as_listable()
+
+    if is_nullable:
+        spec = spec.as_nullable()
+
+    # Handle default value
+    if field_info.default is not PydanticUndefined:
+        spec = spec.with_default(field_info.default)
+    elif field_info.default_factory is not None:
+        spec = spec.with_default(field_info.default_factory)
+
+    # Preserve description if present
+    if field_info.description:
+        spec = spec.with_updates(description=field_info.description)
+
+    return spec

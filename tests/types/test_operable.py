@@ -1464,3 +1464,190 @@ class TestOperable:
         model_dynamic = operable_no_name.create_model(adapter="pydantic")
         assert model_dynamic is not None
         assert model_dynamic.__name__ == "DynamicModel"
+
+
+class TestOperableFromModel:
+    """Tests for Operable.from_model() - disassembling Pydantic models into Operables."""
+
+    def test_from_model_basic(self):
+        """from_model() creates Operable from simple Pydantic model fields."""
+        from pydantic import BaseModel
+
+        class SimpleModel(BaseModel):
+            name: str
+            age: int
+
+        op = Operable.from_model(SimpleModel)
+
+        assert op.name == "SimpleModel"
+        assert op.allowed() == {"name", "age"}
+        assert len(op.__op_fields__) == 2
+
+    def test_from_model_with_defaults(self):
+        """from_model() preserves default values from model fields."""
+        from pydantic import BaseModel
+
+        class ModelWithDefaults(BaseModel):
+            name: str = "default_name"
+            count: int = 0
+
+        op = Operable.from_model(ModelWithDefaults)
+
+        name_spec = op.get("name")
+        count_spec = op.get("count")
+
+        assert name_spec.default == "default_name"
+        assert count_spec.default == 0
+
+    def test_from_model_nullable_fields(self):
+        """from_model() detects Optional/nullable fields."""
+        from pydantic import BaseModel
+
+        class ModelWithOptional(BaseModel):
+            required: str
+            optional: str | None = None
+
+        op = Operable.from_model(ModelWithOptional)
+
+        required_spec = op.get("required")
+        optional_spec = op.get("optional")
+
+        assert required_spec.is_nullable is False
+        assert optional_spec.is_nullable is True
+        assert optional_spec.default is None
+
+    def test_from_model_list_fields(self):
+        """from_model() detects list/listable fields."""
+        from pydantic import BaseModel
+
+        class ModelWithList(BaseModel):
+            tags: list[str]
+            scores: list[int] = []
+
+        op = Operable.from_model(ModelWithList)
+
+        tags_spec = op.get("tags")
+        scores_spec = op.get("scores")
+
+        assert tags_spec.is_listable is True
+        assert tags_spec.base_type is str
+        assert scores_spec.is_listable is True
+        assert scores_spec.base_type is int
+
+    def test_from_model_optional_list(self):
+        """from_model() handles Optional[list[T]] correctly."""
+        from pydantic import BaseModel
+
+        class ModelWithOptionalList(BaseModel):
+            items: list[str] | None = None
+
+        op = Operable.from_model(ModelWithOptionalList)
+
+        items_spec = op.get("items")
+
+        assert items_spec.is_listable is True
+        assert items_spec.is_nullable is True
+        assert items_spec.base_type is str
+        assert items_spec.default is None
+
+    def test_from_model_custom_name(self):
+        """from_model() accepts custom operable name."""
+        from pydantic import BaseModel
+
+        class OriginalName(BaseModel):
+            field: str
+
+        op = Operable.from_model(OriginalName, name="CustomName")
+
+        assert op.name == "CustomName"
+
+    def test_from_model_with_description(self):
+        """from_model() preserves field descriptions."""
+        from pydantic import BaseModel, Field
+
+        class ModelWithDescriptions(BaseModel):
+            name: str = Field(description="The user's name")
+            age: int = Field(description="Age in years")
+
+        op = Operable.from_model(ModelWithDescriptions)
+
+        name_spec = op.get("name")
+        age_spec = op.get("age")
+
+        assert name_spec.get("description") == "The user's name"
+        assert age_spec.get("description") == "Age in years"
+
+    def test_from_model_default_factory(self):
+        """from_model() preserves default_factory from fields."""
+        from pydantic import BaseModel, Field
+
+        class ModelWithFactory(BaseModel):
+            items: list[str] = Field(default_factory=list)
+
+        op = Operable.from_model(ModelWithFactory)
+
+        items_spec = op.get("items")
+
+        # Should have a default factory
+        assert items_spec.has_default_factory is True
+
+    def test_from_model_type_error_on_non_basemodel(self):
+        """from_model() raises TypeError for non-BaseModel classes."""
+
+        class NotAModel:
+            name: str
+
+        with pytest.raises(TypeError, match="must be a Pydantic BaseModel subclass"):
+            Operable.from_model(NotAModel)
+
+    def test_from_model_type_error_on_instance(self):
+        """from_model() raises TypeError when passed an instance instead of class."""
+        from pydantic import BaseModel
+
+        class MyModel(BaseModel):
+            name: str
+
+        instance = MyModel(name="test")
+
+        with pytest.raises(TypeError, match="must be a Pydantic BaseModel subclass"):
+            Operable.from_model(instance)  # type: ignore
+
+    def test_from_model_roundtrip(self):
+        """from_model() → create_model() produces equivalent model."""
+        from pydantic import BaseModel
+
+        class OriginalModel(BaseModel):
+            name: str
+            count: int = 0
+            tags: list[str] = []
+
+        op = Operable.from_model(OriginalModel)
+        ReconstructedModel = op.create_model()
+
+        # Test that both models accept same data
+        original = OriginalModel(name="test", count=5, tags=["a", "b"])
+        reconstructed = ReconstructedModel(name="test", count=5, tags=["a", "b"])
+
+        assert original.name == reconstructed.name
+        assert original.count == reconstructed.count
+        assert original.tags == reconstructed.tags
+
+    def test_from_model_complex_types(self):
+        """from_model() handles nested and complex type annotations."""
+        from pydantic import BaseModel
+
+        class Inner(BaseModel):
+            value: int
+
+        class Outer(BaseModel):
+            inner: Inner
+            inners: list[Inner] = []
+
+        op = Operable.from_model(Outer)
+
+        inner_spec = op.get("inner")
+        inners_spec = op.get("inners")
+
+        assert inner_spec.base_type is Inner
+        assert inners_spec.is_listable is True
+        assert inners_spec.base_type is Inner
