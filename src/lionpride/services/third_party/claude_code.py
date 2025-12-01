@@ -3,11 +3,11 @@
 
 from __future__ import annotations
 
-import asyncio
+import asyncio  # Required for subprocess management (create_subprocess_exec)
 import codecs
 import contextlib
 import inspect
-import json
+import json  # Required for JSONDecoder.raw_decode() (streaming JSON parsing)
 import logging
 import shutil
 from collections.abc import AsyncIterator, Callable

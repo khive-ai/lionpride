@@ -3,11 +3,11 @@
 
 from __future__ import annotations
 
-import asyncio
+import asyncio  # Required for subprocess management (create_subprocess_exec)
 import codecs
 import contextlib
 import inspect
-import json
+import json  # Required for JSONDecoder.raw_decode() (streaming JSON parsing)
 import logging
 import shutil
 from collections.abc import AsyncIterator, Callable
@@ -20,6 +20,8 @@ from textwrap import shorten
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
+
+from lionpride.ln import json_dumps
 
 HAS_GEMINI_CLI = False
 GEMINI_CLI = None
@@ -90,9 +92,7 @@ class GeminiCodeRequest(BaseModel):
             if message["role"] != "system":
                 content = message["content"]
                 if isinstance(content, (dict, list)):
-                    import json
-
-                    prompts.append(json.dumps(content))
+                    prompts.append(json_dumps(content))
                 else:
                     prompts.append(content)
             elif message["role"] == "system" and not data.get("system_prompt"):

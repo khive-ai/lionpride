@@ -9,9 +9,9 @@ Provides:
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
+from lionpride.libs.concurrency import Semaphore, gather
 from lionpride.operations.operate import (
     GenerateParams,
     OperateParams,
@@ -200,10 +200,10 @@ async def flow_report(
 
             if max_concurrent:
                 # Use semaphore for concurrency limit
-                sem = asyncio.Semaphore(max_concurrent)
+                sem = Semaphore(max_concurrent)
 
                 async def limited_execute(
-                    form: Form, semaphore: asyncio.Semaphore = sem
+                    form: Form, semaphore: Semaphore = sem
                 ) -> tuple[Form, Any]:
                     async with semaphore:
                         return await execute_one(form)
@@ -212,7 +212,7 @@ async def flow_report(
             else:
                 tasks = [execute_one(f) for f in ready_forms]
 
-            results = await asyncio.gather(*tasks)
+            results = await gather(*tasks)
 
             # Update report with results
             for form, result in results:

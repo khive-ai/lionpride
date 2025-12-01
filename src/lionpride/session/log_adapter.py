@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from abc import ABC, abstractmethod
@@ -13,7 +12,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import orjson
 from pydantic import BaseModel, Field
+
+from lionpride.ln import json_dumps
 
 if TYPE_CHECKING:
     from .logs import Log
@@ -228,8 +230,8 @@ class SQLiteWALLogAdapter(LogAdapter):
         for log in logs:
             log_dict = log.to_dict(mode="json")
             # Store full log as JSON content
-            content = json.dumps(log_dict, default=str)
-            metadata = json.dumps(log_dict.get("metadata", {}))
+            content = json_dumps(log_dict)
+            metadata = json_dumps(log_dict.get("metadata", {}))
 
             await self._connection.execute(
                 """
@@ -283,9 +285,9 @@ class SQLiteWALLogAdapter(LogAdapter):
         results = []
         for row in rows:
             try:
-                log_dict = json.loads(row[0])
+                log_dict = orjson.loads(row[0])
                 results.append(log_dict)
-            except (json.JSONDecodeError, TypeError):
+            except (orjson.JSONDecodeError, TypeError):
                 pass
 
         return results
@@ -391,8 +393,8 @@ class PostgresLogAdapter(LogAdapter):
             async with self._engine.begin() as conn:
                 for log in logs:
                     log_dict = log.to_dict(mode="json")
-                    content = json.dumps(log_dict, default=str)
-                    metadata = json.dumps(log_dict.get("metadata", {}))
+                    content = json_dumps(log_dict)
+                    metadata = json_dumps(log_dict.get("metadata", {}))
 
                     await conn.execute(
                         text(f"""
@@ -467,7 +469,7 @@ class PostgresLogAdapter(LogAdapter):
             for row in rows:
                 content = row[0]
                 if isinstance(content, str):
-                    content = json.loads(content)
+                    content = orjson.loads(content)
                 results.append(content)
 
             return results
