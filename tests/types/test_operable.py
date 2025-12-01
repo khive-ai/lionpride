@@ -1801,3 +1801,40 @@ class TestOperableFromModel:
         assert schema["properties"]["name"]["description"] == "User's full name"
         assert schema["properties"]["name"]["title"] == "Full Name"
         assert schema["properties"]["age"]["description"] == "Age in years"
+
+    def test_from_model_preserves_discriminator(self):
+        """from_model() preserves discriminator for discriminated unions."""
+        from typing import Literal, Union
+
+        from pydantic import BaseModel, Field
+
+        class Cat(BaseModel):
+            kind: Literal["cat"] = "cat"
+            meow_volume: int = 5
+
+        class Dog(BaseModel):
+            kind: Literal["dog"] = "dog"
+            bark_volume: int = 10
+
+        class Pet(BaseModel):
+            pet: Union[Cat, Dog] = Field(discriminator="kind")
+
+        # Disassemble
+        op = Operable.from_model(Pet)
+        pet_spec = op.get("pet")
+
+        # Check discriminator is preserved in spec
+        assert pet_spec.get("discriminator") == "kind"
+
+        # Reassemble and test discriminated union works
+        RecreatedModel = op.create_model()
+
+        # Should correctly parse Cat
+        cat_instance = RecreatedModel.model_validate({"pet": {"kind": "cat", "meow_volume": 8}})
+        assert cat_instance.pet.kind == "cat"
+        assert cat_instance.pet.meow_volume == 8
+
+        # Should correctly parse Dog
+        dog_instance = RecreatedModel.model_validate({"pet": {"kind": "dog", "bark_volume": 15}})
+        assert dog_instance.pet.kind == "dog"
+        assert dog_instance.pet.bark_volume == 15

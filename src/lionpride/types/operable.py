@@ -332,6 +332,7 @@ _FIELD_INFO_ATTRS = frozenset(
         "deprecated",
         "frozen",
         "json_schema_extra",
+        "discriminator",  # For discriminated unions
     }
 )
 
