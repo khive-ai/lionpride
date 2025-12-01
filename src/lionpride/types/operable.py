@@ -319,8 +319,43 @@ def _is_list_type(annotation: Any) -> tuple[bool, Any]:
     return False, annotation
 
 
+# Direct FieldInfo attributes to preserve
+_FIELD_INFO_ATTRS = frozenset(
+    {
+        # Metadata (stored as direct attributes)
+        "alias",
+        "validation_alias",
+        "serialization_alias",
+        "title",
+        "description",
+        "examples",
+        "deprecated",
+        "frozen",
+        "json_schema_extra",
+    }
+)
+
+# Constraints stored in FieldInfo.metadata as annotated_types objects
+_CONSTRAINT_MAPPING = {
+    "Gt": "gt",
+    "Ge": "ge",
+    "Lt": "lt",
+    "Le": "le",
+    "MultipleOf": "multiple_of",
+    "MinLen": "min_length",
+    "MaxLen": "max_length",
+}
+
+
 def _field_info_to_spec(field_name: str, field_info: Any) -> Spec:
     """Convert a Pydantic FieldInfo to a Spec.
+
+    Preserves:
+    - Type annotation (nullable, listable)
+    - Default value or factory
+    - Validation constraints (gt, lt, min_length, pattern, etc.)
+    - Metadata (description, alias, title, etc.)
+    - Requiredness for nullable fields without defaults
 
     Args:
         field_name: Name of the field
@@ -353,17 +388,57 @@ def _field_info_to_spec(field_name: str, field_info: Any) -> Spec:
     if is_nullable:
         spec = spec.as_nullable()
 
-    # Handle default value - check against PydanticUndefined, not None
-    if field_info.default is not PydanticUndefined:
-        spec = spec.with_default(field_info.default)
-    elif (
+    # Determine if field is required (no default value or factory)
+    has_default = field_info.default is not PydanticUndefined
+    has_default_factory = (
         field_info.default_factory is not None
         and field_info.default_factory is not PydanticUndefined
-    ):
+    )
+    is_required = not has_default and not has_default_factory
+
+    # Handle default value
+    if has_default:
+        spec = spec.with_default(field_info.default)
+    elif has_default_factory:
         spec = spec.with_default(field_info.default_factory)
 
-    # Preserve description if present
-    if field_info.description:
-        spec = spec.with_updates(description=field_info.description)
+    # For nullable fields without defaults, mark as required to prevent
+    # PydanticSpecAdapter from auto-injecting default=None
+    if is_nullable and is_required:
+        spec = spec.with_updates(required=True)
+
+    # Preserve FieldInfo direct attributes (metadata)
+    updates = {}
+    for attr in _FIELD_INFO_ATTRS:
+        value = getattr(field_info, attr, None)
+        if value is not None:
+            updates[attr] = value
+
+    # Extract constraints from FieldInfo.metadata (annotated_types objects)
+    # e.g., Gt(gt=0), Lt(lt=150), MinLen(min_length=1)
+    if hasattr(field_info, "metadata") and field_info.metadata:
+        for constraint in field_info.metadata:
+            constraint_type = type(constraint).__name__
+            if constraint_type in _CONSTRAINT_MAPPING:
+                key = _CONSTRAINT_MAPPING[constraint_type]
+                # Get the value from the constraint object
+                value = getattr(constraint, key, None)
+                if value is not None:
+                    updates[key] = value
+            # Handle Pydantic's Strict type
+            elif constraint_type == "Strict":
+                updates["strict"] = getattr(constraint, "strict", True)
+            # Handle pattern from _PydanticGeneralMetadata
+            elif constraint_type == "_PydanticGeneralMetadata":
+                pattern = getattr(constraint, "pattern", None)
+                if pattern is not None:
+                    updates["pattern"] = pattern
+                # Also check for strict in general metadata
+                strict = getattr(constraint, "strict", None)
+                if strict is not None:
+                    updates["strict"] = strict
+
+    if updates:
+        spec = spec.with_updates(**updates)
 
     return spec

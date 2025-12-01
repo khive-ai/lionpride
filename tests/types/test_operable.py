@@ -1675,3 +1675,129 @@ class TestOperableFromModel:
 
         # Optional field should have default
         assert optional_spec.default == "default"
+
+    def test_from_model_required_nullable_field_roundtrip(self):
+        """from_model() preserves requiredness for nullable fields without defaults.
+
+        A field like `foo: str | None` (no default) is REQUIRED in Pydantic.
+        After round-trip through Operable, it should still be required.
+        """
+        import pytest
+        from pydantic import BaseModel, ValidationError
+
+        class RequiredNullableModel(BaseModel):
+            required_nullable: str | None  # Required but can be None
+            optional_nullable: str | None = None  # Optional with default None
+
+        # Disassemble and reassemble
+        op = Operable.from_model(RequiredNullableModel)
+        RecreatedModel = op.create_model()
+
+        # required_nullable should still be REQUIRED (no default)
+        # This should raise ValidationError because required_nullable is missing
+        with pytest.raises(ValidationError):
+            RecreatedModel()  # Missing required_nullable
+
+        # Should work when required_nullable is provided (even as None)
+        instance = RecreatedModel(required_nullable=None)
+        assert instance.required_nullable is None
+
+        # optional_nullable should still be optional
+        assert instance.optional_nullable is None
+
+    def test_from_model_preserves_constraints(self):
+        """from_model() preserves FieldInfo constraints (gt, lt, min_length, etc.)."""
+        import pytest
+        from pydantic import BaseModel, Field, ValidationError
+
+        class ConstrainedModel(BaseModel):
+            age: int = Field(gt=0, lt=150, description="Age in years")
+            name: str = Field(min_length=1, max_length=100)
+            score: float = Field(ge=0.0, le=1.0)
+            email: str = Field(pattern=r"^[\w.-]+@[\w.-]+\.\w+$")
+
+        # Disassemble and reassemble
+        op = Operable.from_model(ConstrainedModel)
+        RecreatedModel = op.create_model()
+
+        # Test gt constraint preserved
+        with pytest.raises(ValidationError):
+            RecreatedModel(age=0, name="Alice", score=0.5, email="a@b.co")
+
+        # Test lt constraint preserved
+        with pytest.raises(ValidationError):
+            RecreatedModel(age=150, name="Alice", score=0.5, email="a@b.co")
+
+        # Test min_length constraint preserved
+        with pytest.raises(ValidationError):
+            RecreatedModel(age=25, name="", score=0.5, email="a@b.co")
+
+        # Test max_length constraint preserved
+        with pytest.raises(ValidationError):
+            RecreatedModel(age=25, name="A" * 101, score=0.5, email="a@b.co")
+
+        # Test ge constraint preserved
+        with pytest.raises(ValidationError):
+            RecreatedModel(age=25, name="Alice", score=-0.1, email="a@b.co")
+
+        # Test le constraint preserved
+        with pytest.raises(ValidationError):
+            RecreatedModel(age=25, name="Alice", score=1.1, email="a@b.co")
+
+        # Test pattern constraint preserved
+        with pytest.raises(ValidationError):
+            RecreatedModel(age=25, name="Alice", score=0.5, email="invalid")
+
+        # Valid data should pass
+        instance = RecreatedModel(age=25, name="Alice", score=0.5, email="alice@example.com")
+        assert instance.age == 25
+        assert instance.name == "Alice"
+        assert instance.score == 0.5
+        assert instance.email == "alice@example.com"
+
+    def test_from_model_preserves_aliases(self):
+        """from_model() preserves field aliases."""
+        from pydantic import BaseModel, Field
+
+        class AliasModel(BaseModel):
+            user_name: str = Field(alias="userName")
+            email_address: str = Field(serialization_alias="email")
+
+        # Disassemble and reassemble
+        op = Operable.from_model(AliasModel)
+        RecreatedModel = op.create_model()
+
+        # Test alias works for input
+        instance = RecreatedModel.model_validate({"userName": "alice", "email_address": "a@b.co"})
+        assert instance.user_name == "alice"
+
+        # Test serialization_alias works for output
+        dumped = instance.model_dump(by_alias=True)
+        assert dumped.get("email") == "a@b.co"
+
+    def test_from_model_preserves_description_and_title(self):
+        """from_model() preserves description and title metadata."""
+        from pydantic import BaseModel, Field
+
+        class MetadataModel(BaseModel):
+            name: str = Field(description="User's full name", title="Full Name")
+            age: int = Field(description="Age in years")
+
+        # Disassemble
+        op = Operable.from_model(MetadataModel)
+
+        # Check spec metadata
+        name_spec = op.get("name")
+        age_spec = op.get("age")
+
+        assert name_spec.get("description") == "User's full name"
+        assert name_spec.get("title") == "Full Name"
+        assert age_spec.get("description") == "Age in years"
+
+        # Reassemble and check model schema
+        RecreatedModel = op.create_model()
+        schema = RecreatedModel.model_json_schema()
+
+        assert schema["properties"]["name"]["description"] == "User's full name"
+        assert schema["properties"]["name"]["title"] == "Full Name"
+        assert schema["properties"]["age"]["description"] == "Age in years"
