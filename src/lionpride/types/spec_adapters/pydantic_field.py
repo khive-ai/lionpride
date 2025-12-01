@@ -70,10 +70,14 @@ class PydanticSpecAdapter(SpecAdapter["BaseModel"]):
                     field_kwargs["json_schema_extra"][meta.key] = meta.value
 
         # Handle nullable case - ensure default is set if not already
+        # BUT respect 'required=True' metadata to preserve requiredness for
+        # nullable fields that were originally required (e.g., `foo: str | None`)
+        is_required = any(m.key == "required" and m.value for m in spec.metadata)
         if (
             spec.is_nullable
             and "default" not in field_kwargs
             and "default_factory" not in field_kwargs
+            and not is_required
         ):
             field_kwargs["default"] = None
 

@@ -1464,3 +1464,403 @@ class TestOperable:
         model_dynamic = operable_no_name.create_model(adapter="pydantic")
         assert model_dynamic is not None
         assert model_dynamic.__name__ == "DynamicModel"
+
+
+class TestOperableFromModel:
+    """Tests for Operable.from_model() - disassembling Pydantic models into Operables."""
+
+    def test_from_model_basic(self):
+        """from_model() creates Operable from simple Pydantic model fields."""
+        from pydantic import BaseModel
+
+        class SimpleModel(BaseModel):
+            name: str
+            age: int
+
+        op = Operable.from_model(SimpleModel)
+
+        assert op.name == "SimpleModel"
+        assert op.allowed() == {"name", "age"}
+        assert len(op.__op_fields__) == 2
+
+    def test_from_model_with_defaults(self):
+        """from_model() preserves default values from model fields."""
+        from pydantic import BaseModel
+
+        class ModelWithDefaults(BaseModel):
+            name: str = "default_name"
+            count: int = 0
+
+        op = Operable.from_model(ModelWithDefaults)
+
+        name_spec = op.get("name")
+        count_spec = op.get("count")
+
+        assert name_spec.default == "default_name"
+        assert count_spec.default == 0
+
+    def test_from_model_nullable_fields(self):
+        """from_model() detects Optional/nullable fields."""
+        from pydantic import BaseModel
+
+        class ModelWithOptional(BaseModel):
+            required: str
+            optional: str | None = None
+
+        op = Operable.from_model(ModelWithOptional)
+
+        required_spec = op.get("required")
+        optional_spec = op.get("optional")
+
+        assert required_spec.is_nullable is False
+        assert optional_spec.is_nullable is True
+        assert optional_spec.default is None
+
+    def test_from_model_list_fields(self):
+        """from_model() detects list/listable fields."""
+        from pydantic import BaseModel
+
+        class ModelWithList(BaseModel):
+            tags: list[str]
+            scores: list[int] = []
+
+        op = Operable.from_model(ModelWithList)
+
+        tags_spec = op.get("tags")
+        scores_spec = op.get("scores")
+
+        assert tags_spec.is_listable is True
+        assert tags_spec.base_type is str
+        assert scores_spec.is_listable is True
+        assert scores_spec.base_type is int
+
+    def test_from_model_optional_list(self):
+        """from_model() handles Optional[list[T]] correctly."""
+        from pydantic import BaseModel
+
+        class ModelWithOptionalList(BaseModel):
+            items: list[str] | None = None
+
+        op = Operable.from_model(ModelWithOptionalList)
+
+        items_spec = op.get("items")
+
+        assert items_spec.is_listable is True
+        assert items_spec.is_nullable is True
+        assert items_spec.base_type is str
+        assert items_spec.default is None
+
+    def test_from_model_custom_name(self):
+        """from_model() accepts custom operable name."""
+        from pydantic import BaseModel
+
+        class OriginalName(BaseModel):
+            field: str
+
+        op = Operable.from_model(OriginalName, name="CustomName")
+
+        assert op.name == "CustomName"
+
+    def test_from_model_with_description(self):
+        """from_model() preserves field descriptions."""
+        from pydantic import BaseModel, Field
+
+        class ModelWithDescriptions(BaseModel):
+            name: str = Field(description="The user's name")
+            age: int = Field(description="Age in years")
+
+        op = Operable.from_model(ModelWithDescriptions)
+
+        name_spec = op.get("name")
+        age_spec = op.get("age")
+
+        assert name_spec.get("description") == "The user's name"
+        assert age_spec.get("description") == "Age in years"
+
+    def test_from_model_default_factory(self):
+        """from_model() preserves default_factory from fields."""
+        from pydantic import BaseModel, Field
+
+        class ModelWithFactory(BaseModel):
+            items: list[str] = Field(default_factory=list)
+
+        op = Operable.from_model(ModelWithFactory)
+
+        items_spec = op.get("items")
+
+        # Should have a default factory
+        assert items_spec.has_default_factory is True
+
+    def test_from_model_type_error_on_non_basemodel(self):
+        """from_model() raises TypeError for non-BaseModel classes."""
+
+        class NotAModel:
+            name: str
+
+        with pytest.raises(TypeError, match="must be a Pydantic BaseModel subclass"):
+            Operable.from_model(NotAModel)
+
+    def test_from_model_type_error_on_instance(self):
+        """from_model() raises TypeError when passed an instance instead of class."""
+        from pydantic import BaseModel
+
+        class MyModel(BaseModel):
+            name: str
+
+        instance = MyModel(name="test")
+
+        with pytest.raises(TypeError, match="must be a Pydantic BaseModel subclass"):
+            Operable.from_model(instance)  # type: ignore
+
+    def test_from_model_roundtrip(self):
+        """from_model() → create_model() produces equivalent model."""
+        from pydantic import BaseModel
+
+        class OriginalModel(BaseModel):
+            name: str
+            count: int = 0
+            tags: list[str] = []
+
+        op = Operable.from_model(OriginalModel)
+        ReconstructedModel = op.create_model()
+
+        # Test that both models accept same data
+        original = OriginalModel(name="test", count=5, tags=["a", "b"])
+        reconstructed = ReconstructedModel(name="test", count=5, tags=["a", "b"])
+
+        assert original.name == reconstructed.name
+        assert original.count == reconstructed.count
+        assert original.tags == reconstructed.tags
+
+    def test_from_model_complex_types(self):
+        """from_model() handles nested and complex type annotations."""
+        from pydantic import BaseModel
+
+        class Inner(BaseModel):
+            value: int
+
+        class Outer(BaseModel):
+            inner: Inner
+            inners: list[Inner] = []
+
+        op = Operable.from_model(Outer)
+
+        inner_spec = op.get("inner")
+        inners_spec = op.get("inners")
+
+        assert inner_spec.base_type is Inner
+        assert inners_spec.is_listable is True
+        assert inners_spec.base_type is Inner
+
+    def test_from_model_required_fields_no_default(self):
+        """from_model() does not set default on required fields."""
+        from pydantic import BaseModel
+
+        from lionpride.types import Undefined
+
+        class RequiredFieldsModel(BaseModel):
+            required_str: str
+            required_int: int
+            optional_with_default: str = "default"
+
+        op = Operable.from_model(RequiredFieldsModel)
+
+        required_str_spec = op.get("required_str")
+        required_int_spec = op.get("required_int")
+        optional_spec = op.get("optional_with_default")
+
+        # Required fields should NOT have defaults
+        assert required_str_spec.default is Undefined
+        assert required_int_spec.default is Undefined
+
+        # Optional field should have default
+        assert optional_spec.default == "default"
+
+    def test_from_model_required_nullable_field_roundtrip(self):
+        """from_model() preserves requiredness for nullable fields without defaults.
+
+        A field like `foo: str | None` (no default) is REQUIRED in Pydantic.
+        After round-trip through Operable, it should still be required.
+        """
+        import pytest
+        from pydantic import BaseModel, ValidationError
+
+        class RequiredNullableModel(BaseModel):
+            required_nullable: str | None  # Required but can be None
+            optional_nullable: str | None = None  # Optional with default None
+
+        # Disassemble and reassemble
+        op = Operable.from_model(RequiredNullableModel)
+        RecreatedModel = op.create_model()
+
+        # required_nullable should still be REQUIRED (no default)
+        # This should raise ValidationError because required_nullable is missing
+        with pytest.raises(ValidationError):
+            RecreatedModel()  # Missing required_nullable
+
+        # Should work when required_nullable is provided (even as None)
+        instance = RecreatedModel(required_nullable=None)
+        assert instance.required_nullable is None
+
+        # optional_nullable should still be optional
+        assert instance.optional_nullable is None
+
+    def test_from_model_preserves_constraints(self):
+        """from_model() preserves FieldInfo constraints (gt, lt, min_length, etc.)."""
+        import pytest
+        from pydantic import BaseModel, Field, ValidationError
+
+        class ConstrainedModel(BaseModel):
+            age: int = Field(gt=0, lt=150, description="Age in years")
+            name: str = Field(min_length=1, max_length=100)
+            score: float = Field(ge=0.0, le=1.0)
+            email: str = Field(pattern=r"^[\w.-]+@[\w.-]+\.\w+$")
+
+        # Disassemble and reassemble
+        op = Operable.from_model(ConstrainedModel)
+        RecreatedModel = op.create_model()
+
+        # Test gt constraint preserved
+        with pytest.raises(ValidationError):
+            RecreatedModel(age=0, name="Alice", score=0.5, email="a@b.co")
+
+        # Test lt constraint preserved
+        with pytest.raises(ValidationError):
+            RecreatedModel(age=150, name="Alice", score=0.5, email="a@b.co")
+
+        # Test min_length constraint preserved
+        with pytest.raises(ValidationError):
+            RecreatedModel(age=25, name="", score=0.5, email="a@b.co")
+
+        # Test max_length constraint preserved
+        with pytest.raises(ValidationError):
+            RecreatedModel(age=25, name="A" * 101, score=0.5, email="a@b.co")
+
+        # Test ge constraint preserved
+        with pytest.raises(ValidationError):
+            RecreatedModel(age=25, name="Alice", score=-0.1, email="a@b.co")
+
+        # Test le constraint preserved
+        with pytest.raises(ValidationError):
+            RecreatedModel(age=25, name="Alice", score=1.1, email="a@b.co")
+
+        # Test pattern constraint preserved
+        with pytest.raises(ValidationError):
+            RecreatedModel(age=25, name="Alice", score=0.5, email="invalid")
+
+        # Valid data should pass
+        instance = RecreatedModel(age=25, name="Alice", score=0.5, email="alice@example.com")
+        assert instance.age == 25
+        assert instance.name == "Alice"
+        assert instance.score == 0.5
+        assert instance.email == "alice@example.com"
+
+    def test_from_model_preserves_aliases(self):
+        """from_model() preserves field aliases."""
+        from pydantic import BaseModel, Field
+
+        class AliasModel(BaseModel):
+            user_name: str = Field(alias="userName")
+            email_address: str = Field(serialization_alias="email")
+
+        # Disassemble and reassemble
+        op = Operable.from_model(AliasModel)
+        RecreatedModel = op.create_model()
+
+        # Test alias works for input
+        instance = RecreatedModel.model_validate({"userName": "alice", "email_address": "a@b.co"})
+        assert instance.user_name == "alice"
+
+        # Test serialization_alias works for output
+        dumped = instance.model_dump(by_alias=True)
+        assert dumped.get("email") == "a@b.co"
+
+    def test_from_model_preserves_description_and_title(self):
+        """from_model() preserves description and title metadata."""
+        from pydantic import BaseModel, Field
+
+        class MetadataModel(BaseModel):
+            name: str = Field(description="User's full name", title="Full Name")
+            age: int = Field(description="Age in years")
+
+        # Disassemble
+        op = Operable.from_model(MetadataModel)
+
+        # Check spec metadata
+        name_spec = op.get("name")
+        age_spec = op.get("age")
+
+        assert name_spec.get("description") == "User's full name"
+        assert name_spec.get("title") == "Full Name"
+        assert age_spec.get("description") == "Age in years"
+
+        # Reassemble and check model schema
+        RecreatedModel = op.create_model()
+        schema = RecreatedModel.model_json_schema()
+
+        assert schema["properties"]["name"]["description"] == "User's full name"
+        assert schema["properties"]["name"]["title"] == "Full Name"
+        assert schema["properties"]["age"]["description"] == "Age in years"
+
+    def test_from_model_preserves_discriminator(self):
+        """from_model() preserves discriminator for discriminated unions."""
+        from typing import Literal, Union
+
+        from pydantic import BaseModel, Field
+
+        class Cat(BaseModel):
+            kind: Literal["cat"] = "cat"
+            meow_volume: int = 5
+
+        class Dog(BaseModel):
+            kind: Literal["dog"] = "dog"
+            bark_volume: int = 10
+
+        class Pet(BaseModel):
+            pet: Union[Cat, Dog] = Field(discriminator="kind")
+
+        # Disassemble
+        op = Operable.from_model(Pet)
+        pet_spec = op.get("pet")
+
+        # Check discriminator is preserved in spec
+        assert pet_spec.get("discriminator") == "kind"
+
+        # Reassemble and test discriminated union works
+        RecreatedModel = op.create_model()
+
+        # Should correctly parse Cat
+        cat_instance = RecreatedModel.model_validate({"pet": {"kind": "cat", "meow_volume": 8}})
+        assert cat_instance.pet.kind == "cat"
+        assert cat_instance.pet.meow_volume == 8
+
+        # Should correctly parse Dog
+        dog_instance = RecreatedModel.model_validate({"pet": {"kind": "dog", "bark_volume": 15}})
+        assert dog_instance.pet.kind == "dog"
+        assert dog_instance.pet.bark_volume == 15
+
+    def test_from_model_preserves_exclude(self):
+        """from_model() preserves exclude flag (important for security)."""
+        from pydantic import BaseModel, Field
+
+        class UserModel(BaseModel):
+            username: str
+            password: str = Field(exclude=True)  # Should not appear in serialization
+            email: str
+
+        # Disassemble
+        op = Operable.from_model(UserModel)
+        password_spec = op.get("password")
+
+        # Check exclude is preserved in spec
+        assert password_spec.get("exclude") is True
+
+        # Reassemble and verify exclude works
+        RecreatedModel = op.create_model()
+        instance = RecreatedModel(username="alice", password="secret123", email="a@b.com")
+
+        # Password should be excluded from serialization
+        dumped = instance.model_dump()
+        assert "username" in dumped
+        assert "email" in dumped
+        assert "password" not in dumped  # CRITICAL: password must be excluded
