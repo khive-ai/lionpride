@@ -333,6 +333,12 @@ _FIELD_INFO_ATTRS = frozenset(
         "frozen",
         "json_schema_extra",
         "discriminator",  # For discriminated unions
+        "exclude",  # Exclude from serialization (important for sensitive fields)
+        "repr",  # Control repr output
+        "init",  # Control __init__ inclusion
+        "init_var",  # Init-only variable
+        "kw_only",  # Keyword-only argument
+        "validate_default",  # Validate default value
     }
 )
 

@@ -1838,3 +1838,29 @@ class TestOperableFromModel:
         dog_instance = RecreatedModel.model_validate({"pet": {"kind": "dog", "bark_volume": 15}})
         assert dog_instance.pet.kind == "dog"
         assert dog_instance.pet.bark_volume == 15
+
+    def test_from_model_preserves_exclude(self):
+        """from_model() preserves exclude flag (important for security)."""
+        from pydantic import BaseModel, Field
+
+        class UserModel(BaseModel):
+            username: str
+            password: str = Field(exclude=True)  # Should not appear in serialization
+            email: str
+
+        # Disassemble
+        op = Operable.from_model(UserModel)
+        password_spec = op.get("password")
+
+        # Check exclude is preserved in spec
+        assert password_spec.get("exclude") is True
+
+        # Reassemble and verify exclude works
+        RecreatedModel = op.create_model()
+        instance = RecreatedModel(username="alice", password="secret123", email="a@b.com")
+
+        # Password should be excluded from serialization
+        dumped = instance.model_dump()
+        assert "username" in dumped
+        assert "email" in dumped
+        assert "password" not in dumped  # CRITICAL: password must be excluded
