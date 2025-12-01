@@ -5,15 +5,13 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any
+from typing import Any
+
+import orjson
 
 from .base import Rule, RuleParams, RuleQualifier
 from .models import ActionRequest
-
-if TYPE_CHECKING:
-    pass
 
 __all__ = ("ActionRequestRule",)
 
@@ -117,8 +115,8 @@ class ActionRequestRule(Rule):
         # Parse JSON string
         if isinstance(v, str):
             try:
-                v = json.loads(v)
-            except json.JSONDecodeError as e:
+                v = orjson.loads(v)
+            except orjson.JSONDecodeError as e:
                 raise ValueError(f"Failed to parse action request JSON: {e}") from e
 
         if not isinstance(v, Mapping):
@@ -149,8 +147,8 @@ class ActionRequestRule(Rule):
         # Parse JSON string arguments (OpenAI format)
         if isinstance(arguments, str):
             try:
-                arguments = json.loads(arguments)
-            except json.JSONDecodeError:
+                arguments = orjson.loads(arguments)
+            except orjson.JSONDecodeError:
                 # Keep as string if not valid JSON
                 arguments = {"raw": arguments}
 

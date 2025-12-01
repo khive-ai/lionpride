@@ -3,9 +3,10 @@
 
 """Mapping validation rule for dict/mapping structures."""
 
-import json
 from collections.abc import Mapping
 from typing import Any
+
+import orjson
 
 from .base import Rule, RuleParams, RuleQualifier
 
@@ -103,8 +104,8 @@ class MappingRule(Rule):
         # Try JSON parsing for strings
         if isinstance(v, str):
             try:
-                v = json.loads(v)
-            except json.JSONDecodeError as e:
+                v = orjson.loads(v)
+            except orjson.JSONDecodeError as e:
                 raise ValueError(f"Failed to parse JSON string: {e}") from e
 
         if not isinstance(v, Mapping):

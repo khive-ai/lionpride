@@ -319,3 +319,46 @@ class TestFlowReportUnit:
                 session=mock_session,
                 report=report,
             )
+
+    @pytest.mark.asyncio
+    async def test_flow_report_max_concurrent(self):
+        """Test that max_concurrent limits parallel execution."""
+
+        class TestReport(Report):
+            a: SimpleOutput | None = None
+            b: SimpleOutput | None = None
+            c: SimpleOutput | None = None
+
+            assignment: str = "input -> c"
+            form_assignments: list[str] = [
+                "input -> a",
+                "input -> b",
+                "a, b -> c",
+            ]
+
+        report = TestReport()
+        report.initialize(input="test")
+
+        mock_session = MagicMock()
+        mock_session.default_branch = MagicMock()
+        mock_session.get_branch = MagicMock(return_value=mock_session.default_branch)
+
+        async def mock_operate_side_effect(session, branch, params):
+            if "a" in params.capabilities:
+                return SimpleOutput(result="a")
+            elif "b" in params.capabilities:
+                return SimpleOutput(result="b")
+            elif "c" in params.capabilities:
+                return SimpleOutput(result="c")
+            return SimpleOutput(result="unknown")
+
+        with patch("lionpride.work.runner.operate", side_effect=mock_operate_side_effect):
+            result = await flow_report(
+                session=mock_session,
+                report=report,
+                max_concurrent=1,  # Limit to 1 concurrent execution
+            )
+
+        # Verify all forms completed
+        assert len(report.completed_forms) == 3
+        assert "c" in result

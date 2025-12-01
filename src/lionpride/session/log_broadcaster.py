@@ -17,13 +17,14 @@ Example:
 
 from __future__ import annotations
 
-import json
 import logging
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
+
+from lionpride.ln import json_dumps
 
 if TYPE_CHECKING:
     from .logs import Log
@@ -125,7 +126,7 @@ class S3LogSubscriber(LogSubscriber):
 
         # Convert logs to JSON
         log_dicts = [log.to_dict(mode="json") for log in logs]
-        content = json.dumps(log_dicts, indent=2, default=str)
+        content = json_dumps(log_dicts, pretty=True)
 
         try:
             async with self._client.client(
