@@ -1651,3 +1651,27 @@ class TestOperableFromModel:
         assert inner_spec.base_type is Inner
         assert inners_spec.is_listable is True
         assert inners_spec.base_type is Inner
+
+    def test_from_model_required_fields_no_default(self):
+        """from_model() does not set default on required fields."""
+        from pydantic import BaseModel
+
+        from lionpride.types import Undefined
+
+        class RequiredFieldsModel(BaseModel):
+            required_str: str
+            required_int: int
+            optional_with_default: str = "default"
+
+        op = Operable.from_model(RequiredFieldsModel)
+
+        required_str_spec = op.get("required_str")
+        required_int_spec = op.get("required_int")
+        optional_spec = op.get("optional_with_default")
+
+        # Required fields should NOT have defaults
+        assert required_str_spec.default is Undefined
+        assert required_int_spec.default is Undefined
+
+        # Optional field should have default
+        assert optional_spec.default == "default"

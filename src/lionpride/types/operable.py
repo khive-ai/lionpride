@@ -353,10 +353,13 @@ def _field_info_to_spec(field_name: str, field_info: Any) -> Spec:
     if is_nullable:
         spec = spec.as_nullable()
 
-    # Handle default value
+    # Handle default value - check against PydanticUndefined, not None
     if field_info.default is not PydanticUndefined:
         spec = spec.with_default(field_info.default)
-    elif field_info.default_factory is not None:
+    elif (
+        field_info.default_factory is not None
+        and field_info.default_factory is not PydanticUndefined
+    ):
         spec = spec.with_default(field_info.default_factory)
 
     # Preserve description if present
