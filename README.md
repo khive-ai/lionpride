@@ -59,7 +59,7 @@ asyncio.run(main())
 
 ### Session & Branch
 
-`Session` orchestrates messages, services, and operations. `Branch` is a named conversation thread with access control.
+`Session` orchestrates messages, services, and operations. `Branch` is a named conversation thread with capability-based access control.
 
 ```python
 from lionpride import Session, iModel
@@ -68,10 +68,11 @@ from lionpride import Session, iModel
 model = iModel(provider="openai", model="gpt-4o-mini")
 session = Session(default_generate_model=model)
 
-# Branch inherits access to default model
+# Branch with capability and resource restrictions
 branch = session.create_branch(
-    name="analysis",
-    capabilities={"MyOutputSchema"},  # Allowed output types
+    name="restricted",
+    capabilities={"AnalysisModel"},  # Only these output types allowed
+    resources={"gpt-4o-mini"},        # Only these services allowed
 )
 ```
 
@@ -111,18 +112,20 @@ branch = session.create_branch(resources={"gpt4", "claude"})  # Access to both
 
 ### Declarative Workflows
 
-`Report` and `Form` enable multi-step agent pipelines with automatic dependency resolution:
+`Report` and `Form` enable multi-step agent pipelines with automatic dependency resolution. Model docstrings serve as agent instructions:
 
 ```python
 from pydantic import BaseModel
 from lionpride.work import Report, flow_report
 
 class Analysis(BaseModel):
+    '''Analyze the topic and provide insights.
+    Focus on actionable recommendations.'''
     summary: str
-    score: float
+    recommendations: list[str]
 
 class MyReport(Report):
-    analysis: Analysis | None = None  # Schema attribute
+    analysis: Analysis | None = None  # Schema attribute (docstring = instruction)
 
     assignment: str = "topic -> analysis"
     form_assignments: list[str] = ["topic -> analysis"]
@@ -152,7 +155,13 @@ See [CLAUDE.md](CLAUDE.md) for detailed codebase navigation.
 ## Documentation
 
 - [CLAUDE.md](CLAUDE.md) - AI agent codebase guide
-- [AGENTS.md](AGENTS.md) - Quick reference for AI agents
+- [AGENTS.md](AGENTS.md) - Quick reference
+- [API Reference](docs/api/) - Comprehensive API docs
+  - [Session](docs/api/session/) - Session, Branch, Message
+  - [Services](docs/api/services/) - iModel, ServiceRegistry, Tool
+  - [Operations](docs/api/operations/) - operate, react, communicate
+  - [Rules](docs/api/rules/) - Validation and auto-correction
+  - [Work](docs/api/work/) - Report, Form, flow_report
 - [notebooks/](notebooks/) - Example notebooks
 
 ## Roadmap

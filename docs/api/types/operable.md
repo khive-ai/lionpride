@@ -429,6 +429,120 @@ Validation failed
 
 Pydantic adapter implementation is available in `src/lionpride/types/spec_adapters/pydantic_field.py`.
 
+#### `from_model()` (classmethod)
+
+Create Operable from a Pydantic model's fields.
+
+Disassembles a Pydantic BaseModel class and returns an Operable with Specs representing each top-level field. Preserves type annotations (including nullable/listable), default values, validation constraints, and metadata.
+
+**Signature:**
+
+```python
+@classmethod
+def from_model(
+    cls,
+    model: type[BaseModel],
+    *,
+    name: str | None = None,
+    adapter: AdapterType = "pydantic",
+) -> Self: ...
+```
+
+**Parameters:**
+
+- `model` (type[BaseModel]): Pydantic BaseModel class to disassemble (not an instance)
+- `name` (str, optional): Optional operable name. Default: model's class name (`model.__name__`)
+- `adapter` ({'pydantic'}, default 'pydantic'): Adapter type for model generation
+
+**Returns:**
+
+- Self: Operable instance with Specs for each top-level field of the model
+
+**Raises:**
+
+- TypeError: If `model` is not a Pydantic BaseModel subclass
+
+**Examples:**
+
+```python
+>>> from lionpride.types import Operable
+>>> from pydantic import BaseModel, Field
+
+# Define a Pydantic model
+>>> class User(BaseModel):
+...     name: str
+...     age: int = 0
+...     tags: list[str] | None = None
+...     email: str = Field(description="User email address")
+
+# Create Operable from model
+>>> op = Operable.from_model(User)
+>>> op.name
+'User'
+
+>>> op.allowed()
+{'name', 'age', 'tags', 'email'}
+
+# Access individual specs
+>>> name_spec = op.get("name")
+>>> name_spec.base_type
+<class 'str'>
+
+>>> age_spec = op.get("age")
+>>> age_spec.default
+0
+
+>>> tags_spec = op.get("tags")
+>>> tags_spec.nullable
+True
+>>> tags_spec.listable
+True
+
+# Metadata preserved
+>>> email_spec = op.get("email")
+>>> email_spec.description
+'User email address'
+```
+
+**Preserved Field Properties:**
+
+The method preserves comprehensive field information:
+
+| Property | Example | Notes |
+|----------|---------|-------|
+| Type annotation | `str`, `int`, `MyClass` | Base type extracted |
+| Nullable | `str \| None`, `Optional[str]` | Sets `spec.nullable = True` |
+| Listable | `list[str]`, `List[int]` | Sets `spec.listable = True` |
+| Default value | `age: int = 0` | Sets `spec.default` |
+| Default factory | `tags: list = Field(default_factory=list)` | Sets `spec.default` to factory |
+| Constraints | `Field(gt=0, lt=100)` | Preserves gt, lt, ge, le, etc. |
+| Metadata | `Field(description="...")` | Preserves description, alias, title, etc. |
+
+**Notes:**
+
+**Use Cases:**
+
+- **Schema Inspection**: Analyze existing Pydantic models as Operable specifications
+- **Round-Trip Conversion**: Model -> Operable -> Modified Model (add/remove fields)
+- **Schema Migration**: Extract schema from one model, filter fields, create new model
+- **Testing**: Create Operables from production models for test scenarios
+
+**Nullable Required Fields:**
+
+When a field is nullable (`str | None`) but has no default value, the resulting Spec is marked with `required=True` to prevent automatic `default=None` injection during model regeneration. This preserves the original semantics where the field must be explicitly provided.
+
+```python
+>>> class Config(BaseModel):
+...     setting: str | None  # Required nullable field (no default!)
+
+>>> op = Operable.from_model(Config)
+>>> spec = op.get("setting")
+>>> spec.nullable
+True
+>>> spec.required  # Preserved: field is required even though nullable
+True
+```
+
 ## Protocol Implementations
 
 Operable implements two core protocols:
@@ -649,6 +763,105 @@ llm_output = {
 response = ResponseModel(**llm_output)
 print(response.task)  # "Analyze sentiment"
 print(response.confidence)  # 0.92
+```
+
+### Model Disassembly with `from_model()`
+
+```python
+from lionpride.types import Operable, Spec
+from pydantic import BaseModel, Field
+
+# Existing Pydantic model
+class UserProfile(BaseModel):
+    user_id: str
+    username: str
+    email: str = Field(description="Primary email")
+    age: int = Field(default=0, ge=0, le=150)
+    verified: bool = False
+    roles: list[str] | None = None
+
+# Disassemble model into Operable
+op = Operable.from_model(UserProfile)
+print(op.name)  # "UserProfile"
+print(op.allowed())  # {'user_id', 'username', 'email', 'age', 'verified', 'roles'}
+
+# Inspect preserved constraints
+age_spec = op.get("age")
+print(age_spec.ge)  # 0
+print(age_spec.le)  # 150
+
+# Inspect preserved metadata
+email_spec = op.get("email")
+print(email_spec.description)  # "Primary email"
+```
+
+### Round-Trip: Model -> Operable -> Model
+
+```python
+from lionpride.types import Operable, Spec
+from pydantic import BaseModel, Field
+
+# Original model
+class Order(BaseModel):
+    order_id: str
+    customer_id: str
+    items: list[str]
+    total: float = Field(gt=0)
+    notes: str | None = None
+    internal_code: str  # Internal field to remove
+
+# Disassemble to Operable
+op = Operable.from_model(Order)
+
+# Create public API model (exclude internal fields)
+PublicOrder = op.create_model(
+    model_name="PublicOrder",
+    exclude={"internal_code"}
+)
+
+# PublicOrder has all fields except internal_code
+print(list(PublicOrder.model_fields.keys()))
+# ['order_id', 'customer_id', 'items', 'total', 'notes']
+
+# Validate and create instance
+order = PublicOrder(
+    order_id="ORD-123",
+    customer_id="CUST-456",
+    items=["widget", "gadget"],
+    total=99.99
+)
+print(order.model_dump())
+# {'order_id': 'ORD-123', 'customer_id': 'CUST-456',
+#  'items': ['widget', 'gadget'], 'total': 99.99, 'notes': None}
+```
+
+### Extend Existing Model Schema
+
+```python
+from lionpride.types import Operable, Spec
+from pydantic import BaseModel
+
+# Base model from external library
+class ExternalUser(BaseModel):
+    id: str
+    name: str
+
+# Disassemble and extend
+op = Operable.from_model(ExternalUser)
+
+# Add new specs
+extended_specs = list(op.__op_fields__) + [
+    Spec(str, name="email"),
+    Spec(bool, name="is_admin", default=False),
+]
+
+# Create extended Operable
+extended_op = Operable(extended_specs, name="ExtendedUser")
+
+# Generate extended model
+ExtendedUser = extended_op.create_model()
+print(list(ExtendedUser.model_fields.keys()))
+# ['id', 'name', 'email', 'is_admin']
 ```
 
 ## Common Pitfalls
