@@ -68,4 +68,4 @@ def match_endpoint(
 
     from .oai_chat import OAIChatEndpoint
 
-    return OAIChatEndpoint(None, **kwargs)
+    return OAIChatEndpoint(None, provider=provider, endpoint=endpoint, **kwargs)
