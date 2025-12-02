@@ -75,18 +75,35 @@ class TestDirectParse:
         assert exc_info.value.retryable is True
         assert "No JSON" in str(exc_info.value)
 
-    def test_lndl_format_raises_configuration_error(self):
-        """Test that LNDL format raises ConfigurationError (not yet implemented)."""
+    def test_custom_format_without_parser_raises_configuration_error(self):
+        """Test that custom format without parser raises ConfigurationError."""
         with pytest.raises(ConfigurationError) as exc_info:
             _direct_parse(
                 text='{"key": "value"}',
                 target_keys=["key"],
                 similarity_threshold=0.85,
                 handle_unmatched="force",
-                structure_format="lndl",
+                structure_format="custom",
             )
-        assert "not yet implemented" in str(exc_info.value)
+        assert "requires a custom_parser" in str(exc_info.value)
         assert exc_info.value.retryable is False
+
+    def test_custom_format_with_parser(self):
+        """Test that custom format with parser works correctly."""
+
+        def my_parser(text: str, target_keys: list[str], **kwargs) -> dict:
+            # Simple mock parser that extracts key-value pairs
+            return {"key": "parsed_value"}
+
+        result = _direct_parse(
+            text="some text",
+            target_keys=["key"],
+            similarity_threshold=0.85,
+            handle_unmatched="force",
+            structure_format="custom",
+            custom_parser=my_parser,
+        )
+        assert result == {"key": "parsed_value"}
 
     def test_unsupported_format_raises_validation_error(self):
         """Test that unsupported format raises ValidationError."""
@@ -265,11 +282,11 @@ class TestParseErrorRetryability:
         session, _ = session_with_model
         branch = session.create_branch(name="test")
 
-        # LNDL is ConfigurationError (not retryable)
+        # custom format without parser is ConfigurationError (not retryable)
         params = ParseParams(
             text='{"key": "value"}',
             target_keys=["key"],
-            structure_format="lndl",
+            structure_format="custom",
             max_retries=5,  # Would retry if error was retryable
         )
 

@@ -118,12 +118,18 @@ class InstructionContent(MessageContent):
     image_detail: MaybeUnset[Literal["low", "high", "auto"]] = Unset
 
     def render(
-        self, structure_format: Literal["json", "lndl"] = "json"
+        self,
+        structure_format: Literal["json", "custom"] = "json",
+        custom_renderer: "Callable[[type[BaseModel]], str] | None" = None,
     ) -> str | list[dict[str, Any]]:
-        text = self._format_text_content(structure_format)
+        text = self._format_text_content(structure_format, custom_renderer)
         return text if self._is_sentinel(self.images) else self._format_image_content(text)
 
-    def _format_text_content(self, structure_format: Literal["json", "lndl"] = "json") -> str:
+    def _format_text_content(
+        self,
+        structure_format: Literal["json", "custom"] = "json",
+        custom_renderer: "Callable[[type[BaseModel]], str] | None" = None,
+    ) -> str:
         from ._utils import _format_json_response_structure, _format_model_schema, _format_task
 
         task_data = {
@@ -136,6 +142,8 @@ class InstructionContent(MessageContent):
             text += _format_model_schema(self.request_model)
             if structure_format == "json":
                 text += _format_json_response_structure(self.request_model)
+            elif structure_format == "custom" and custom_renderer is not None:
+                text += custom_renderer(self.request_model)
         return text.strip()
 
     def _format_image_content(self, text: str) -> list[dict[str, Any]]:

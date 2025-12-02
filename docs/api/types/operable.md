@@ -425,7 +425,7 @@ Validation failed
 
 - Only Pydantic adapter implemented (v1.0.0-alpha)
 - Validation modes (strict/lenient/fuzzy) not yet exposed in API
-- LNDL (Language InterOperable Network Directive Language) integration available via [lndl module](../lndl/types.md)
+- Custom parser/renderer protocols available for extensible output format handling
 
 Pydantic adapter implementation is available in `src/lionpride/types/spec_adapters/pydantic_field.py`.
 
@@ -1088,26 +1088,33 @@ Operable will support multiple validation modes for different use cases:
 
 **Current State**: Validation mode configuration not yet exposed in Operable API. Pydantic adapter uses framework defaults.
 
-## LNDL Support
+## Custom Parser Support
 
-**Status**: Available in lionpride v1.0.0-alpha3+
+**Status**: Available in lionpride v1.0.0-alpha4+
 
-LNDL (Language InterOperable Network Directive Language) integration enables:
+Custom parser/renderer protocols enable extensible structured output handling:
 
-- Structured LLM output parsing with `OUT{}` blocks
-- Variable resolution and templating with `LVAR{}`
-- Tool/ActionCall invocation with `ActionCall{}`
-- Fuzzy matching for schema validation
-- Template-based generation with metadata preservation
+- **CustomParser**: Protocol for extracting structured data from LLM text responses
+- **CustomRenderer**: Protocol for formatting request_model schema for custom output formats
 
-**Usage**: See comprehensive documentation in the [LNDL module](../lndl/parser.md):
+**Usage**: Implement the protocols in `lionpride.operations.operate.types`:
 
-- [Parser](../lndl/parser.md): Parse LVAR, ActionCall, and OUT blocks
-- [Resolver](../lndl/resolver.md): Variable resolution and validation
-- [Fuzzy](../lndl/fuzzy.md): Typo-tolerant parsing with Operable integration
-- [Types](../lndl/types.md): Core LNDL data structures
-- [Prompt](../lndl/prompt.md): System prompts for LLMs
-- [Errors](../lndl/errors.md): Exception hierarchy
+```python
+from lionpride.operations.operate.types import CustomParser, CustomRenderer
+
+# Custom parser implementation
+def my_parser(text: str, target_keys: list[str], **kwargs) -> dict:
+    # Extract structured data from text
+    return {"field": "value"}
+
+# Use with ParseParams
+params = ParseParams(
+    text="...",
+    target_keys=["field"],
+    structure_format="custom",
+    custom_parser=my_parser,
+)
+```
 
 ## See Also
 

@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel
 
@@ -18,6 +18,8 @@ if TYPE_CHECKING:
 __all__ = (
     "ActParams",
     "CommunicateParams",
+    "CustomParser",
+    "CustomRenderer",
     "GenerateParams",
     "HandleUnmatched",
     "InterpretParams",
@@ -30,6 +32,47 @@ __all__ = (
 # Type aliases
 HandleUnmatched = Literal["ignore", "raise", "remove", "fill", "force"]
 ReturnAs = Literal["text", "raw", "message", "calling"]
+
+
+# =============================================================================
+# Custom Parser/Renderer Protocols
+# =============================================================================
+
+
+@runtime_checkable
+class CustomParser(Protocol):
+    """Protocol for custom output parsers (e.g., LNDL).
+
+    Implementations extract structured data from LLM text responses.
+
+    Args:
+        text: Raw LLM response text
+        target_keys: Expected field names for fuzzy matching
+        **kwargs: Additional parser-specific options
+
+    Returns:
+        Dict mapping field names to extracted values
+    """
+
+    def __call__(self, text: str, target_keys: list[str], **kwargs: Any) -> dict[str, Any]: ...
+
+
+@runtime_checkable
+class CustomRenderer(Protocol):
+    """Protocol for custom instruction renderers.
+
+    Implementations format request_model schema for custom output formats.
+
+    Args:
+        model: Pydantic model class defining expected response schema
+        **kwargs: Additional renderer-specific options
+
+    Returns:
+        Formatted instruction string for the custom output format
+    """
+
+    def __call__(self, model: type[BaseModel], **kwargs: Any) -> str: ...
+
 
 # =============================================================================
 # Standalone Params (no inheritance)
@@ -71,8 +114,11 @@ class GenerateParams(Params):
     request_model: type[BaseModel] | None = None
     """Pydantic model for structured output schema."""
 
-    structure_format: Literal["json", "lndl"] = "json"
-    """Format for structured output rendering."""
+    structure_format: Literal["json", "custom"] = "json"
+    """Format for structured output rendering ('json' or 'custom')."""
+
+    custom_renderer: CustomRenderer | None = None
+    """Custom renderer for structure_format='custom'. Formats request_model schema."""
 
     return_as: ReturnAs = "calling"
     """Output format."""
@@ -129,8 +175,11 @@ class ParseParams(Params):
     imodel_kwargs: dict[str, Any] = field(default_factory=dict)
     """Additional kwargs for imodel."""
 
-    structure_format: Literal["json", "lndl"] = "json"
-    """Format for structured output rendering."""
+    structure_format: Literal["json", "custom"] = "json"
+    """Format for parsing output ('json' or 'custom')."""
+
+    custom_parser: CustomParser | None = None
+    """Custom parser for structure_format='custom'. Extracts dict from text."""
 
     match_kwargs: dict[str, Any] = field(default_factory=dict)
     """Additional kwargs for direct matching."""

@@ -113,7 +113,7 @@ Initial alpha release of lionpride - foundational primitives for production AI a
 ### Utilities
 
 - **ln module**: alcall, bcall, fuzzy_match, json_dumps, to_dict, to_list, hash_dict
-- **LNDL**: Lion Natural Description Language parser
+- **Custom Parser Interface**: Extensible parser protocol for structured output formats
 - **Concurrency**: TaskGroup, CancelScope, async patterns
 - **Schema handlers**: TypeScript notation, function call parser
 

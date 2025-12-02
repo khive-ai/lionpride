@@ -9,7 +9,7 @@ Focus areas:
     3. ActionResponseContent.success edge cases (None, empty string, both result+error)
     4. Message.clone() lineage tracking edge cases
     5. to_chat() for each content type with edge cases
-    6. render() with structure_format='lndl' vs 'json'
+    6. render() with structure_format='custom' vs 'json'
     7. Sender/recipient edge cases in Message context
     8. Serialization round-trip edge cases
 
@@ -547,16 +547,16 @@ class TestRenderStructureFormat:
         assert "## ResponseFormat" in rendered
         assert "MUST RETURN VALID JSON" in rendered
 
-    def test_render_lndl_format_excludes_json_structure(self):
-        """render(structure_format='lndl') should NOT include JSON structure section."""
+    def test_render_custom_format_excludes_json_structure(self):
+        """render(structure_format='custom') should NOT include JSON structure section."""
 
         class OutputModel(BaseModel):
             answer: str = Field(..., description="The answer")
 
         content = InstructionContent.create(instruction="Answer", request_model=OutputModel)
-        rendered = content.render(structure_format="lndl")
+        rendered = content.render(structure_format="custom")
 
-        # lndl format should still include the schema but NOT the JSON structure
+        # custom format should still include the schema but NOT the JSON structure
         # The _format_json_response_structure is only called for structure_format="json"
         assert "## ResponseFormat" not in rendered
 
@@ -577,11 +577,11 @@ class TestRenderStructureFormat:
         content = InstructionContent.create(instruction="Simple instruction")
 
         rendered_json = content.render(structure_format="json")
-        rendered_lndl = content.render(structure_format="lndl")
+        rendered_custom = content.render(structure_format="custom")
 
         # Both should work and produce similar output (no ResponseFormat section)
         assert "Instruction:" in rendered_json
-        assert "Instruction:" in rendered_lndl
+        assert "Instruction:" in rendered_custom
 
 
 # =============================================================================
