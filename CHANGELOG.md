@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a4] - 2025-12-02
+
+### Added
+
+- `CustomParser` protocol for extensible output parsing (#39)
+- `CustomRenderer` protocol for extensible instruction rendering (#39)
+- `custom_parser` param to `ParseParams` for external parser injection (#39)
+- `custom_renderer` param to `GenerateParams` for external renderer injection (#39)
+
+### Changed
+
+- Replace `structure_format="lndl"` with `structure_format="custom"` (#39)
+
+### Removed
+
+- LNDL tutorial docs (lndl_architecture.md, structured_llm_outputs.md) (#39)
+- Broken CLAUDE.md and AGENTS.md links from README (#39)
+
 ## [1.0.0a3] - 2025-12-02
 
 ### Added
@@ -123,7 +141,8 @@ Initial alpha release of lionpride - foundational primitives for production AI a
 - Interactive Jupyter notebooks
 - 99%+ test coverage
 
-[Unreleased]: https://github.com/khive-ai/lionpride/compare/v1.0.0a3...HEAD
+[Unreleased]: https://github.com/khive-ai/lionpride/compare/v1.0.0a4...HEAD
+[1.0.0a4]: https://github.com/khive-ai/lionpride/releases/tag/v1.0.0a4
 [1.0.0a3]: https://github.com/khive-ai/lionpride/releases/tag/v1.0.0a3
 [1.0.0a2]: https://github.com/khive-ai/lionpride/releases/tag/v1.0.0a2
 [1.0.0a1]: https://github.com/khive-ai/lionpride/releases/tag/v1.0.0a1
