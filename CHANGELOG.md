@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a3] - 2025-12-02
+
+### Added
+
+- `Operable.from_model()` to disassemble Pydantic models into Spec fields (#32)
+- `unescape_html` param to `minimal_yaml` with improved type hints (#34)
+- `return_one` and `extract_all` params to `fuzzy_validate_pydantic` (#37)
+
+### Changed
+
+- Move spec extraction logic to `SpecAdapter` for cleaner separation (#38)
+- Use internal `ln` and concurrency modules instead of naked json/asyncio (#31)
+- Use `textwrap.indent` for cleaner message line indentation (#35)
+- Pass provider and endpoint kwargs to OAIChatEndpoint fallback (#36)
+
+### Documentation
+
+- Comprehensive API reference for session, services, operations, rules, work (#33)
+- Cleaned README.md by removing redundant example sections
+- Removed outdated docstrings from workflow modules
+
+### Removed
+
+- Repo-level CLAUDE.md (consolidated into project docs) (#38)
+
 ## [1.0.0a2] - 2025-11-29
 
 ### Added
@@ -98,6 +123,7 @@ Initial alpha release of lionpride - foundational primitives for production AI a
 - Interactive Jupyter notebooks
 - 99%+ test coverage
 
-[Unreleased]: https://github.com/khive-ai/lionpride/compare/v1.0.0a2...HEAD
+[Unreleased]: https://github.com/khive-ai/lionpride/compare/v1.0.0a3...HEAD
+[1.0.0a3]: https://github.com/khive-ai/lionpride/releases/tag/v1.0.0a3
 [1.0.0a2]: https://github.com/khive-ai/lionpride/releases/tag/v1.0.0a2
 [1.0.0a1]: https://github.com/khive-ai/lionpride/releases/tag/v1.0.0a1
