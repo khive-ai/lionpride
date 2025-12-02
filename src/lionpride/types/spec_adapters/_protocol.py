@@ -5,6 +5,8 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Generic, TypeAlias, TypeVar
 
 if TYPE_CHECKING:
+    from pydantic import BaseModel
+
     from lionpride.types.operable import Operable
     from lionpride.types.spec import Spec
 
@@ -48,6 +50,12 @@ class SpecAdapter(ABC, Generic[M]):
     @abstractmethod
     def dump_model(cls, instance: M) -> dict[str, Any]:
         """Dump model → dict. Framework-specific (Pydantic: model_dump, attrs: asdict, dataclasses: asdict)."""
+        ...
+
+    @classmethod
+    @abstractmethod
+    def specs_from_model(cls, model: "type[BaseModel]") -> "tuple[Spec, ...]":
+        """Extract Specs from a model class. Framework-specific (Pydantic: model_fields → Spec)."""
         ...
 
     @classmethod
