@@ -1,25 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Capabilities system for workflow resource management.
-
-Provides declarative specification of what resources (APIs, tools) each
-workflow step can access. Based on capability-based security principles.
-
-DSL Grammar:
-    assignment := [branch ":"] [operation "("] inputs "->" outputs [")"] ["|" resources]
-    operation := "generate" | "parse" | "communicate" | "operate" | "react"
-    resources := resource ("," resource)*
-    resource := resource_type ":" name
-    resource_type := "api" | "api_gen" | "api_parse" | "api_interpret" | "tool"
-    name := identifier | "*"
-
-Examples:
-    "context -> plan"
-    "orchestrator: operate(context -> plan) | api:gpt4mini"
-    "planner: react(a, b -> c) | api_gen:gpt5, api_parse:gpt4, tool:*"
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

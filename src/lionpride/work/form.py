@@ -1,19 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Form - declarative unit of work with assignment-based field contracts.
-
-Assignment DSL: "[branch:] [operation(] inputs -> outputs [)] [| resources]"
-
-Examples:
-    "context -> plan"
-    "orchestrator: operate(context -> plan) | api:gpt4mini"
-    "planner: react(a, b -> c) | api_gen:gpt5, api_parse:gpt4, tool:*"
-
-Forms derive execution order from field dependencies, not explicit graph edges.
-Resource declarations specify what APIs and tools each step can access.
-"""
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any

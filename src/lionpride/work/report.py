@@ -1,30 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Report - workflow orchestrator that schedules forms based on field availability.
-
-Report declares the overall workflow via class attributes:
-- Class attributes with type annotations define output schemas
-- assignment: "inputs -> final_outputs" (workflow contract)
-- form_assignments: list of form assignments that make up the workflow
-
-Usage:
-    class AnalysisReport(Report):
-        # Schema declarations
-        analysis: Analysis
-        insights: Insights
-        score: float
-
-        # Workflow
-        assignment = "topic -> insights, score"
-        form_assignments = [
-            "topic -> analysis",
-            "analysis -> insights, score",
-        ]
-
-Scheduling is derived from field dependencies, not explicit ordering.
-"""
-
 from __future__ import annotations
 
 import types
