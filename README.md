@@ -31,26 +31,20 @@ pip install lionpride
 ```python
 import asyncio
 from lionpride import Session, iModel
+from lionpride.operations.operate import generate, GenerateParams
 
 # Create model and session
 model = iModel(provider="openai", model="gpt-4o-mini")
 session = Session(default_generate_model=model)
+branch = session.create_branch(name="main", resources={model.name})
 
-# Create branch with model access
-branch = session.create_branch(name="main")
-
-# Conduct an operation
 async def main():
-    from lionpride.operations.operate import OperateParams, GenerateParams
-
-    result = await session.conduct(
-        "operate",
-        branch,
-        params=OperateParams(
-            generate=GenerateParams(instruction="What is 2 + 2?")
-        ),
+    # Simple text generation
+    result = await generate(
+        session, branch,
+        params=GenerateParams(instruction="What is 2 + 2?", return_as="text"),
     )
-    print(result.response)
+    print(result)  # "4" or similar
 
 asyncio.run(main())
 ```
@@ -59,7 +53,7 @@ asyncio.run(main())
 
 ### Session & Branch
 
-`Session` orchestrates messages, services, and operations. `Branch` is a named conversation thread with access control.
+`Session` orchestrates messages, services, and operations. `Branch` is a named conversation thread with capability-based access control.
 
 ```python
 from lionpride import Session, iModel
@@ -68,10 +62,11 @@ from lionpride import Session, iModel
 model = iModel(provider="openai", model="gpt-4o-mini")
 session = Session(default_generate_model=model)
 
-# Branch inherits access to default model
+# Branch with capability and resource restrictions
 branch = session.create_branch(
-    name="analysis",
-    capabilities={"MyOutputSchema"},  # Allowed output types
+    name="restricted",
+    capabilities={"AnalysisModel"},  # Only these output types allowed
+    resources={"gpt-4o-mini"},        # Only these services allowed
 )
 ```
 
@@ -80,17 +75,27 @@ branch = session.create_branch(
 Operations are composable building blocks for agent workflows:
 
 ```python
+from pydantic import BaseModel
 from lionpride.operations.operate import operate, OperateParams, GenerateParams
+
+class Insights(BaseModel):
+    summary: str
+    score: float
+
+# Branch must have capability for output field
+branch = session.create_branch(capabilities={"insights"}, resources={model.name})
 
 # Structured output with validation
 params = OperateParams(
     generate=GenerateParams(
-        instruction="Analyze this data and return insights",
-        request_model=MyInsightsModel,  # Pydantic model for validation
-    )
+        instruction="Analyze this data",
+        request_model=Insights,
+    ),
+    capabilities={"insights"},  # Explicit capability declaration
 )
 
 result = await operate(session, branch, params)
+print(result.insights)  # Insights(summary="...", score=0.85)
 ```
 
 ### Services
@@ -111,18 +116,20 @@ branch = session.create_branch(resources={"gpt4", "claude"})  # Access to both
 
 ### Declarative Workflows
 
-`Report` and `Form` enable multi-step agent pipelines with automatic dependency resolution:
+`Report` and `Form` enable multi-step agent pipelines with automatic dependency resolution. Model docstrings serve as agent instructions:
 
 ```python
 from pydantic import BaseModel
 from lionpride.work import Report, flow_report
 
 class Analysis(BaseModel):
+    '''Analyze the topic and provide insights.
+    Focus on actionable recommendations.'''
     summary: str
-    score: float
+    recommendations: list[str]
 
 class MyReport(Report):
-    analysis: Analysis | None = None  # Schema attribute
+    analysis: Analysis | None = None  # Schema attribute (docstring = instruction)
 
     assignment: str = "topic -> analysis"
     form_assignments: list[str] = ["topic -> analysis"]
@@ -152,7 +159,13 @@ See [CLAUDE.md](CLAUDE.md) for detailed codebase navigation.
 ## Documentation
 
 - [CLAUDE.md](CLAUDE.md) - AI agent codebase guide
-- [AGENTS.md](AGENTS.md) - Quick reference for AI agents
+- [AGENTS.md](AGENTS.md) - Quick reference
+- [API Reference](docs/api/) - Comprehensive API docs
+  - [Session](docs/api/session/) - Session, Branch, Message
+  - [Services](docs/api/services/) - iModel, ServiceRegistry, Tool
+  - [Operations](docs/api/operations/) - operate, react, communicate
+  - [Rules](docs/api/rules/) - Validation and auto-correction
+  - [Work](docs/api/work/) - Report, Form, flow_report
 - [notebooks/](notebooks/) - Example notebooks
 
 ## Roadmap
