@@ -84,51 +84,50 @@ The module follows lionagi v0's proven patterns for structured output extraction
 
 ```python
 from lionpride import Session, iModel
+from lionpride.types import Operable
 from lionpride.operations import (
-    generate, communicate, operate, react,
-    GenerateParams, ParseParams, CommunicateParams, OperateParams, ReactParams,
+    generate, communicate, operate,
+    GenerateParams, CommunicateParams, OperateParams,
 )
 from pydantic import BaseModel
 
 # Setup
 model = iModel(provider="openai", model="gpt-4o-mini")
 session = Session(default_generate_model=model)
-branch = session.create_branch()
 
-# Low-level: generate
-params = GenerateParams(
-    imodel=model,
-    instruction="Translate to French: Hello",
-)
-result = await generate(session, branch, params)
+# Low-level: generate (text output, no capabilities needed)
+branch = session.create_branch(resources={model.name})
+params = GenerateParams(instruction="Translate to French: Hello", return_as="text")
+result = await generate(session, branch, params)  # Returns str
 
-# Mid-level: communicate (generate + parse)
+# Mid-level: communicate (structured output)
 class Translation(BaseModel):
     text: str
     language: str
 
+branch = session.create_branch(capabilities={"translation"}, resources={model.name})
 params = CommunicateParams(
     generate=GenerateParams(instruction="Translate 'Hello' to French"),
-    parse=ParseParams(request_model=Translation),
+    operable=Operable.from_model(Translation),
+    capabilities={"translation"},
 )
 result = await communicate(session, branch, params)  # Returns Translation
 
-# High-level: operate (with tools)
+# High-level: operate (structured + tools)
+class SearchResult(BaseModel):
+    query: str
+    results: list[str]
+
+branch = session.create_branch(
+    capabilities={"searchresult", "action_requests", "action_responses"},
+    resources={model.name},
+)
 params = OperateParams(
-    generate=GenerateParams(
-        instruction="Search for Python tutorials",
-        request_model=SearchResult,
-    ),
-    actions=True,  # Enable tool use
+    generate=GenerateParams(instruction="Search for Python tutorials", request_model=SearchResult),
+    capabilities={"searchresult"},
+    actions=True,
 )
 result = await operate(session, branch, params)
-
-# Multi-turn: react (ReAct loop)
-params = ReactParams(
-    generate=GenerateParams(instruction="Research and summarize AI trends"),
-    max_steps=5,
-)
-result = await react(session, branch, params)
 ```
 
 ## See Also

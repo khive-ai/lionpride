@@ -80,7 +80,10 @@ class ResearchReport(Report):
 # Execute workflow
 model = iModel(provider="openai", model="gpt-4o-mini")
 session = Session(default_generate_model=model)
-branch = session.create_branch()
+branch = session.create_branch(
+    capabilities={"analysis", "plan"},
+    resources={model.name},
+)
 
 report = ResearchReport()
 report.initialize(topic="Building AI agents with lionpride")

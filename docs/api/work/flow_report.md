@@ -174,7 +174,10 @@ class SequentialReport(Report):
 
 model = iModel(provider="openai", model="gpt-4o-mini")
 session = Session(default_generate_model=model)
-branch = session.create_branch()
+branch = session.create_branch(
+    capabilities={"analysis", "conclusion"},
+    resources={model.name},
+)
 
 report = SequentialReport()
 report.initialize(topic="AI assistants")

@@ -385,7 +385,10 @@ class ResearchReport(Report):
 # Execute
 model = iModel(provider="openai", model="gpt-4o-mini")
 session = Session(default_generate_model=model)
-branch = session.create_branch()
+branch = session.create_branch(
+    capabilities={"analysis", "insights"},
+    resources={model.name},
+)
 
 report = ResearchReport()
 report.initialize(topic="AI coding assistants")
