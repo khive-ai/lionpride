@@ -6,6 +6,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal
 
+from pydantic.main import BaseModel
+
 from lionpride.errors import ValidationError
 
 from ..libs.string_handlers._extract_json import extract_json
@@ -28,56 +30,108 @@ def fuzzy_validate_pydantic(
     fuzzy_parse: bool = True,
     fuzzy_match: bool = False,
     fuzzy_match_params: FuzzyMatchKeysParams | dict[Any, Any] | None = None,
-):
+    return_one: bool = True,
+    extract_all: bool = False,
+) -> BaseModel | list[BaseModel]:
     """Validate and parse text/dict into Pydantic model with fuzzy parsing.
 
     Args:
-        text: Input data (BaseModel instance, dict, or JSON string)
+        data: Input data (BaseModel instance, dict, or JSON string)
         model_type: Target Pydantic model class
         fuzzy_parse: Enable fuzzy JSON extraction from text
         fuzzy_match: Enable fuzzy key matching for field names
         fuzzy_match_params: Parameters for fuzzy matching (dict or FuzzyMatchKeysParams)
+        return_one: Always return a single model (default True)
+        extract_all: Extract all valid dicts as models (default False)
 
     Returns:
-        Validated Pydantic model instance
+        Single model if return_one=True, list of models if extract_all=True
 
     Raises:
         ValidationError: If JSON extraction or model validation fails
         TypeError: If fuzzy_match_params is invalid type
+        ValueError: If return_one and extract_all are both True
     """
+    if return_one and extract_all:
+        raise ValueError("return_one and extract_all are mutually exclusive")
+
     # Handle already-valid model instances
     if isinstance(data, model_type):
-        return data
+        return [data] if extract_all else data
 
-    # Handle dict inputs directly (skip JSON extraction)
-    model_data: dict[str, Any]
+    # Collect candidate dicts for validation
+    candidates: list[dict[str, Any]] = []
+
     if isinstance(data, dict):
-        model_data = data
+        candidates = [data]
+    elif isinstance(data, BaseModel):
+        candidates = [data.model_dump()]
     else:
-        # Handle string inputs (JSON strings, markdown, etc.)
+        # String input - extract JSON
         try:
-            extracted = extract_json(data, fuzzy_parse=fuzzy_parse)
-            model_data = extracted if isinstance(extracted, dict) else {"data": extracted}
-        except Exception as e:
-            raise ValidationError(f"Failed to extract valid JSON from model response: {e}") from e
+            extracted = extract_json(data, fuzzy_parse=fuzzy_parse, return_one_if_single=False)
+            # extract_json returns list of extracted items
+            # Each item can be dict or list (for JSON arrays)
+            for item in extracted if isinstance(extracted, list) else [extracted]:
+                if isinstance(item, dict):
+                    candidates.append(item)
+                elif isinstance(item, list):
+                    # JSON array - add each dict in the array
+                    candidates.extend(x for x in item if isinstance(x, dict))
+        except Exception:
+            pass
 
-    d = model_data
-    if fuzzy_match:
-        # Get field names from model_fields
-        field_names = list(model_type.model_fields.keys())
+        # Fallback to to_dict if no candidates
+        if not candidates:
+            fallback = to_dict(
+                data,
+                fuzzy_parse=fuzzy_parse,
+                suppress=True,
+                recursive=True,
+                recursive_python_only=False,
+            )
+            if isinstance(fallback, dict) and fallback:
+                candidates = [fallback]
+
+        if not candidates:
+            raise ValidationError("Failed to extract valid JSON from input")
+
+    # Apply fuzzy matching if enabled
+    field_names = list(model_type.model_fields.keys()) if fuzzy_match else None
+
+    def _apply_fuzzy_match(d: dict[str, Any]) -> dict[str, Any]:
+        if not fuzzy_match:
+            return d
         if fuzzy_match_params is None:
-            model_data = fuzzy_match_keys(d, field_names, handle_unmatched="remove")
+            return fuzzy_match_keys(d, field_names, handle_unmatched="remove")
         elif isinstance(fuzzy_match_params, dict):
-            model_data = fuzzy_match_keys(d, field_names, **fuzzy_match_params)
+            return fuzzy_match_keys(d, field_names, **fuzzy_match_params)
         elif isinstance(fuzzy_match_params, FuzzyMatchKeysParams):
-            model_data = fuzzy_match_params(d, field_names)
+            return fuzzy_match_params(d, field_names)
         else:
             raise TypeError("fuzzy_keys_params must be a dict or FuzzyMatchKeysParams instance")
 
-    try:
-        return model_type.model_validate(model_data)
-    except Exception as e:
-        raise ValidationError(f"Validation failed: {e}") from e
+    # Validate candidates
+    validated: list[BaseModel] = []
+    errors: list[str] = []
+
+    for candidate in candidates:
+        try:
+            matched = _apply_fuzzy_match(candidate)
+            model = model_type.model_validate(matched)
+            validated.append(model)
+            if return_one:
+                return model  # Return first valid model
+        except Exception as e:
+            errors.append(str(e))
+
+    if extract_all:
+        if not validated:
+            raise ValidationError(f"No valid models extracted. Errors: {'; '.join(errors)}")
+        return validated
+
+    # return_one=True but no valid models found
+    raise ValidationError(f"Validation failed: {'; '.join(errors)}")
 
 
 def fuzzy_validate_mapping(

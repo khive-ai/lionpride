@@ -57,10 +57,10 @@ class TestFuzzyValidatePydantic:
         assert result.age == 25
 
     def test_invalid_json_raises_validation_error(self):
-        """Test extraction failure raises ValidationError (lines 29-32)."""
+        """Test extraction failure raises ValidationError."""
         text = "This is not JSON at all"
         # extract_json returns [] for non-JSON text, which causes validation to fail
-        with pytest.raises(ValidationError, match="Validation failed"):
+        with pytest.raises(ValidationError, match="Failed to extract valid JSON"):
             fuzzy_validate_pydantic(text, SimpleModel, fuzzy_parse=False)
 
     def test_fuzzy_match_default_params(self):
@@ -100,10 +100,10 @@ class TestFuzzyValidatePydantic:
         assert result.age == 28
 
     def test_fuzzy_match_invalid_params_type(self):
-        """Test invalid fuzzy_match_params type raises TypeError (lines 46-49)."""
+        """Test invalid fuzzy_match_params type raises ValidationError with TypeError message."""
         text = '{"name": "Frank", "age": 50, "email": "frank@example.com"}'
         with pytest.raises(
-            TypeError,
+            ValidationError,
             match="fuzzy_keys_params must be a dict or FuzzyMatchKeysParams instance",
         ):
             fuzzy_validate_pydantic(
@@ -139,6 +139,53 @@ class TestFuzzyValidatePydantic:
         result = fuzzy_validate_pydantic(text, NestedModel)
         assert result.user == {"id": 1, "name": "Jack"}
         assert result.status == "active"
+
+    def test_return_one_and_extract_all_mutually_exclusive(self):
+        """Test that return_one and extract_all cannot both be True."""
+        text = '{"name": "Alice", "age": 30, "email": "alice@example.com"}'
+        with pytest.raises(ValueError, match="mutually exclusive"):
+            fuzzy_validate_pydantic(text, SimpleModel, return_one=True, extract_all=True)
+
+    def test_extract_all_returns_list(self):
+        """Test extract_all=True returns a list of models."""
+        text = '[{"name": "Alice", "age": 30, "email": "a@x.com"}, {"name": "Bob", "age": 25, "email": "b@x.com"}]'
+        result = fuzzy_validate_pydantic(text, SimpleModel, return_one=False, extract_all=True)
+        assert isinstance(result, list)
+        assert len(result) == 2
+        assert result[0].name == "Alice"
+        assert result[1].name == "Bob"
+
+    def test_extract_all_with_single_item(self):
+        """Test extract_all=True with single item returns list with one element."""
+        text = '{"name": "Alice", "age": 30, "email": "alice@example.com"}'
+        result = fuzzy_validate_pydantic(text, SimpleModel, return_one=False, extract_all=True)
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert result[0].name == "Alice"
+
+    def test_extract_all_skips_invalid_items(self):
+        """Test extract_all=True skips items that fail validation."""
+        # First item missing email, second item valid
+        text = '[{"name": "Bad", "age": 30}, {"name": "Good", "age": 25, "email": "good@x.com"}]'
+        result = fuzzy_validate_pydantic(text, SimpleModel, return_one=False, extract_all=True)
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert result[0].name == "Good"
+
+    def test_return_one_returns_first_valid(self):
+        """Test return_one=True returns the first valid model."""
+        text = '[{"name": "First", "age": 30, "email": "a@x.com"}, {"name": "Second", "age": 25, "email": "b@x.com"}]'
+        result = fuzzy_validate_pydantic(text, SimpleModel, return_one=True, extract_all=False)
+        assert isinstance(result, SimpleModel)
+        assert result.name == "First"
+
+    def test_extract_all_with_already_valid_instance(self):
+        """Test extract_all=True with already valid model instance."""
+        instance = SimpleModel(name="Alice", age=30, email="alice@example.com")
+        result = fuzzy_validate_pydantic(instance, SimpleModel, return_one=False, extract_all=True)
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert result[0] is instance
 
 
 class TestFuzzyValidateMapping:

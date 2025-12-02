@@ -1,12 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Models for rule-based validation.
-
-These models define the canonical formats for structured data
-that flows through the validation pipeline.
-"""
-
 from __future__ import annotations
 
 from typing import Any

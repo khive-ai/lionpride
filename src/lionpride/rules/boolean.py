@@ -1,8 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Boolean validation rule with flexible parsing."""
-
 from typing import Any
 
 from .base import Rule, RuleParams, RuleQualifier

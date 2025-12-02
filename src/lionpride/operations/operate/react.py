@@ -1,25 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""React operation - multi-step reasoning loop.
-
-React is a pure loop: reasoning + actions + optional intermediate outputs.
-For final structured output, follow up with communicate().
-
-Stream-first architecture:
-    react_stream() - async generator yielding steps
-    react() - wrapper collecting all steps
-
-Composition:
-    react() → react_stream() → operate() → communicate() → generate()
-                                        → act() (via actions=True)
-
-Security model:
-    React requires these capabilities on branch:
-    - reasoning, action_requests, is_done (react protocol fields)
-    - Plus any intermediate_response_options field names
-"""
-
 from __future__ import annotations
 
 import logging

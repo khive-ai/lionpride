@@ -1,15 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Unified Operation class - both Node (graph) and Event (lifecycle).
-
-Operation combines:
-- Node: Can be added to operation graphs, has UUID identity
-- Event: Has invoke() execution, status tracking, result storage
-
-This replaces the previous separate Operation + ExecutableOperation pattern.
-"""
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Literal

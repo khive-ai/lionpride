@@ -1,12 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Base rule system for validation and auto-correction.
-
-Resurrected from lionagi v0.2.2 and refined from lionherd-old patterns.
-This is the validation layer of the IPU (Intelligence Processing Unit).
-"""
-
 from abc import abstractmethod
 from dataclasses import dataclass, field
 from enum import IntEnum, auto
