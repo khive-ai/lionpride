@@ -36,7 +36,7 @@ from lionpride.operations.operate import generate, GenerateParams
 # Create model and session
 model = iModel(provider="openai", model="gpt-4o-mini")
 session = Session(default_generate_model=model)
-branch = session.create_branch(name="main")
+branch = session.create_branch(name="main", resources={model.name})
 
 async def main():
     # Simple text generation
