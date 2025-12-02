@@ -1,3 +1,4 @@
+import textwrap
 from urllib.parse import urlparse
 
 from pydantic import BaseModel
@@ -85,9 +86,7 @@ def _format_model_schema(request_model: type[BaseModel]) -> str:
     if defs := model_schema.get("$defs"):
         for def_name, def_schema in defs.items():
             if def_ts := typescript_schema(def_schema):
-                schema_text += f"\n{def_name}:\n" + "\n".join(
-                    f"  {line}" for line in def_ts.split("\n")
-                )
+                schema_text += f"\n{def_name}:\n" + textwrap.indent(def_ts, "  ")
     return schema_text
 
 
