@@ -31,26 +31,20 @@ pip install lionpride
 ```python
 import asyncio
 from lionpride import Session, iModel
+from lionpride.operations.operate import generate, GenerateParams
 
 # Create model and session
 model = iModel(provider="openai", model="gpt-4o-mini")
 session = Session(default_generate_model=model)
-
-# Create branch with model access
 branch = session.create_branch(name="main")
 
-# Conduct an operation
 async def main():
-    from lionpride.operations.operate import OperateParams, GenerateParams
-
-    result = await session.conduct(
-        "operate",
-        branch,
-        params=OperateParams(
-            generate=GenerateParams(instruction="What is 2 + 2?")
-        ),
+    # Simple text generation
+    result = await generate(
+        session, branch,
+        params=GenerateParams(instruction="What is 2 + 2?", return_as="text"),
     )
-    print(result.response)
+    print(result)  # "4" or similar
 
 asyncio.run(main())
 ```
@@ -81,17 +75,27 @@ branch = session.create_branch(
 Operations are composable building blocks for agent workflows:
 
 ```python
+from pydantic import BaseModel
 from lionpride.operations.operate import operate, OperateParams, GenerateParams
+
+class Insights(BaseModel):
+    summary: str
+    score: float
+
+# Branch must have capability for output field
+branch = session.create_branch(capabilities={"insights"}, resources={model.name})
 
 # Structured output with validation
 params = OperateParams(
     generate=GenerateParams(
-        instruction="Analyze this data and return insights",
-        request_model=MyInsightsModel,  # Pydantic model for validation
-    )
+        instruction="Analyze this data",
+        request_model=Insights,
+    ),
+    capabilities={"insights"},  # Explicit capability declaration
 )
 
 result = await operate(session, branch, params)
+print(result.insights)  # Insights(summary="...", score=0.85)
 ```
 
 ### Services
