@@ -16,10 +16,10 @@ See [Progression](../base/progression.md) and [Session](session.md) for related 
 
 | Attribute | Controls | Default | Note |
 |-----------|----------|---------|------|
-| `capabilities` | Output schema names | `set()` (empty = unrestricted) | Checked during operate/communicate |
-| `resources` | Service names (models, tools) | `set()` (empty = unrestricted) | Checked during service resolution |
+| `capabilities` | Output schema names | `set()` (empty = no access) | Checked during operate/communicate |
+| `resources` | Service names (models, tools) | `set()` (empty = no access) | Checked during service resolution |
 
-**Warning**: Empty sets mean unrestricted access. Production should explicitly set permissions.
+**Important**: Empty sets deny all access. You must explicitly grant permissions for operations to succeed.
 
 ```python
 branch = session.create_branch(

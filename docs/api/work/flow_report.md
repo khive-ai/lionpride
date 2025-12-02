@@ -60,12 +60,11 @@ Raised when deadlock is detected:
 - But pending forms exist (workflow not complete)
 - Indicates missing inputs or circular dependencies
 
-### ValueError
+### NotFoundError
 
 Raised if:
 
-- Report not initialized (missing required inputs)
-- Invalid branch name provided
+- Branch name not found in session (via `session.get_branch()`)
 
 ## Execution Model
 
