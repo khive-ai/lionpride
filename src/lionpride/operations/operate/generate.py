@@ -54,6 +54,7 @@ async def generate(
         new_instruction=params.instruction_message,
         to_chat=True,
         structure_format=params.structure_format,
+        custom_renderer=params.custom_renderer,
     )
     calling = await session.request(
         imodel.name,
