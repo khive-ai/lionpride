@@ -66,6 +66,7 @@ def minimal_yaml(
     indent: int = 2,
     line_width: int = 2**31 - 1,
     sort_keys: bool = False,
+    unescape_html: bool = False,
 ) -> str:
     """Convert value to minimal YAML string."""
     # Auto-parse JSON strings for convenience (fails gracefully on invalid JSON)
@@ -77,7 +78,7 @@ def minimal_yaml(
             pass
 
     data = _prune(value) if drop_empties else value
-    return yaml.dump(
+    str_ = yaml.dump(
         data,
         Dumper=MinimalDumper,
         default_flow_style=False,
@@ -86,3 +87,8 @@ def minimal_yaml(
         indent=indent,
         width=line_width,
     )
+    if unescape_html:
+        import html
+
+        return html.unescape(str_)
+    return str_

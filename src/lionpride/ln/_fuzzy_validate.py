@@ -1,6 +1,8 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -20,9 +22,9 @@ __all__ = ("fuzzy_validate_pydantic",)
 
 
 def fuzzy_validate_pydantic(
-    text,
+    data: BaseModel | dict[str, Any] | str,
     /,
-    model_type: "type[BaseModel]",
+    model_type: type[BaseModel],
     fuzzy_parse: bool = True,
     fuzzy_match: bool = False,
     fuzzy_match_params: FuzzyMatchKeysParams | dict[Any, Any] | None = None,
@@ -44,17 +46,17 @@ def fuzzy_validate_pydantic(
         TypeError: If fuzzy_match_params is invalid type
     """
     # Handle already-valid model instances
-    if isinstance(text, model_type):
-        return text
+    if isinstance(data, model_type):
+        return data
 
     # Handle dict inputs directly (skip JSON extraction)
     model_data: dict[str, Any]
-    if isinstance(text, dict):
-        model_data = text
+    if isinstance(data, dict):
+        model_data = data
     else:
         # Handle string inputs (JSON strings, markdown, etc.)
         try:
-            extracted = extract_json(text, fuzzy_parse=fuzzy_parse)
+            extracted = extract_json(data, fuzzy_parse=fuzzy_parse)
             model_data = extracted if isinstance(extracted, dict) else {"data": extracted}
         except Exception as e:
             raise ValidationError(f"Failed to extract valid JSON from model response: {e}") from e

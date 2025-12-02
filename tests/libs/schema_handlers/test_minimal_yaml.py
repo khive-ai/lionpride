@@ -504,6 +504,54 @@ class TestReturnType:
         assert parsed["items"] == data["items"]
 
 
+class TestUnescapeHtml:
+    """Test HTML entity unescaping."""
+
+    def test_unescape_html_entities(self):
+        """Test that HTML entities are unescaped when enabled."""
+        data = {"text": "Hello &amp; World", "quote": "&quot;test&quot;"}
+        result = minimal_yaml(data, unescape_html=True)
+
+        assert "Hello & World" in result
+        assert '"test"' in result
+
+    def test_unescape_html_disabled_by_default(self):
+        """Test that HTML entities are NOT unescaped by default."""
+        data = {"text": "Hello &amp; World"}
+        result = minimal_yaml(data, unescape_html=False)
+
+        assert "&amp;" in result
+
+    def test_unescape_html_common_entities(self):
+        """Test common HTML entities are properly unescaped."""
+        data = {
+            "lt": "&lt;tag&gt;",
+            "amp": "a &amp; b",
+            "quot": "&quot;quoted&quot;",
+            "apos": "&apos;apostrophe&apos;",
+            "nbsp": "non&nbsp;breaking",
+        }
+        result = minimal_yaml(data, unescape_html=True)
+
+        assert "<tag>" in result
+        assert "a & b" in result
+        assert '"quoted"' in result
+
+    def test_unescape_html_with_nested_structure(self):
+        """Test HTML unescaping works with nested data."""
+        data = {
+            "outer": {
+                "inner": "value &amp; more",
+                "list": ["item &lt;1&gt;", "item &amp; 2"],
+            }
+        }
+        result = minimal_yaml(data, unescape_html=True)
+
+        assert "value & more" in result
+        assert "item <1>" in result
+        assert "item & 2" in result
+
+
 class TestPruningHelpers:
     """Test the internal pruning helper functions."""
 
