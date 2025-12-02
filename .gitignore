@@ -210,3 +210,6 @@ __marimo__/
 .coverage
 coverage.*
 *.DS_Store
+
+CLAUDE.md
+AGENTS.md
