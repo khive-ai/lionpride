@@ -1,8 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""BaseModel validation rule - validates arbitrary Pydantic models."""
-
 from __future__ import annotations
 
 from typing import Any

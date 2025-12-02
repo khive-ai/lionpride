@@ -1,25 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Operation parameter types - flat inheritance hierarchy.
-
-Hierarchy (inheritance):
-    GenerateParams      (standalone - LLM call params)
-    ParseParams         (standalone - extraction params)
-    ActParams           (standalone - tool execution params)
-
-    CommunicateParams   (has generate + parse)
-        ↓
-    OperateParams       (inherits CommunicateParams, adds act fields)
-        ↓
-    ReactParams         (inherits OperateParams, adds loop params)
-
-Access patterns:
-    communicate.generate.instruction   # 1 level
-    operate.generate.instruction       # 1 level (inherited)
-    react.generate.instruction         # 1 level (inherited)
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field

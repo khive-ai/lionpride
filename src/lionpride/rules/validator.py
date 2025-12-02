@@ -1,18 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Validator engine - applies rules to validate and fix data structures.
-
-Core of the IPU validation pipeline:
-    Spec.base_type → auto Rule assignment → validate spec-by-spec → Operable.create_model()
-
-Features:
-- Auto Rule assignment from Spec.base_type via RuleRegistry
-- Spec metadata override for custom rules
-- validation_log for error tracking
-- strict mode control
-"""
-
 from __future__ import annotations
 
 from datetime import datetime

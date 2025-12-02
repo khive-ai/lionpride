@@ -1,16 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Per-session operation registry.
-
-OperationRegistry maps operation names to their factory functions.
-Unlike the old global dispatcher, this is instantiated per-Session
-for better isolation and testability.
-
-Default operations (operate, react, communicate, generate) are
-auto-registered when the registry is created.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable

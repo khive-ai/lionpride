@@ -1,17 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Operate operation - structured output with optional actions.
-
-Operate = Communicate + optional Act (tool execution).
-
-Security model:
-    - User declares capabilities (field names they want in output)
-    - System adds action_requests/reason if enabled
-    - Total capabilities must be ⊆ branch.capabilities
-    - Communicate validates and builds model from capabilities
-"""
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any

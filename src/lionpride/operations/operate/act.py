@@ -1,8 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Action execution for tool calls."""
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
