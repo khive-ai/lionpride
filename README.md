@@ -14,7 +14,6 @@
 ## Features
 
 - **Model Agnostic** - Built-in providers for OpenAI-compatible APIs, Anthropic, Gemini
-- **LNDL** - Domain-specific language for LLM structured output and enhanced reasoning
 - **Declarative Workflows** - Report/Form system for multi-step agent pipelines
 - **Async Native** - Operation graph building, dependency-aware execution
 - **Modular Architecture** - Protocol-based composition, zero framework lock-in
@@ -150,7 +149,6 @@ lionpride/
 ├── work/           # Declarative workflows: Report, Form, flow_report
 ├── rules/          # Validation rules and auto-correction
 ├── types/          # Spec, Operable, type system
-├── lndl/           # LNDL parser and resolver
 └── ln/             # Utility functions
 ```
 
