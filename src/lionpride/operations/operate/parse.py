@@ -15,7 +15,7 @@ from lionpride.libs.string_handlers import extract_json
 from lionpride.ln import fuzzy_validate_mapping
 from lionpride.session.messages import InstructionContent, Message
 
-from .types import GenerateParams, HandleUnmatched, ParseParams
+from .types import CustomParser, GenerateParams, HandleUnmatched, ParseParams
 
 if TYPE_CHECKING:
     from lionpride.session import Branch, Session
@@ -40,6 +40,7 @@ async def parse(
             similarity_threshold=params.similarity_threshold,
             handle_unmatched=params.handle_unmatched,
             structure_format=params.structure_format,
+            custom_parser=params.custom_parser,
             **params.match_kwargs,
         )
     except LionprideError as e:
@@ -81,14 +82,30 @@ def _direct_parse(
     similarity_threshold: float,
     handle_unmatched: HandleUnmatched,
     structure_format: str,
+    custom_parser: CustomParser | None = None,
     **kwargs,
 ) -> dict[str, Any]:
-    if structure_format == "lndl":
-        raise ConfigurationError("LNDL structure_format is not yet implemented in parse")
-    if structure_format != "json":
-        raise ValidationError(f"Unsupported structure_format '{structure_format}' in parse")
     if not target_keys:
         raise ValidationError("No target_keys provided for parse operation")
+
+    # Custom parser path
+    if structure_format == "custom":
+        if custom_parser is None:
+            raise ConfigurationError(
+                "structure_format='custom' requires a custom_parser to be provided"
+            )
+        try:
+            return custom_parser(text, target_keys, **kwargs)
+        except Exception as e:
+            raise ExecutionError(
+                "Custom parser failed to extract data from text",
+                retryable=True,
+                cause=e,
+            )
+
+    # JSON parser path
+    if structure_format != "json":
+        raise ValidationError(f"Unsupported structure_format '{structure_format}' in parse")
 
     extracted = None
     try:
@@ -159,5 +176,6 @@ async def _llm_reparse(
         params.similarity_threshold,
         params.handle_unmatched,
         params.structure_format,
+        params.custom_parser,
         **params.match_kwargs,
     )

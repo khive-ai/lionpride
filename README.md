@@ -152,12 +152,8 @@ lionpride/
 └── ln/             # Utility functions
 ```
 
-See [CLAUDE.md](CLAUDE.md) for detailed codebase navigation.
-
 ## Documentation
 
-- [CLAUDE.md](CLAUDE.md) - AI agent codebase guide
-- [AGENTS.md](AGENTS.md) - Quick reference
 - [API Reference](docs/api/) - Comprehensive API docs
   - [Session](docs/api/session/) - Session, Branch, Message
   - [Services](docs/api/services/) - iModel, ServiceRegistry, Tool

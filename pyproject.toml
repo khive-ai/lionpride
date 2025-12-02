@@ -1,6 +1,6 @@
 [project]
 name = "lionpride"
-version = "1.0.0a3"
+version = "1.0.0a4"
 description = "The kernel layer for production AI agents - protocol-based, type-safe, zero framework lock-in"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -24,6 +24,7 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Topic :: Software Development :: Libraries :: Python Modules",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
   "Typing :: Typed",

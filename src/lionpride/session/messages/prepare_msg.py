@@ -1,10 +1,14 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any, Literal
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Literal
 
 from lionpride.core import Pile, Progression
 from lionpride.types import not_sentinel
+
+if TYPE_CHECKING:
+    from pydantic import BaseModel
 
 from .content import (
     ActionResponseContent,
@@ -37,7 +41,8 @@ def prepare_messages_for_chat(
     progression: Progression | None = None,
     new_instruction: Message | None = None,
     to_chat: bool = False,
-    structure_format: Literal["json", "lndl"] = "json",
+    structure_format: Literal["json", "custom"] = "json",
+    custom_renderer: Callable[["BaseModel"], str] | None = None,
 ) -> list[MessageContent] | list[dict[str, Any]]:
     """Prepare messages for chat API with intelligent content organization.
 
@@ -66,7 +71,7 @@ def prepare_messages_for_chat(
                 copy_containers="deep"
             )
             if to_chat:
-                chat_msg = content.to_chat(structure_format)
+                chat_msg = content.to_chat(structure_format, custom_renderer)
                 return [chat_msg] if not_sentinel(chat_msg, True, True) else []
             return [content]
         return []
@@ -152,8 +157,8 @@ def prepare_messages_for_chat(
 
     if to_chat:
         return [
-            m.to_chat(structure_format)
+            m.to_chat(structure_format, custom_renderer)
             for m in _use_msgs
-            if not_sentinel(m.to_chat(structure_format), True, True)
+            if not_sentinel(m.to_chat(structure_format, custom_renderer), True, True)
         ]
     return _use_msgs
