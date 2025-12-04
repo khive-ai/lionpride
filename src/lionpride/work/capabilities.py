@@ -30,9 +30,6 @@ class AmbiguousResourceError(CapabilityError):
     pass
 
 
-# Valid operation types (must match session.operations registry)
-VALID_OPERATIONS = frozenset({"generate", "parse", "communicate", "operate", "react"})
-
 # Valid resource type prefixes
 VALID_RESOURCE_TYPES = frozenset({"api", "api_gen", "api_parse", "api_interpret", "tool"})
 
@@ -96,16 +93,15 @@ class FormResources:
                 )
             return model
 
-        # Count models in branch resources (heuristic: not tools)
-        # This requires knowing which are models vs tools
-        # For now, assume branch tracks this separately or we check session
-        branch_models = _get_branch_models(branch)
-        if len(branch_models) == 1:
-            return next(iter(branch_models))
-        if len(branch_models) == 0:
-            raise CapabilityError("No models available in branch resources")
+        # Branch resources contain both models and tools without distinction.
+        # When no model is specified, we can only auto-resolve if there's exactly one resource.
+        branch_resources = _get_branch_resources(branch)
+        if len(branch_resources) == 1:
+            return next(iter(branch_resources))
+        if len(branch_resources) == 0:
+            raise CapabilityError("No resources available in branch")
         raise AmbiguousResourceError(
-            f"Multiple models available ({branch_models}), must specify api or api_gen"
+            f"Multiple resources available ({branch_resources}), must specify api or api_gen"
         )
 
     def resolve_parse_model(self, branch: Branch) -> str:
@@ -130,29 +126,32 @@ class FormResources:
             return model
         return self.resolve_gen_model(branch)  # Fallback to gen model
 
-    def resolve_tools(self, branch: Branch) -> set[str]:
-        """Resolve tools against branch resources.
+    def resolve_tools(self, branch: Branch) -> list[str] | bool:
+        """Resolve tools for ActParams/OperateParams.
 
         Args:
             branch: Branch to resolve against
 
         Returns:
-            Set of tool names to use
+            - False: No tools
+            - True: All branch tools (tool:*)
+            - list[str]: Specific tools
 
         Raises:
             CapabilityError: If specified tool not in branch resources
         """
         if self.tools is None:
-            return set()
+            return False
         if self.tools == "*":
-            return _get_branch_tools(branch)
-        # Validate subset
+            # tool:* means all tools the branch has access to
+            return True
+        # Validate subset against branch resources
         tools = set(self.tools)
-        branch_tools = _get_branch_tools(branch)
-        if not tools <= branch_tools:
-            missing = tools - branch_tools
-            raise CapabilityError(f"Tools {missing} not in branch resources: {branch_tools}")
-        return tools
+        branch_resources = _get_branch_resources(branch)
+        if not tools <= branch_resources:
+            missing = tools - branch_resources
+            raise CapabilityError(f"Tools {missing} not in branch resources: {branch_resources}")
+        return list(self.tools)
 
     def validate_against(self, branch: Branch) -> None:
         """Validate all resources are subset of branch resources.
@@ -178,23 +177,12 @@ class FormResources:
                     )
 
 
-def _get_branch_models(branch: Branch) -> set[str]:
-    """Get model names from branch resources.
+def _get_branch_resources(branch: Branch) -> set[str]:
+    """Get all resource names from branch.
 
-    This is a heuristic - ideally branch would track models vs tools separately.
-    For now, we need to check against session's service registry.
+    Note: Branch.resources contains both models and tools without distinction.
+    Callers must disambiguate based on their context (e.g., service registry).
     """
-    # TODO: Proper separation of models vs tools in branch
-    # For now, return all resources (caller may need to filter)
-    return set(branch.resources)
-
-
-def _get_branch_tools(branch: Branch) -> set[str]:
-    """Get tool names from branch resources.
-
-    This is a heuristic - ideally branch would track models vs tools separately.
-    """
-    # TODO: Proper separation of models vs tools in branch
     return set(branch.resources)
 
 
@@ -222,15 +210,14 @@ class ParsedAssignment:
 def parse_assignment(assignment: str) -> ParsedAssignment:
     """Parse assignment DSL into structured result.
 
-    Supports full DSL:
-        [branch:] [operation(] inputs -> outputs [)] [| resources]
+    Supports DSL:
+        [branch:] inputs -> outputs [| resources]
 
     Examples:
         "a, b -> c"
         "orchestrator: a -> b"
-        "operate(a -> b)"
-        "orchestrator: react(a, b -> c) | api:gpt4, tool:search"
-        "step: communicate(x -> y) | api_gen:gpt5, api_parse:gpt4mini, tool:*"
+        "orchestrator: a, b -> c | api:gpt4, tool:search"
+        "step: x -> y | api_gen:gpt5, api_parse:gpt4mini, tool:*"
 
     Args:
         assignment: DSL string to parse
@@ -259,38 +246,20 @@ def parse_assignment(assignment: str) -> ParsedAssignment:
     # Parse resources
     resources = _parse_resources(resources_part) if resources_part else FormResources()
 
-    # Parse flow part: [branch:] [operation(] inputs -> outputs [)]
+    # Parse flow part: [branch:] inputs -> outputs
     branch_name = None
-    operation = "operate"
 
-    # Check for branch prefix (colon before any parenthesis or arrow)
+    # Check for branch prefix (colon before arrow)
     arrow_pos = flow_part.find("->")
     if arrow_pos == -1:
         raise ValueError(f"Invalid assignment: '{original}'. Must contain '->'")
 
-    paren_pos = flow_part.find("(")
     colon_pos = flow_part.find(":")
 
-    # Colon is branch prefix only if it's before arrow and before opening paren (if any)
-    if colon_pos != -1 and colon_pos < arrow_pos and (paren_pos == -1 or colon_pos < paren_pos):
+    # Colon is branch prefix only if it's before arrow
+    if colon_pos != -1 and colon_pos < arrow_pos:
         branch_name = flow_part[:colon_pos].strip()
         flow_part = flow_part[colon_pos + 1 :].strip()
-
-    # Check for operation prefix: operation(...)
-    paren_pos = flow_part.find("(")
-    if paren_pos != -1:
-        # Has operation prefix
-        op_candidate = flow_part[:paren_pos].strip().lower()
-        if op_candidate in VALID_OPERATIONS:
-            operation = op_candidate
-            # Remove operation( and trailing )
-            flow_part = flow_part[paren_pos + 1 :].strip()
-            if flow_part.endswith(")"):
-                flow_part = flow_part[:-1].strip()
-        else:
-            raise ValueError(
-                f"Invalid operation '{op_candidate}'. Valid operations: {sorted(VALID_OPERATIONS)}"
-            )
 
     # Parse inputs -> outputs
     if "->" not in flow_part:
@@ -305,7 +274,7 @@ def parse_assignment(assignment: str) -> ParsedAssignment:
 
     return ParsedAssignment(
         branch_name=branch_name,
-        operation=operation,
+        operation="operate",  # Always operate - only supported operation
         input_fields=input_fields,
         output_fields=output_fields,
         resources=resources,
@@ -355,21 +324,36 @@ def _parse_resources(resources_str: str) -> FormResources:
             )
 
         if res_type == "api":
+            if api is not None:
+                raise ValueError(f"Duplicate 'api' declaration: already set to '{api}'")
             api = res_name
         elif res_type == "api_gen":
+            if api_gen is not None:
+                raise ValueError(f"Duplicate 'api_gen' declaration: already set to '{api_gen}'")
             api_gen = res_name
         elif res_type == "api_parse":
+            if api_parse is not None:
+                raise ValueError(f"Duplicate 'api_parse' declaration: already set to '{api_parse}'")
             api_parse = res_name
         elif res_type == "api_interpret":
+            if api_interpret is not None:
+                raise ValueError(
+                    f"Duplicate 'api_interpret' declaration: already set to '{api_interpret}'"
+                )
             api_interpret = res_name
         elif res_type == "tool":
             if res_name == "*":
+                if tools is not None and tools != "*":
+                    raise ValueError("Cannot mix 'tool:*' with specific tools")
                 tools = "*"
             else:
+                if tools == "*":
+                    raise ValueError("Cannot mix specific tools with 'tool:*'")
                 if tools is None:
                     tools = set()
-                if tools != "*":
-                    tools.add(res_name)
+                if res_name in tools:
+                    raise ValueError(f"Duplicate tool declaration: '{res_name}'")
+                tools.add(res_name)
 
     # Convert tools set to frozenset for immutability
     frozen_tools: frozenset[str] | Literal["*"] | None = None

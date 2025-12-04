@@ -44,18 +44,12 @@ class TestLazyImport:
         from lionpride.libs.schema_handlers import (
             breakdown_pydantic_annotation,
             is_pydantic_model,
-            map_positional_args,
             minimal_yaml,
-            nest_arguments_by_schema,
-            parse_function_call,
             typescript_schema,
         )
 
         # Verify all regular exports are callable
         assert callable(breakdown_pydantic_annotation)
         assert callable(is_pydantic_model)
-        assert callable(map_positional_args)
         assert callable(minimal_yaml)
-        assert callable(nest_arguments_by_schema)
-        assert callable(parse_function_call)
         assert callable(typescript_schema)

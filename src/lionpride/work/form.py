@@ -21,15 +21,14 @@ class Form(Element):
     """Declarative unit of work with assignment-based field contracts.
 
     A Form declares:
-    - assignment: Full DSL string with operation, data flow, and resources
-    - Derived: branch_name, operation, input/output fields, resources
+    - assignment: DSL string with data flow and resources
+    - Derived: branch_name, input/output fields, resources
 
     Forms are data contracts with capability declarations.
     Schema/validation comes from Report class attributes.
 
     Example:
-        form = Form(assignment="orchestrator: react(context -> plan) | api:gpt4, tool:*")
-        form.operation      # "react"
+        form = Form(assignment="orchestrator: context -> plan | api:gpt4, tool:*")
         form.input_fields   # ["context"]
         form.output_fields  # ["plan"]
         form.resources.api  # "gpt4"
@@ -41,12 +40,12 @@ class Form(Element):
     # Declaration
     assignment: str = Field(
         ...,
-        description="Assignment DSL: '[branch:] [op(] inputs -> outputs [)] [| resources]'",
+        description="Assignment DSL: '[branch:] inputs -> outputs [| resources]'",
     )
 
     # Derived fields (computed from assignment)
     branch_name: str | None = Field(default=None)
-    operation: str = Field(default="operate")
+    operation: str = Field(default="operate")  # Always "operate" - kept for compatibility
     input_fields: list[str] = Field(default_factory=list)
     output_fields: list[str] = Field(default_factory=list)
     resources: FormResources = Field(default_factory=FormResources)
@@ -142,7 +141,6 @@ class Form(Element):
 
     def __repr__(self) -> str:
         status = "filled" if self.filled else "pending"
-        op_str = f" op={self.operation}" if self.operation != "operate" else ""
         res_parts = []
         if self.resources.api:
             res_parts.append(f"api:{self.resources.api}")
@@ -152,4 +150,4 @@ class Form(Element):
             )
             res_parts.append(f"tools:{tools_str}")
         res_str = f" [{', '.join(res_parts)}]" if res_parts else ""
-        return f"Form('{self.assignment}'{op_str}{res_str}, {status})"
+        return f"Form('{self.assignment}'{res_str}, {status})"
