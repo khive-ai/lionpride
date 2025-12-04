@@ -9,7 +9,7 @@ from .capabilities import (
 )
 from .form import Form, parse_assignment
 from .report import Report
-from .runner import flow_report
+from .runner import flow_report, stream_flow_report
 
 __all__ = (
     "AmbiguousResourceError",
@@ -20,4 +20,5 @@ __all__ = (
     "Report",
     "flow_report",
     "parse_assignment",
+    "stream_flow_report",
 )

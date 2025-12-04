@@ -18,7 +18,6 @@ class TestParseAssignment:
         assert parsed.branch_name is None
         assert parsed.input_fields == ["a", "b"]
         assert parsed.output_fields == ["c"]
-        assert parsed.operation == "operate"
 
     def test_single_input_output(self):
         """Test single input to single output."""
@@ -85,26 +84,6 @@ class TestParseAssignment:
         assert parsed.output_fields == ["b:c"]
 
 
-class TestParseAssignmentOperationAlwaysOperate:
-    """Tests verifying operation is always 'operate'."""
-
-    def test_operation_always_operate(self):
-        """Test that operation is always 'operate'."""
-        parsed = parse_assignment("a -> b")
-        assert parsed.operation == "operate"
-
-    def test_operation_with_branch(self):
-        """Test operation is 'operate' even with branch prefix."""
-        parsed = parse_assignment("orchestrator: a, b -> c")
-        assert parsed.branch_name == "orchestrator"
-        assert parsed.operation == "operate"
-
-    def test_operation_with_resources(self):
-        """Test operation is 'operate' with resources."""
-        parsed = parse_assignment("a -> b | api:gpt4")
-        assert parsed.operation == "operate"
-
-
 class TestParseAssignmentWithResources:
     """Tests for parse_assignment with resource declarations."""
 
@@ -126,17 +105,11 @@ class TestParseAssignmentWithResources:
         parsed = parse_assignment("a -> b | api_parse:gpt4mini")
         assert parsed.resources.api_parse == "gpt4mini"
 
-    def test_api_interpret(self):
-        """Test api_interpret declaration."""
-        parsed = parse_assignment("a -> b | api_interpret:gemini")
-        assert parsed.resources.api_interpret == "gemini"
-
     def test_multiple_api_roles(self):
         """Test multiple api role declarations."""
-        parsed = parse_assignment("a -> b | api_gen:gpt5, api_parse:gpt4mini, api_interpret:gemini")
+        parsed = parse_assignment("a -> b | api_gen:gpt5, api_parse:gpt4mini")
         assert parsed.resources.api_gen == "gpt5"
         assert parsed.resources.api_parse == "gpt4mini"
-        assert parsed.resources.api_interpret == "gemini"
 
     def test_single_tool(self):
         """Test single tool declaration."""
@@ -165,7 +138,6 @@ class TestParseAssignmentWithResources:
             "orchestrator: context -> plan | api_gen:gpt5, api_parse:gpt4mini, tool:*"
         )
         assert parsed.branch_name == "orchestrator"
-        assert parsed.operation == "operate"  # Always operate
         assert parsed.input_fields == ["context"]
         assert parsed.output_fields == ["plan"]
         assert parsed.resources.api_gen == "gpt5"
@@ -202,11 +174,6 @@ class TestParseAssignmentWithResources:
         with pytest.raises(ValueError, match="Duplicate 'api_parse'"):
             parse_assignment("a -> b | api_parse:gpt4, api_parse:gpt5")
 
-    def test_duplicate_api_interpret_raises_error(self):
-        """Test duplicate api_interpret declaration raises error."""
-        with pytest.raises(ValueError, match="Duplicate 'api_interpret'"):
-            parse_assignment("a -> b | api_interpret:gpt4, api_interpret:gpt5")
-
     def test_duplicate_tool_raises_error(self):
         """Test duplicate tool declaration raises error."""
         with pytest.raises(ValueError, match="Duplicate tool"):
@@ -232,28 +199,7 @@ class TestFormResources:
         assert res.api is None
         assert res.api_gen is None
         assert res.api_parse is None
-        assert res.api_interpret is None
         assert res.tools is None
-
-    def test_get_gen_model_fallback(self):
-        """Test get_gen_model falls back to api."""
-        res = FormResources(api="gpt4")
-        assert res.get_gen_model() == "gpt4"
-
-    def test_get_gen_model_explicit(self):
-        """Test get_gen_model uses api_gen when set."""
-        res = FormResources(api="gpt4", api_gen="gpt5")
-        assert res.get_gen_model() == "gpt5"
-
-    def test_get_parse_model_fallback(self):
-        """Test get_parse_model falls back to api."""
-        res = FormResources(api="gpt4")
-        assert res.get_parse_model() == "gpt4"
-
-    def test_get_interpret_model_fallback(self):
-        """Test get_interpret_model falls back to api."""
-        res = FormResources(api="gpt4")
-        assert res.get_interpret_model() == "gpt4"
 
     def test_frozen(self):
         """Test FormResources is immutable."""
@@ -272,7 +218,6 @@ class TestForm:
         assert form.branch_name is None
         assert form.input_fields == ["a", "b"]
         assert form.output_fields == ["c"]
-        assert form.operation == "operate"
         assert form.filled is False
         assert form.output is None
 
@@ -293,7 +238,6 @@ class TestForm:
         """Test form creation with all components."""
         form = Form(assignment="orchestrator: a, b -> c | api:gpt4, tool:*")
         assert form.branch_name == "orchestrator"
-        assert form.operation == "operate"  # Always operate
         assert form.input_fields == ["a", "b"]
         assert form.output_fields == ["c"]
         assert form.resources.api == "gpt4"

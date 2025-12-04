@@ -52,6 +52,9 @@ class TestFlowReportUnit:
 
         mock_session = MagicMock()
         mock_session.default_branch = MagicMock()
+        mock_session.default_branch.resources = {
+            "default_model"
+        }  # Single resource for auto-resolve
         mock_session.get_branch = MagicMock(return_value=mock_session.default_branch)
 
         mock_output = SimpleOutput(result="success")
@@ -82,6 +85,7 @@ class TestFlowReportUnit:
 
         mock_session = MagicMock()
         mock_session.default_branch = MagicMock()
+        mock_session.default_branch.resources = {"default_model"}
         mock_session.get_branch = MagicMock(return_value=mock_session.default_branch)
 
         mock_output = SimpleOutput(result="filled")
@@ -120,6 +124,7 @@ class TestFlowReportUnit:
 
         mock_session = MagicMock()
         mock_session.default_branch = MagicMock()
+        mock_session.default_branch.resources = {"default_model"}
         mock_session.get_branch = MagicMock(return_value=mock_session.default_branch)
 
         # Track execution order
@@ -166,6 +171,7 @@ class TestFlowReportUnit:
 
         mock_session = MagicMock()
         mock_session.default_branch = MagicMock()
+        mock_session.default_branch.resources = {"default_model"}
         mock_session.get_branch = MagicMock(return_value=mock_session.default_branch)
 
         async def mock_operate_side_effect(session, branch, params):
@@ -206,7 +212,9 @@ class TestFlowReportUnit:
 
         mock_session = MagicMock()
         mock_branch = MagicMock()
+        mock_branch.resources = {"default_model"}
         mock_worker_branch = MagicMock()
+        mock_worker_branch.resources = {"default_model"}
         mock_session.default_branch = mock_branch
         mock_session.get_branch = MagicMock(return_value=mock_worker_branch)
 
@@ -236,6 +244,7 @@ class TestFlowReportUnit:
 
         mock_session = MagicMock()
         mock_session.default_branch = MagicMock()
+        mock_session.default_branch.resources = {"default_model"}
         mock_session.get_branch = MagicMock(return_value=mock_session.default_branch)
 
         with patch("lionpride.work.runner.operate") as mock_operate:
@@ -270,6 +279,7 @@ class TestFlowReportUnit:
 
         mock_session = MagicMock()
         mock_session.default_branch = MagicMock()
+        mock_session.default_branch.resources = {"default_model"}
         mock_session.get_branch = MagicMock(return_value=mock_session.default_branch)
 
         # Track context passed to operate
@@ -312,6 +322,7 @@ class TestFlowReportUnit:
 
         mock_session = MagicMock()
         mock_session.default_branch = MagicMock()
+        mock_session.default_branch.resources = {"default_model"}
         mock_session.get_branch = MagicMock(return_value=mock_session.default_branch)
 
         with pytest.raises(RuntimeError, match="Deadlock"):
@@ -341,6 +352,7 @@ class TestFlowReportUnit:
 
         mock_session = MagicMock()
         mock_session.default_branch = MagicMock()
+        mock_session.default_branch.resources = {"default_model"}
         mock_session.get_branch = MagicMock(return_value=mock_session.default_branch)
 
         async def mock_operate_side_effect(session, branch, params):
