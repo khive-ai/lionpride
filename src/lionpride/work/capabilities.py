@@ -31,7 +31,7 @@ class AmbiguousResourceError(CapabilityError):
 
 
 # Valid resource type prefixes
-VALID_RESOURCE_TYPES = frozenset({"api", "api_gen", "api_parse", "api_interpret", "tool"})
+VALID_RESOURCE_TYPES = frozenset({"api", "api_gen", "api_parse", "tool"})
 
 
 @dataclass(frozen=True)
@@ -41,90 +41,50 @@ class FormResources:
     Immutable specification of what resources a form step can access.
 
     Attributes:
-        api: Default model for all roles (sets gen, parse, interpret if not specified)
+        api: Default model for all roles (fallback if api_gen/api_parse not specified)
         api_gen: Model for generation/completion
         api_parse: Model for structured extraction
-        api_interpret: Model for react interpretation
         tools: Set of tool names, or "*" for all branch tools, or None for no tools
     """
 
     api: str | None = None
     api_gen: str | None = None
     api_parse: str | None = None
-    api_interpret: str | None = None
     tools: frozenset[str] | Literal["*"] | None = None
-
-    def get_gen_model(self) -> str | None:
-        """Get model for generation (api_gen → api fallback)."""
-        return self.api_gen or self.api
-
-    def get_parse_model(self) -> str | None:
-        """Get model for parsing (api_parse → api fallback)."""
-        return self.api_parse or self.api
-
-    def get_interpret_model(self) -> str | None:
-        """Get model for interpretation (api_interpret → api fallback)."""
-        return self.api_interpret or self.api
 
     def resolve_gen_model(self, branch: Branch) -> str:
         """Resolve generation model against branch resources.
 
-        Resolution order:
-        1. api_gen if specified
-        2. api if specified
-        3. Branch's only model (if unambiguous)
-        4. Error
-
-        Args:
-            branch: Branch to resolve against
-
-        Returns:
-            Model name to use
-
-        Raises:
-            AmbiguousResourceError: If multiple models and none specified
-            CapabilityError: If specified model not in branch resources
+        Resolution order: api_gen → api → branch's only resource → error
         """
-        model = self.get_gen_model()
+        branch_id = branch.name or str(branch.id)[:8]
+        model = self.api_gen or self.api
         if model:
             if model not in branch.resources:
-                raise CapabilityError(
-                    f"Model '{model}' not in branch resources: {branch.resources}"
-                )
+                raise CapabilityError(f"Model '{model}' not available in branch '{branch_id}'")
             return model
 
-        # Branch resources contain both models and tools without distinction.
-        # When no model is specified, we can only auto-resolve if there's exactly one resource.
-        branch_resources = _get_branch_resources(branch)
-        if len(branch_resources) == 1:
-            return next(iter(branch_resources))
-        if len(branch_resources) == 0:
-            raise CapabilityError("No resources available in branch")
+        # Auto-resolve only if branch has exactly one resource
+        if len(branch.resources) == 1:
+            return next(iter(branch.resources))
+        if len(branch.resources) == 0:
+            raise CapabilityError(f"No resources available in branch '{branch_id}'")
         raise AmbiguousResourceError(
-            f"Multiple resources available ({branch_resources}), must specify api or api_gen"
+            f"Multiple resources in branch '{branch_id}', must specify api or api_gen"
         )
 
     def resolve_parse_model(self, branch: Branch) -> str:
-        """Resolve parse model against branch resources."""
-        model = self.get_parse_model()
-        if model:
-            if model not in branch.resources:
-                raise CapabilityError(
-                    f"Model '{model}' not in branch resources: {branch.resources}"
-                )
-            return model
-        return self.resolve_gen_model(branch)  # Fallback to gen model
+        """Resolve parse model against branch resources.
 
-    def resolve_interpret_model(self, branch: Branch) -> str:
-        """Resolve interpret model against branch resources."""
-        model = self.get_interpret_model()
+        Resolution order: api_parse → api_gen → api → branch's only resource → error
+        """
+        branch_id = branch.name or str(branch.id)[:8]
+        model = self.api_parse or self.api_gen or self.api
         if model:
             if model not in branch.resources:
-                raise CapabilityError(
-                    f"Model '{model}' not in branch resources: {branch.resources}"
-                )
+                raise CapabilityError(f"Model '{model}' not available in branch '{branch_id}'")
             return model
-        return self.resolve_gen_model(branch)  # Fallback to gen model
+        return self.resolve_gen_model(branch)  # Fallback to gen model resolution
 
     def resolve_tools(self, branch: Branch) -> list[str] | bool:
         """Resolve tools for ActParams/OperateParams.
@@ -147,43 +107,11 @@ class FormResources:
             return True
         # Validate subset against branch resources
         tools = set(self.tools)
-        branch_resources = _get_branch_resources(branch)
-        if not tools <= branch_resources:
-            missing = tools - branch_resources
-            raise CapabilityError(f"Tools {missing} not in branch resources: {branch_resources}")
+        if not tools <= branch.resources:
+            missing = tools - branch.resources
+            branch_id = branch.name or str(branch.id)[:8]
+            raise CapabilityError(f"Tools {missing} not available in branch '{branch_id}'")
         return list(self.tools)
-
-    def validate_against(self, branch: Branch) -> None:
-        """Validate all resources are subset of branch resources.
-
-        Args:
-            branch: Branch to validate against
-
-        Raises:
-            CapabilityError: If any resource not in branch
-        """
-        # Validate APIs
-        for api in [self.api, self.api_gen, self.api_parse, self.api_interpret]:
-            if api and api not in branch.resources:
-                raise CapabilityError(f"API '{api}' not in branch resources: {branch.resources}")
-
-        # Validate tools (unless wildcard)
-        if self.tools and self.tools != "*":
-            branch_resources = branch.resources
-            for tool in self.tools:
-                if tool not in branch_resources:
-                    raise CapabilityError(
-                        f"Tool '{tool}' not in branch resources: {branch_resources}"
-                    )
-
-
-def _get_branch_resources(branch: Branch) -> set[str]:
-    """Get all resource names from branch.
-
-    Note: Branch.resources contains both models and tools without distinction.
-    Callers must disambiguate based on their context (e.g., service registry).
-    """
-    return set(branch.resources)
 
 
 @dataclass
@@ -192,7 +120,6 @@ class ParsedAssignment:
 
     Attributes:
         branch_name: Optional branch prefix (e.g., "orchestrator")
-        operation: Operation type (default: "operate")
         input_fields: List of input field names
         output_fields: List of output field names
         resources: Parsed resource declarations
@@ -200,7 +127,6 @@ class ParsedAssignment:
     """
 
     branch_name: str | None
-    operation: str
     input_fields: list[str]
     output_fields: list[str]
     resources: FormResources
@@ -274,7 +200,6 @@ def parse_assignment(assignment: str) -> ParsedAssignment:
 
     return ParsedAssignment(
         branch_name=branch_name,
-        operation="operate",  # Always operate - only supported operation
         input_fields=input_fields,
         output_fields=output_fields,
         resources=resources,
@@ -302,7 +227,6 @@ def _parse_resources(resources_str: str) -> FormResources:
     api: str | None = None
     api_gen: str | None = None
     api_parse: str | None = None
-    api_interpret: str | None = None
     tools: set[str] | Literal["*"] | None = None
 
     parts = [p.strip() for p in resources_str.split(",") if p.strip()]
@@ -335,12 +259,6 @@ def _parse_resources(resources_str: str) -> FormResources:
             if api_parse is not None:
                 raise ValueError(f"Duplicate 'api_parse' declaration: already set to '{api_parse}'")
             api_parse = res_name
-        elif res_type == "api_interpret":
-            if api_interpret is not None:
-                raise ValueError(
-                    f"Duplicate 'api_interpret' declaration: already set to '{api_interpret}'"
-                )
-            api_interpret = res_name
         elif res_type == "tool":
             if res_name == "*":
                 if tools is not None and tools != "*":
@@ -366,6 +284,5 @@ def _parse_resources(resources_str: str) -> FormResources:
         api=api,
         api_gen=api_gen,
         api_parse=api_parse,
-        api_interpret=api_interpret,
         tools=frozen_tools,
     )

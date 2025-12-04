@@ -3,16 +3,13 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from pydantic import ConfigDict, Field
 
 from lionpride.core import Element
 
 from .capabilities import FormResources, parse_assignment
-
-if TYPE_CHECKING:
-    from lionpride.session import Branch
 
 __all__ = ("Form", "parse_assignment")
 
@@ -45,7 +42,6 @@ class Form(Element):
 
     # Derived fields (computed from assignment)
     branch_name: str | None = Field(default=None)
-    operation: str = Field(default="operate")  # Always "operate" - kept for compatibility
     input_fields: list[str] = Field(default_factory=list)
     output_fields: list[str] = Field(default_factory=list)
     resources: FormResources = Field(default_factory=FormResources)
@@ -64,7 +60,6 @@ class Form(Element):
         """Parse assignment to derive all fields."""
         parsed = parse_assignment(self.assignment)
         self.branch_name = parsed.branch_name
-        self.operation = parsed.operation
         self.input_fields = parsed.input_fields
         self.output_fields = parsed.output_fields
         self.resources = parsed.resources
@@ -127,17 +122,6 @@ class Form(Element):
                     result[field] = data[field]
 
         return result
-
-    def validate_resources(self, branch: Branch) -> None:
-        """Validate form resources are subset of branch resources.
-
-        Args:
-            branch: Branch to validate against
-
-        Raises:
-            CapabilityError: If any resource not in branch
-        """
-        self.resources.validate_against(branch)
 
     def __repr__(self) -> str:
         status = "filled" if self.filled else "pending"

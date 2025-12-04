@@ -3,9 +3,12 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
-from lionpride.libs.concurrency import Semaphore, gather
+from lionpride.ln import alcall
+from lionpride.operations import ParseParams
 from lionpride.operations.operate import (
     GenerateParams,
     OperateParams,
@@ -19,7 +22,8 @@ from .report import Report
 if TYPE_CHECKING:
     from lionpride.session import Branch, Session
 
-__all__ = ("flow_report",)
+
+__all__ = ("flow_report", "stream_flow_report")
 
 
 async def _execute_form(
@@ -30,6 +34,9 @@ async def _execute_form(
     reason: bool = False,
     actions: bool = False,
     verbose: bool = False,
+    structure_format: str | None = None,
+    custom_parser: Any = None,
+    custom_renderer: Any = None,
 ) -> Any:
     """Execute a single form with current context from report.
 
@@ -61,12 +68,6 @@ async def _execute_form(
             else:
                 context[field] = value
 
-    # Get model from form resources
-    imodel = form.resources.get_gen_model()
-
-    # Resolve tools from form resources (False, True, or list[str])
-    tools = form.resources.resolve_tools(branch)
-
     # Build operable for validation
     operable = None
     if request_model:
@@ -85,13 +86,21 @@ async def _execute_form(
             instruction=instruction,
             context=context if context else None,
             request_model=request_model,  # Schema rendered into instruction
-            imodel=imodel,
+            imodel=form.resources.resolve_gen_model(branch),
+            structure_format=structure_format,
+            custom_renderer=custom_renderer,
+        ),
+        parse=ParseParams(
+            imodel=form.resources.resolve_parse_model(branch),
+            target_keys=list(request_model.model_fields.keys()) if request_model else None,
+            structure_format=structure_format,
+            custom_parser=custom_parser,
         ),
         operable=operable,
         capabilities={primary_output},
         reason=reason,
         actions=actions,
-        tools=tools,  # Resolved from form.resources
+        tools=form.resources.resolve_tools(branch),  # Resolved from form.resources
     )
 
     if verbose:
@@ -119,7 +128,7 @@ async def _execute_form(
     return result
 
 
-async def flow_report(
+async def stream_flow_report(
     session: Session,
     report: Report,
     *,
@@ -128,24 +137,18 @@ async def flow_report(
     reason: bool = False,
     actions: bool = False,
     verbose: bool = False,
-) -> dict[str, Any]:
-    """Execute report with explicit context management.
+    structure_format: str | None = None,
+    custom_parser: Any = None,
+    custom_renderer: Any = None,
+    throttle_period: float | None = None,
+) -> AsyncGenerator[Form, None]:
+    """Execute report forms, yielding each as it completes.
 
-    Uses Report's scheduling (next_forms) to find ready forms,
-    executes them with current context, and updates available_data.
-    This is simpler than graph-based flow and context is always explicit.
+    Useful for streaming progress updates to frontends.
+    Report state is mutated in-place; access report directly after completion.
 
-    Args:
-        session: Session for services
-        report: Report to execute
-        branch: Default branch (forms can override via DSL prefix)
-        max_concurrent: Max concurrent forms (None = unlimited)
-        reason: Include reasoning in outputs
-        actions: Enable tool use
-        verbose: Print progress
-
-    Returns:
-        Final deliverable dict
+    Yields:
+        Form objects as they complete execution.
     """
     # Resolve default branch
     branch = session.default_branch if branch is None else session.get_branch(branch)
@@ -171,50 +174,76 @@ async def flow_report(
         if verbose:
             print(f"Ready forms: {[f.output_fields[0] for f in ready_forms]}")
 
-        # Execute ready forms (parallel if multiple)
+        _execute = partial(
+            _execute_form,
+            reason=reason,
+            actions=actions,
+            verbose=verbose,
+            structure_format=structure_format,
+            custom_parser=custom_parser,
+            custom_renderer=custom_renderer,
+        )
+
         if len(ready_forms) == 1:
             # Single form - execute directly
             form = ready_forms[0]
             form_branch = session.get_branch(form.branch_name) if form.branch_name else branch
-            result = await _execute_form(
-                session, form_branch, form, report, reason=reason, actions=actions, verbose=verbose
-            )
+            result = await _execute(session, form_branch, form, report)
             form.fill(output=result)
             report.complete_form(form)
+            yield form
+
         else:
             # Multiple forms - execute in parallel (respecting max_concurrent)
-            async def execute_one(form: Form) -> tuple[Form, Any]:
+            async def execute_one(form: Form, _exec=_execute) -> tuple[Form, Any]:
                 form_branch = session.get_branch(form.branch_name) if form.branch_name else branch
-                result = await _execute_form(
-                    session,
-                    form_branch,
-                    form,
-                    report,
-                    reason=reason,
-                    actions=actions,
-                    verbose=verbose,
-                )
+                result = await _exec(session, form_branch, form, report)
                 return form, result
 
-            if max_concurrent:
-                # Use semaphore for concurrency limit
-                sem = Semaphore(max_concurrent)
-
-                async def limited_execute(
-                    form: Form, semaphore: Semaphore = sem
-                ) -> tuple[Form, Any]:
-                    async with semaphore:
-                        return await execute_one(form)
-
-                tasks = [limited_execute(f) for f in ready_forms]
-            else:
-                tasks = [execute_one(f) for f in ready_forms]
-
-            results = await gather(*tasks)
+            results = await alcall(
+                ready_forms,
+                execute_one,
+                max_concurrent=max_concurrent,
+                throttle_period=throttle_period,
+            )
 
             # Update report with results
             for form, result in results:
                 form.fill(output=result)
                 report.complete_form(form)
+                yield form
 
+
+async def flow_report(
+    session: Session,
+    report: Report,
+    *,
+    branch: Branch | str | None = None,
+    max_concurrent: int | None = None,
+    reason: bool = False,
+    actions: bool = False,
+    verbose: bool = False,
+    structure_format: str | None = None,
+    custom_parser: Any = None,
+    custom_renderer: Any = None,
+    throttle_period: float | None = None,
+) -> dict[str, Any]:
+    """Execute all forms in report, return deliverable.
+
+    For streaming/progress updates, use stream_flow_report instead.
+    """
+    async for _ in stream_flow_report(
+        session,
+        report,
+        branch=branch,
+        max_concurrent=max_concurrent,
+        reason=reason,
+        actions=actions,
+        verbose=verbose,
+        structure_format=structure_format,
+        custom_parser=custom_parser,
+        custom_renderer=custom_renderer,
+        throttle_period=throttle_period,
+    ):
+        pass
     return report.get_deliverable()
