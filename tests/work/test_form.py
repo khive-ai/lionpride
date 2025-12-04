@@ -85,52 +85,24 @@ class TestParseAssignment:
         assert parsed.output_fields == ["b:c"]
 
 
-class TestParseAssignmentWithOperation:
-    """Tests for parse_assignment with operation specification."""
+class TestParseAssignmentOperationAlwaysOperate:
+    """Tests verifying operation is always 'operate'."""
 
-    def test_operate_explicit(self):
-        """Test explicit operate operation."""
-        parsed = parse_assignment("operate(a -> b)")
+    def test_operation_always_operate(self):
+        """Test that operation is always 'operate'."""
+        parsed = parse_assignment("a -> b")
         assert parsed.operation == "operate"
-        assert parsed.input_fields == ["a"]
-        assert parsed.output_fields == ["b"]
-
-    def test_react_operation(self):
-        """Test react operation."""
-        parsed = parse_assignment("react(context -> plan)")
-        assert parsed.operation == "react"
-        assert parsed.input_fields == ["context"]
-        assert parsed.output_fields == ["plan"]
-
-    def test_generate_operation(self):
-        """Test generate operation."""
-        parsed = parse_assignment("generate(prompt -> response)")
-        assert parsed.operation == "generate"
-        assert parsed.input_fields == ["prompt"]
-        assert parsed.output_fields == ["response"]
-
-    def test_parse_operation(self):
-        """Test parse operation."""
-        parsed = parse_assignment("parse(text -> entities)")
-        assert parsed.operation == "parse"
-
-    def test_communicate_operation(self):
-        """Test communicate operation."""
-        parsed = parse_assignment("communicate(query -> answer)")
-        assert parsed.operation == "communicate"
 
     def test_operation_with_branch(self):
-        """Test operation with branch prefix."""
-        parsed = parse_assignment("orchestrator: react(a, b -> c)")
+        """Test operation is 'operate' even with branch prefix."""
+        parsed = parse_assignment("orchestrator: a, b -> c")
         assert parsed.branch_name == "orchestrator"
-        assert parsed.operation == "react"
-        assert parsed.input_fields == ["a", "b"]
-        assert parsed.output_fields == ["c"]
+        assert parsed.operation == "operate"
 
-    def test_invalid_operation(self):
-        """Test invalid operation raises error."""
-        with pytest.raises(ValueError, match="Invalid operation"):
-            parse_assignment("invalid_op(a -> b)")
+    def test_operation_with_resources(self):
+        """Test operation is 'operate' with resources."""
+        parsed = parse_assignment("a -> b | api:gpt4")
+        assert parsed.operation == "operate"
 
 
 class TestParseAssignmentWithResources:
@@ -190,15 +162,14 @@ class TestParseAssignmentWithResources:
     def test_full_resource_declaration(self):
         """Test full resource declaration with all components."""
         parsed = parse_assignment(
-            "orchestrator: react(context -> plan) | api_gen:gpt5, api_parse:gpt4mini, tool:search, tool:*"
+            "orchestrator: context -> plan | api_gen:gpt5, api_parse:gpt4mini, tool:*"
         )
         assert parsed.branch_name == "orchestrator"
-        assert parsed.operation == "react"
+        assert parsed.operation == "operate"  # Always operate
         assert parsed.input_fields == ["context"]
         assert parsed.output_fields == ["plan"]
         assert parsed.resources.api_gen == "gpt5"
         assert parsed.resources.api_parse == "gpt4mini"
-        # tool:* overwrites specific tools
         assert parsed.resources.tools == "*"
 
     def test_invalid_resource_format(self):
@@ -215,6 +186,41 @@ class TestParseAssignmentWithResources:
         """Test empty resource name raises error."""
         with pytest.raises(ValueError, match="cannot be empty"):
             parse_assignment("a -> b | api:")
+
+    def test_duplicate_api_raises_error(self):
+        """Test duplicate api declaration raises error."""
+        with pytest.raises(ValueError, match="Duplicate 'api'"):
+            parse_assignment("a -> b | api:gpt4, api:gpt5")
+
+    def test_duplicate_api_gen_raises_error(self):
+        """Test duplicate api_gen declaration raises error."""
+        with pytest.raises(ValueError, match="Duplicate 'api_gen'"):
+            parse_assignment("a -> b | api_gen:gpt4, api_gen:gpt5")
+
+    def test_duplicate_api_parse_raises_error(self):
+        """Test duplicate api_parse declaration raises error."""
+        with pytest.raises(ValueError, match="Duplicate 'api_parse'"):
+            parse_assignment("a -> b | api_parse:gpt4, api_parse:gpt5")
+
+    def test_duplicate_api_interpret_raises_error(self):
+        """Test duplicate api_interpret declaration raises error."""
+        with pytest.raises(ValueError, match="Duplicate 'api_interpret'"):
+            parse_assignment("a -> b | api_interpret:gpt4, api_interpret:gpt5")
+
+    def test_duplicate_tool_raises_error(self):
+        """Test duplicate tool declaration raises error."""
+        with pytest.raises(ValueError, match="Duplicate tool"):
+            parse_assignment("a -> b | tool:search, tool:search")
+
+    def test_tool_wildcard_with_specific_raises_error(self):
+        """Test mixing tool:* with specific tools raises error."""
+        with pytest.raises(ValueError, match="Cannot mix"):
+            parse_assignment("a -> b | tool:search, tool:*")
+
+    def test_specific_tool_after_wildcard_raises_error(self):
+        """Test adding specific tool after tool:* raises error."""
+        with pytest.raises(ValueError, match="Cannot mix"):
+            parse_assignment("a -> b | tool:*, tool:search")
 
 
 class TestFormResources:
@@ -277,13 +283,6 @@ class TestForm:
         assert form.input_fields == ["x"]
         assert form.output_fields == ["y", "z"]
 
-    def test_creation_with_operation(self):
-        """Test form creation with operation."""
-        form = Form(assignment="react(context -> plan)")
-        assert form.operation == "react"
-        assert form.input_fields == ["context"]
-        assert form.output_fields == ["plan"]
-
     def test_creation_with_resources(self):
         """Test form creation with resources."""
         form = Form(assignment="a -> b | api:gpt4, tool:search")
@@ -292,9 +291,9 @@ class TestForm:
 
     def test_creation_full(self):
         """Test form creation with all components."""
-        form = Form(assignment="orchestrator: react(a, b -> c) | api:gpt4, tool:*")
+        form = Form(assignment="orchestrator: a, b -> c | api:gpt4, tool:*")
         assert form.branch_name == "orchestrator"
-        assert form.operation == "react"
+        assert form.operation == "operate"  # Always operate
         assert form.input_fields == ["a", "b"]
         assert form.output_fields == ["c"]
         assert form.resources.api == "gpt4"
@@ -401,11 +400,6 @@ class TestForm:
         form = Form(assignment="a -> b")
         form.fill(output="result")
         assert "filled" in repr(form)
-
-    def test_repr_with_operation(self):
-        """Test repr shows operation when not default."""
-        form = Form(assignment="react(a -> b)")
-        assert "op=react" in repr(form)
 
     def test_repr_with_resources(self):
         """Test repr shows resources."""

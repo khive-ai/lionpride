@@ -12,7 +12,7 @@ The work system provides capability-based workflow orchestration through declara
 ## Assignment DSL
 
 ```text
-[branch:] [operation(] inputs -> outputs [)] [| resources]
+[branch:] inputs -> outputs [| resources]
 ```
 
 ### Components
@@ -20,19 +20,8 @@ The work system provides capability-based workflow orchestration through declara
 | Component | Required | Description |
 |-----------|----------|-------------|
 | `branch:` | No | Named branch prefix for this step |
-| `operation()` | No | Operation type (default: `operate`) |
 | `inputs -> outputs` | Yes | Data flow declaration |
 | `\| resources` | No | API and tool declarations |
-
-### Operations
-
-| Operation | Description |
-|-----------|-------------|
-| `generate` | Raw LLM completion |
-| `parse` | Structured extraction from text |
-| `communicate` | Generate + parse combined |
-| `operate` | Full structured output with validation (default) |
-| `react` | Multi-turn operation loop |
 
 ### Resource Types
 
@@ -58,7 +47,6 @@ The work system provides capability-based workflow orchestration through declara
 "context -> plan"
 ```
 
-- Operation: `operate` (default)
 - Uses branch's only model (or error if multiple)
 - No tools
 
@@ -69,14 +57,6 @@ The work system provides capability-based workflow orchestration through declara
 ```
 
 - Executes on branch named "orchestrator"
-
-### With operation
-
-```python
-"react(context -> plan)"
-```
-
-- Uses react loop for multi-turn execution
 
 ### With single API
 
@@ -89,7 +69,7 @@ The work system provides capability-based workflow orchestration through declara
 ### With role-specific APIs
 
 ```python
-"orchestrator: react(context -> plan) | api_gen:gpt5, api_parse:gpt4mini"
+"orchestrator: context -> plan | api_gen:gpt5, api_parse:gpt4mini"
 ```
 
 - Generation: gpt5

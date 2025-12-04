@@ -64,6 +64,9 @@ async def _execute_form(
     # Get model from form resources
     imodel = form.resources.get_gen_model()
 
+    # Resolve tools from form resources (False, True, or list[str])
+    tools = form.resources.resolve_tools(branch)
+
     # Build operable for validation
     operable = None
     if request_model:
@@ -88,6 +91,7 @@ async def _execute_form(
         capabilities={primary_output},
         reason=reason,
         actions=actions,
+        tools=tools,  # Resolved from form.resources
     )
 
     if verbose:
