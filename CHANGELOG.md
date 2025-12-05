@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a5] - 2025-12-05
+
+### Added
+
+- `ReportExecutor`: Event-driven executor using completion events (#43)
+- `FormResult`: Rich result dataclass with progress tracking (#43)
+- `execute_report`/`stream_report`: New executor-based API (#43)
+- Cycle detection for form dependencies (#43)
+- Input availability validation before form execution (#43)
+
+### Changed
+
+- Replace polling-based runner with event-driven executor (#43)
+- Simplify `runner.py` to alias executor (`flow_report = execute_report`) (#43)
+- Simplify work DSL: remove `operation` field, consolidate tool resolution (#41)
+- Add streaming API to work module (#42)
+
+### Removed
+
+- `function_call_parser` module (obsolete) (#40)
+- Unused `api_interpret`, `get_*` wrapper methods from FormResources (#41)
+
 ## [1.0.0a4] - 2025-12-02
 
 ### Added
@@ -141,7 +163,8 @@ Initial alpha release of lionpride - foundational primitives for production AI a
 - Interactive Jupyter notebooks
 - 99%+ test coverage
 
-[Unreleased]: https://github.com/khive-ai/lionpride/compare/v1.0.0a4...HEAD
+[Unreleased]: https://github.com/khive-ai/lionpride/compare/v1.0.0a5...HEAD
+[1.0.0a5]: https://github.com/khive-ai/lionpride/releases/tag/v1.0.0a5
 [1.0.0a4]: https://github.com/khive-ai/lionpride/releases/tag/v1.0.0a4
 [1.0.0a3]: https://github.com/khive-ai/lionpride/releases/tag/v1.0.0a3
 [1.0.0a2]: https://github.com/khive-ai/lionpride/releases/tag/v1.0.0a2
