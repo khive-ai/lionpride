@@ -646,3 +646,39 @@ class TestSignatureVerification:
 
             # More lenient is OK
             assert len(w) == 0
+
+    def test_impl_tightening_optional_warns(self):
+        """Implementation cannot make optional params required (tightening contract)."""
+
+        @runtime_checkable
+        class LenientProtocol(Protocol):
+            def process(self, x: int, y: str = "default") -> None: ...
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+
+            @implements(LenientProtocol)
+            class StrictImpl:
+                # y is required - tighter than protocol
+                def process(self, x: int, y: str) -> None:
+                    pass
+
+            # Tightening optional to required should warn
+            assert len(w) == 1
+            assert "y" in str(w[0].message)
+            assert "optional" in str(w[0].message)
+            assert "requires" in str(w[0].message)
+
+    def test_impl_tightening_optional_errors_with_flag(self):
+        """signature_check='error' raises on tightening optional to required."""
+
+        @runtime_checkable
+        class LenientProtocol(Protocol):
+            def process(self, x: int, y: str = "default") -> None: ...
+
+        with pytest.raises(SignatureMismatchError, match="optional"):
+
+            @implements(LenientProtocol, signature_check="error")
+            class StrictImpl:
+                def process(self, x: int, y: str) -> None:
+                    pass

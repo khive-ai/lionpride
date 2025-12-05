@@ -258,7 +258,7 @@ def _check_signature_compatibility(
 
             # If protocol param is required, impl param should not require
             # something the protocol doesn't provide
-            if proto_param.default is inspect.Parameter.empty:  # noqa: SIM102
+            if proto_param.default is inspect.Parameter.empty:
                 # Protocol requires this param
                 # Implementation can either:
                 # 1. Also require it (empty default)
@@ -272,6 +272,14 @@ def _check_signature_compatibility(
                     errors.append(
                         f"  - '{param_name}': protocol allows positional, "
                         f"but implementation requires keyword-only"
+                    )
+            else:
+                # Protocol param is optional (has default)
+                # Implementation should NOT make it required (tightening contract)
+                if impl_param.default is inspect.Parameter.empty:
+                    errors.append(
+                        f"  - '{param_name}': protocol makes this optional, "
+                        f"but implementation requires it"
                     )
 
         else:
