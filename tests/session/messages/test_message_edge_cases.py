@@ -788,10 +788,6 @@ class TestSystemContentDatetimeConflict:
 class TestInstructionContentImageUrlSecurity:
     """Additional security tests for image URL validation."""
 
-    @pytest.mark.xfail(
-        reason="BUG-004: URL validation doesn't catch null bytes. "
-        "Null bytes can be used for path truncation attacks."
-    )
     def test_reject_url_with_null_byte(self):
         """URL with null byte should be rejected."""
         # Null bytes can be used for path truncation attacks
