@@ -290,8 +290,9 @@ class SQLiteWALLogAdapter(LogAdapter):
             try:
                 log_dict = orjson.loads(row[0])
                 results.append(log_dict)
-            except (orjson.JSONDecodeError, TypeError):
-                pass
+            except (orjson.JSONDecodeError, TypeError) as e:
+                logger.debug(f"Skipping corrupted log entry during read: {type(e).__name__}: {e}")
+                # Continue to next row - corrupted entries are skipped
 
         return results
 

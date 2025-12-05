@@ -10,7 +10,46 @@ import orjson
 
 from lionpride.libs.concurrency import Lock
 
-__all__ = ("MCPConnectionPool",)
+__all__ = ("CommandNotAllowedError", "MCPConnectionPool")
+
+
+class CommandNotAllowedError(Exception):
+    """Raised when a command is not in the allowlist.
+
+    This exception is raised when strict_mode is enabled (default) and
+    a command is attempted that is not in the configured allowlist.
+    """
+
+    pass
+
+
+# Default safe commands for MCP servers
+# These are commonly used interpreters/runners that MCP servers typically use
+DEFAULT_ALLOWED_COMMANDS: frozenset[str] = frozenset(
+    {
+        # Python
+        "python",
+        "python3",
+        "python3.10",
+        "python3.11",
+        "python3.12",
+        "python3.13",
+        # Node.js
+        "node",
+        "npx",
+        "npm",
+        # Package managers / runners
+        "uv",
+        "uvx",
+        "pipx",
+        "pdm",
+        "poetry",
+        "rye",
+        # Other common MCP server runners
+        "deno",
+        "bun",
+    }
+)
 
 # Suppress MCP server logging by default
 logging.getLogger("mcp").setLevel(logging.WARNING)
@@ -26,6 +65,10 @@ class MCPConnectionPool:
     Manages FastMCP client instances with connection pooling and lifecycle management.
     Clients are cached by config and reused across calls for efficiency.
 
+    Security:
+        By default, only commands in the allowlist can be executed (strict_mode=True).
+        Use configure_security() to customize the allowlist or disable strict mode.
+
     Example:
         >>> # Load config
         >>> MCPConnectionPool.load_config(".mcp.json")
@@ -36,11 +79,21 @@ class MCPConnectionPool:
         >>>
         >>> # Cleanup on shutdown
         >>> await MCPConnectionPool.cleanup()
+        >>>
+        >>> # Security configuration
+        >>> MCPConnectionPool.configure_security(
+        ...     allowed_commands={"python", "node", "custom-runner"},
+        ...     strict_mode=True,  # Default
+        ... )
     """
 
     _clients: dict[str, Any] = {}
     _configs: dict[str, dict] = {}
     _lock = Lock()
+
+    # Security: Command allowlist
+    _allowed_commands: set[str] = set(DEFAULT_ALLOWED_COMMANDS)
+    _strict_mode: bool = True
 
     async def __aenter__(self):
         """Context manager entry."""
@@ -49,6 +102,81 @@ class MCPConnectionPool:
     async def __aexit__(self, *_):
         """Context manager exit - cleanup connections."""
         await self.cleanup()
+
+    @classmethod
+    def configure_security(
+        cls,
+        allowed_commands: set[str] | None = None,
+        strict_mode: bool | None = None,
+        extend_defaults: bool = True,
+    ) -> None:
+        """Configure command execution security settings.
+
+        Args:
+            allowed_commands: Set of allowed command names. If extend_defaults=True,
+                these are added to the default allowlist. If extend_defaults=False,
+                these replace the allowlist entirely.
+            strict_mode: If True (default), only allowlisted commands can execute.
+                If False, all commands are allowed (use with caution).
+            extend_defaults: If True (default), allowed_commands extends the default
+                allowlist. If False, allowed_commands replaces it entirely.
+
+        Example:
+            >>> # Add custom commands to defaults
+            >>> MCPConnectionPool.configure_security(allowed_commands={"my-custom-runner"})
+            >>>
+            >>> # Replace allowlist entirely
+            >>> MCPConnectionPool.configure_security(
+            ...     allowed_commands={"python", "node"}, extend_defaults=False
+            ... )
+            >>>
+            >>> # Disable strict mode (DANGEROUS - allows any command)
+            >>> MCPConnectionPool.configure_security(strict_mode=False)
+        """
+        if strict_mode is not None:
+            cls._strict_mode = strict_mode
+
+        if allowed_commands is not None:
+            if extend_defaults:
+                cls._allowed_commands = set(DEFAULT_ALLOWED_COMMANDS) | allowed_commands
+            else:
+                cls._allowed_commands = set(allowed_commands)
+
+    @classmethod
+    def reset_security(cls) -> None:
+        """Reset security settings to defaults.
+
+        Restores:
+        - strict_mode to True
+        - allowed_commands to DEFAULT_ALLOWED_COMMANDS
+        """
+        cls._strict_mode = True
+        cls._allowed_commands = set(DEFAULT_ALLOWED_COMMANDS)
+
+    @classmethod
+    def _validate_command(cls, command: str) -> None:
+        """Validate a command against the allowlist.
+
+        Args:
+            command: The command to validate (may be a full path)
+
+        Raises:
+            CommandNotAllowedError: If strict_mode is True and command not in allowlist
+        """
+        if not cls._strict_mode:
+            return
+
+        # Extract base command name from full path (e.g., /usr/bin/python -> python)
+        base_command = Path(command).name
+
+        if base_command not in cls._allowed_commands:
+            allowed_list = ", ".join(sorted(cls._allowed_commands))
+            raise CommandNotAllowedError(
+                f"Command '{command}' (base: '{base_command}') is not in the allowlist. "
+                f"Allowed commands: [{allowed_list}]. "
+                f"Use MCPConnectionPool.configure_security() to add custom commands "
+                f"or set strict_mode=False (not recommended)."
+            )
 
     @classmethod
     def load_config(cls, path: str = ".mcp.json") -> None:
@@ -172,6 +300,11 @@ class MCPConnectionPool:
             client = FastMCPClient(config["url"])
         elif config.get("command") is not None:
             # Command-based connection
+            command = config["command"]
+
+            # SECURITY: Validate command against allowlist
+            cls._validate_command(command)
+
             # Validate args if provided
             args = config.get("args", [])
             if not isinstance(args, list):
@@ -196,7 +329,7 @@ class MCPConnectionPool:
             from fastmcp.client.transports import StdioTransport
 
             transport = StdioTransport(
-                command=config["command"],
+                command=command,
                 args=args,
                 env=env,
             )

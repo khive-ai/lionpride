@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -19,6 +20,7 @@ from ._to_dict import to_dict
 if TYPE_CHECKING:
     from pydantic import BaseModel
 
+logger = logging.getLogger(__name__)
 
 __all__ = ("fuzzy_validate_pydantic",)
 
@@ -78,8 +80,10 @@ def fuzzy_validate_pydantic(
                 elif isinstance(item, list):
                     # JSON array - add each dict in the array
                     candidates.extend(x for x in item if isinstance(x, dict))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(
+                f"JSON extraction failed, will try to_dict fallback: {type(e).__name__}: {e}"
+            )
 
         # Fallback to to_dict if no candidates
         if not candidates:
@@ -180,7 +184,11 @@ def fuzzy_validate_mapping(
             try:
                 json_result = extract_json(d, fuzzy_parse=True, return_one_if_single=True)
                 dict_input = json_result[0] if isinstance(json_result, list) else json_result
-            except Exception:
+            except Exception as e:
+                logger.debug(
+                    f"JSON extraction failed in fuzzy_validate_mapping, using to_dict: "
+                    f"{type(e).__name__}: {e}"
+                )
                 dict_input = to_dict(d, fuzzy_parse=True, suppress=True)
         else:
             dict_input = to_dict(d, prioritize_model_dump=True, fuzzy_parse=True, suppress=True)

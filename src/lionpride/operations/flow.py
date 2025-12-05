@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -16,6 +17,8 @@ from .node import Operation
 
 if TYPE_CHECKING:
     from lionpride.session import Branch, Session
+
+logger = logging.getLogger(__name__)
 
 __all__ = ("DependencyAwareExecutor", "OperationResult", "flow", "flow_stream")
 
@@ -202,8 +205,11 @@ class DependencyAwareExecutor:
         if isinstance(branch_spec, (UUID, str)):
             try:
                 return self.session.get_branch(branch_spec)
-            except Exception:
-                # Branch not found - return None
+            except Exception as e:
+                # Branch not found - return None and let caller use default
+                logger.debug(
+                    f"Branch '{branch_spec}' not found, will use default: {type(e).__name__}: {e}"
+                )
                 return None
 
         return None

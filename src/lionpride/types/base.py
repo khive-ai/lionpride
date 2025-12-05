@@ -140,7 +140,7 @@ class Params:
         dict_.update(kw_)
         return dict_
 
-    def to_dict(self, exclude: set[str] | None = None) -> dict[str, Any]:
+    def to_dict(self, exclude: set[str] | None = None, **kwargs: Any) -> dict[str, Any]:
         data = {}
         exclude = exclude or set()
         for k in self.allowed():
@@ -234,7 +234,7 @@ class DataClass:
         if missing:
             raise ExceptionGroup("Missing required parameters", missing)
 
-    def to_dict(self, exclude: set[str] | None = None) -> dict[str, Any]:
+    def to_dict(self, exclude: set[str] | None = None, **kwargs: Any) -> dict[str, Any]:
         data = {}
         exclude = exclude or set()
         for k in type(self).allowed():

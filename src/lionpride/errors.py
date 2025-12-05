@@ -60,7 +60,7 @@ class LionprideError(Exception):
 
         super().__init__(self.message)
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self, **kwargs: Any) -> dict[str, Any]:
         """Serialize error to dict for logging/debugging.
 
         Returns:

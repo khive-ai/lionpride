@@ -64,7 +64,7 @@ class Execution:
     error: MaybeUnset[BaseException] | None = Unset
     retryable: MaybeUnset[bool] = Unset
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self, **kwargs: Any) -> dict[str, Any]:
         """Serialize to dict with sentinel handling."""
         from ._utils import get_json_serializable
 
