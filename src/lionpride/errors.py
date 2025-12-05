@@ -10,14 +10,14 @@ from .protocols import Serializable, implements
 __all__ = (
     "AccessError",
     "ConfigurationError",
-    "ConnectionError",
     "ExecutionError",
     "ExistsError",
+    "LionConnectionError",
+    "LionTimeoutError",
     "LionprideError",
     "NotFoundError",
     "OperationError",
     "QueueFullError",
-    "TimeoutError",
     "ValidationError",
 )
 
@@ -60,7 +60,7 @@ class LionprideError(Exception):
 
         super().__init__(self.message)
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self, **kwargs: Any) -> dict[str, Any]:
         """Serialize error to dict for logging/debugging.
 
         Returns:
@@ -102,15 +102,21 @@ class ExecutionError(LionprideError):
     default_retryable = True  # Most execution failures are transient
 
 
-class ConnectionError(LionprideError):
-    """Connection/network failure. Retryable by default."""
+class LionConnectionError(LionprideError):
+    """Connection/network failure. Retryable by default.
+
+    Named to avoid shadowing builtins.ConnectionError.
+    """
 
     default_message = "Connection error"
     default_retryable = True  # Network issues are often transient
 
 
-class TimeoutError(LionprideError):
-    """Operation timeout. Retryable by default."""
+class LionTimeoutError(LionprideError):
+    """Operation timeout. Retryable by default.
+
+    Named to avoid shadowing builtins.TimeoutError.
+    """
 
     default_message = "Operation timed out"
     default_retryable = True  # Timeouts might succeed with more time

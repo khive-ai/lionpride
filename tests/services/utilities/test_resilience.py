@@ -572,7 +572,7 @@ class TestRetryConfigCoveragePush:
     @pytest.mark.asyncio
     async def test_retry_defaults(self):
         """Test retry_with_backoff uses defaults when not specified."""
-        from lionpride.errors import ConnectionError as LionConnectionError
+        from lionpride.errors import LionConnectionError
 
         call_count = 0
 
@@ -716,7 +716,7 @@ class TestResilienceRegressions:
     @pytest.mark.asyncio
     async def test_retry_default_does_retry_transient_errors(self):
         """Verify default DOES retry transient errors."""
-        from lionpride.errors import ConnectionError
+        from lionpride.errors import LionConnectionError
 
         call_count = 0
 
@@ -724,7 +724,7 @@ class TestResilienceRegressions:
             nonlocal call_count
             call_count += 1
             if call_count < 3:
-                raise ConnectionError("Transient network error")
+                raise LionConnectionError("Transient network error")
             return "success"
 
         # Should retry ConnectionError with default retry_on

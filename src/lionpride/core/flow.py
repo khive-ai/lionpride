@@ -30,6 +30,16 @@ class Flow(Element, Generic[E, P]):
     - progressions: Named sequences of item UUIDs (workflow stages)
     - items: Referenced elements (Nodes, Agents, etc.)
 
+    Thread Safety:
+        Flow-level methods (add_item, remove_item, add_progression, etc.) are
+        synchronized with RLock for thread-safe access. However, direct access
+        to `flow.items` or `flow.progressions` bypasses this lock.
+
+    Warning:
+        For concurrent access, use Flow methods instead of direct pile access.
+        Direct pile mutations (e.g., `flow.items.include(x)`) are NOT
+        synchronized with Flow's lock and may cause race conditions.
+
     Generic Parameters:
         E: Element type for items
         P: Progression type
@@ -245,6 +255,7 @@ class Flow(Element, Generic[E, P]):
 
     # ==================== Item Management ====================
 
+    @synchronized
     def add_item(
         self,
         item: E,
@@ -283,6 +294,7 @@ class Flow(Element, Generic[E, P]):
         for prog in resolved_progs:
             prog.append(item)
 
+    @synchronized
     def remove_item(self, item_id: UUID | str | Element) -> E:
         """Remove item from items pile and all progressions.
 

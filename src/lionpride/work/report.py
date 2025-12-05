@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 import types
 from typing import Any, Union, get_args, get_origin, get_type_hints
 
@@ -12,6 +13,8 @@ from lionpride.core import Element, Pile
 
 from .capabilities import parse_assignment
 from .form import Form
+
+logger = logging.getLogger(__name__)
 
 __all__ = ("Report",)
 
@@ -114,8 +117,11 @@ class Report(Element):
                     if len(non_none) == 1:
                         return non_none[0]
                 return hint
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(
+                f"Failed to get type hints for field '{field}' on {self.__class__.__name__}: "
+                f"{type(e).__name__}: {e}"
+            )
         return None
 
     def get_request_model(self, field: str) -> type[BaseModel] | None:
@@ -128,8 +134,12 @@ class Report(Element):
             try:
                 if isinstance(field_type, type) and issubclass(field_type, BaseModel):
                     return field_type
-            except TypeError:
-                pass
+            except TypeError as e:
+                # TypeError can occur when field_type is a generic alias or other non-class type
+                logger.debug(
+                    f"Field '{field}' type {field_type} is not a class, cannot check BaseModel: "
+                    f"{type(e).__name__}: {e}"
+                )
         return None
 
     def initialize(self, *, instruction: str | None = None, **inputs: Any) -> None:

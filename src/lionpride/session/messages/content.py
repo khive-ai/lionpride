@@ -1,6 +1,7 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, ClassVar, Literal
@@ -12,6 +13,8 @@ from lionpride.ln import now_utc
 from lionpride.types import DataClass, MaybeUnset, ModelConfig, Unset
 
 from .base import MessageRole
+
+logger = logging.getLogger(__name__)
 
 __all__ = (
     "ActionRequestContent",
@@ -35,11 +38,12 @@ class MessageContent(DataClass):
     def render(self, *args, **kwargs) -> Any:
         raise NotImplementedError("Subclasses must implement render method")
 
-    def to_chat(self, *args, **kwargs) -> dict[str, Any]:
+    def to_chat(self, *args, **kwargs) -> dict[str, Any] | None:
         """Format for chat API: {"role": "...", "content": "..."}"""
         try:
             return {"role": self.role.value, "content": self.render(*args, **kwargs)}
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to render message content for chat API: {type(e).__name__}: {e}")
             return None
 
     @classmethod

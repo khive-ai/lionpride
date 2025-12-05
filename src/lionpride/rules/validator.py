@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -18,17 +19,27 @@ __all__ = ("Validator",)
 class Validator:
     """Validates data spec-by-spec using auto-assigned Rules from Spec.base_type."""
 
+    DEFAULT_MAX_LOG_ENTRIES = 1000
+
     def __init__(
         self,
         registry: RuleRegistry | None = None,
+        max_log_entries: int | None = None,
     ):
         """Initialize validator with rule registry.
 
         Args:
             registry: RuleRegistry for type→Rule lookup (uses default if None)
+            max_log_entries: Maximum validation log entries to keep (FIFO).
+                Defaults to DEFAULT_MAX_LOG_ENTRIES (1000). Set to 0 for unlimited.
         """
         self.registry = registry or get_default_registry()
-        self.validation_log: list[dict[str, Any]] = []
+        max_entries = (
+            max_log_entries if max_log_entries is not None else self.DEFAULT_MAX_LOG_ENTRIES
+        )
+        self.validation_log: deque[dict[str, Any]] = deque(
+            maxlen=max_entries if max_entries > 0 else None
+        )
 
     def log_validation_error(self, field: str, value: Any, error: str) -> None:
         """Log a validation error with timestamp.
@@ -60,8 +71,12 @@ class Validator:
         return {
             "total_errors": len(self.validation_log),
             "fields_with_errors": sorted(list(fields_with_errors)),
-            "error_entries": self.validation_log,
+            "error_entries": list(self.validation_log),
         }
+
+    def clear_log(self) -> None:
+        """Clear the validation log."""
+        self.validation_log.clear()
 
     def get_rule_for_spec(self, spec: Spec) -> Rule | None:
         """Get Rule for a Spec based on base_type or metadata override.

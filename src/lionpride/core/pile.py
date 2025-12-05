@@ -680,6 +680,10 @@ class Pile(Element, PydapterAdaptable, PydapterAsyncAdaptable, Generic[T]):
         # Restore metadata from custom key if specified (db mode deserialization)
         if meta_key and meta_key in data:
             data["metadata"] = data.pop(meta_key)
+        elif "node_metadata" in data and "metadata" not in data:  # backward compatibility
+            data["metadata"] = data.pop("node_metadata")
+
+        data.pop("node_metadata", None)  # remove legacy key if present
 
         # Extract pile configuration
         item_type_data = data.get("item_type") or kwargs.get("item_type")

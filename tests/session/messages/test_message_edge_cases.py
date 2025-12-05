@@ -16,7 +16,7 @@ Focus areas:
 These tests are designed to expose potential bugs in edge cases.
 
 DISCOVERED ISSUES (these tests document current behavior):
-    - BUG-001: Ambiguous dicts pass ALL keys to content create(), causing TypeError
+    - BUG-001: FIXED - Ambiguous dicts now filter keys to prevent TypeError
     - BUG-002: ActionResponseContent.success treats empty string error as True (no error)
     - BUG-003: SystemContent with datetime_factory doesn't roundtrip (becomes InstructionContent)
     - BUG-004: URL validation doesn't catch null bytes in URLs
@@ -63,20 +63,18 @@ class TestContentTypeInferencePriority:
     5. system_message/system_datetime -> SystemContent
     6. Empty dict -> InstructionContent (default)
 
-    KNOWN ISSUE (BUG-001): When dict has keys from multiple content types,
-    ALL keys are passed to create(), causing TypeError.
+    When a dict has keys from multiple content types (ambiguous dict),
+    only the keys recognized by the inferred content type are passed
+    to create(). Extra keys are silently ignored to prevent TypeError.
     """
 
-    @pytest.mark.xfail(
-        reason="BUG-001: Ambiguous dict passes all keys to create(), "
-        "causing TypeError for unexpected keyword arguments"
-    )
     def test_when_dict_has_instruction_and_assistant_response_then_instruction_wins(
         self,
     ):
         """Dict with both instruction and assistant_response should become InstructionContent.
 
         This tests the priority: instruction fields are checked first.
+        Extra keys from other content types are filtered out.
         """
         ambiguous_dict = {
             "instruction": "Do something",
@@ -88,14 +86,11 @@ class TestContentTypeInferencePriority:
         assert msg.role == MessageRole.USER
         assert msg.content.instruction == "Do something"
 
-    @pytest.mark.xfail(
-        reason="BUG-001: Ambiguous dict passes all keys to create(), "
-        "causing TypeError for unexpected keyword arguments"
-    )
     def test_when_dict_has_context_and_result_then_instruction_wins(self):
         """Dict with context (InstructionContent key) and result (ActionResponseContent key).
 
         Context is checked before result, so InstructionContent should win.
+        Extra keys from other content types are filtered out.
         """
         ambiguous_dict = {
             "context": ["some context"],
@@ -107,14 +102,11 @@ class TestContentTypeInferencePriority:
         assert msg.role == MessageRole.USER
         assert msg.content.context == ["some context"]
 
-    @pytest.mark.xfail(
-        reason="BUG-001: Ambiguous dict passes all keys to create(), "
-        "causing TypeError for unexpected keyword arguments"
-    )
     def test_when_dict_has_assistant_response_and_function_then_assistant_wins(self):
         """Dict with assistant_response and function should become AssistantResponseContent.
 
         assistant_response is checked before function.
+        Extra keys from other content types are filtered out.
         """
         ambiguous_dict = {
             "assistant_response": "response",
@@ -125,14 +117,11 @@ class TestContentTypeInferencePriority:
         assert isinstance(msg.content, AssistantResponseContent)
         assert msg.role == MessageRole.ASSISTANT
 
-    @pytest.mark.xfail(
-        reason="BUG-001: Ambiguous dict passes all keys to create(), "
-        "causing TypeError for unexpected keyword arguments"
-    )
     def test_when_dict_has_result_and_function_then_action_response_wins(self):
         """Dict with result and function should become ActionResponseContent.
 
         result/error are checked before function/arguments.
+        Extra keys from other content types are filtered out.
         """
         ambiguous_dict = {
             "result": {"data": "value"},
@@ -143,14 +132,11 @@ class TestContentTypeInferencePriority:
         assert isinstance(msg.content, ActionResponseContent)
         assert msg.role == MessageRole.TOOL
 
-    @pytest.mark.xfail(
-        reason="BUG-001: Ambiguous dict passes all keys to create(), "
-        "causing TypeError for unexpected keyword arguments"
-    )
     def test_when_dict_has_error_and_system_message_then_action_response_wins(self):
         """Dict with error and system_message should become ActionResponseContent.
 
         error is checked before system_message.
+        Extra keys from other content types are filtered out.
         """
         ambiguous_dict = {
             "error": "something failed",
@@ -802,10 +788,6 @@ class TestSystemContentDatetimeConflict:
 class TestInstructionContentImageUrlSecurity:
     """Additional security tests for image URL validation."""
 
-    @pytest.mark.xfail(
-        reason="BUG-004: URL validation doesn't catch null bytes. "
-        "Null bytes can be used for path truncation attacks."
-    )
     def test_reject_url_with_null_byte(self):
         """URL with null byte should be rejected."""
         # Null bytes can be used for path truncation attacks
@@ -813,6 +795,23 @@ class TestInstructionContentImageUrlSecurity:
             InstructionContent.create(
                 instruction="test",
                 images=["https://example.com/image\x00.png"],
+            )
+
+    def test_reject_url_with_percent_encoded_null_byte(self):
+        """URL with percent-encoded null byte (%00) should be rejected."""
+        # %00 is the percent-encoded form of null byte
+        # If unquoted later, it becomes a null byte for path truncation
+        with pytest.raises(ValueError, match="%00"):
+            InstructionContent.create(
+                instruction="test",
+                images=["https://example.com/image%00.png"],
+            )
+
+        # Also test uppercase variant
+        with pytest.raises(ValueError, match="%00"):
+            InstructionContent.create(
+                instruction="test",
+                images=["https://example.com/image%2F%00test.png"],
             )
 
     def test_reject_url_with_newline(self):

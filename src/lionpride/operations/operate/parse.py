@@ -46,8 +46,13 @@ async def parse(
     except LionprideError as e:
         if e.retryable is False:
             raise
-    except Exception:
-        pass  # Direct parse failed, will try LLM reparse
+    except Exception as e:
+        # Direct parse failed, will try LLM reparse if max_retries > 0
+        import logging
+
+        logging.getLogger(__name__).debug(
+            f"Direct parse failed, falling back to LLM reparse: {type(e).__name__}: {e}"
+        )
 
     if params.max_retries < 1:
         raise ConfigurationError(

@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, TypeVar
 
-from lionpride.errors import ConnectionError
+from lionpride.errors import LionConnectionError
 from lionpride.libs.concurrency import Lock, current_time, sleep
 
 __all__ = (
@@ -25,7 +25,7 @@ T = TypeVar("T")
 logger = logging.getLogger(__name__)
 
 
-class CircuitBreakerOpenError(ConnectionError):
+class CircuitBreakerOpenError(LionConnectionError):
     """Circuit breaker is open."""
 
     default_message = "Circuit breaker is open"
@@ -267,7 +267,7 @@ class RetryConfig:
     exponential_base: float = 2.0
     jitter: bool = True
     retry_on: tuple[type[Exception], ...] = field(
-        default=(ConnectionError, CircuitBreakerOpenError)
+        default=(LionConnectionError, CircuitBreakerOpenError)
     )
 
     def __post_init__(self):
@@ -322,7 +322,7 @@ async def retry_with_backoff(
     exponential_base: float = 2.0,
     jitter: bool = True,
     retry_on: tuple[type[Exception], ...] = (
-        ConnectionError,
+        LionConnectionError,
         CircuitBreakerOpenError,
     ),
     **kwargs,

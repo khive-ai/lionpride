@@ -24,6 +24,16 @@ from .content import (
 
 __all__ = ("Message",)
 
+# Valid keys for each content type's create() method
+# Used to filter ambiguous dicts and prevent TypeError on unexpected kwargs
+_INSTRUCTION_KEYS = frozenset(
+    {"instruction", "context", "tool_schemas", "request_model", "images", "image_detail"}
+)
+_ASSISTANT_RESPONSE_KEYS = frozenset({"assistant_response"})
+_ACTION_RESPONSE_KEYS = frozenset({"request_id", "result", "error"})
+_ACTION_REQUEST_KEYS = frozenset({"function", "arguments"})
+_SYSTEM_KEYS = frozenset({"system_message", "system_datetime", "datetime_factory"})
+
 
 class Message(Node):
     """Message container with auto-derived role from content type.
@@ -48,7 +58,12 @@ class Message(Node):
     @field_validator("content", mode="before")
     @classmethod
     def _validate_content(cls, v: Any) -> MessageContent:
-        """Infer and construct MessageContent from dict."""
+        """Infer and construct MessageContent from dict.
+
+        When a dict has keys from multiple content types (ambiguous dict),
+        only the keys recognized by the inferred content type are passed
+        to create(). Extra keys are silently ignored to prevent TypeError.
+        """
         if isinstance(v, MessageContent):
             return v
 
@@ -57,19 +72,25 @@ class Message(Node):
                 f"content must be MessageContent instance or dict, got {type(v).__name__}"
             )
 
-        # Infer content type from dict keys
+        # Infer content type from dict keys and filter to valid keys only
+        # This prevents TypeError when dict has keys from multiple content types
         if any(
             k in v for k in ("instruction", "context", "request_model", "tool_schemas", "images")
         ):
-            return InstructionContent.create(**v)
+            filtered = {k: v[k] for k in v if k in _INSTRUCTION_KEYS}
+            return InstructionContent.create(**filtered)
         if "assistant_response" in v:
-            return AssistantResponseContent.create(**v)
+            filtered = {k: v[k] for k in v if k in _ASSISTANT_RESPONSE_KEYS}
+            return AssistantResponseContent.create(**filtered)
         if "result" in v or "error" in v:
-            return ActionResponseContent.create(**v)
+            filtered = {k: v[k] for k in v if k in _ACTION_RESPONSE_KEYS}
+            return ActionResponseContent.create(**filtered)
         if "function" in v or "arguments" in v:
-            return ActionRequestContent.create(**v)
+            filtered = {k: v[k] for k in v if k in _ACTION_REQUEST_KEYS}
+            return ActionRequestContent.create(**filtered)
         if "system_message" in v or "system_datetime" in v:
-            return SystemContent.create(**v)
+            filtered = {k: v[k] for k in v if k in _SYSTEM_KEYS}
+            return SystemContent.create(**filtered)
 
         # Default to InstructionContent for empty dict
         return InstructionContent.create()

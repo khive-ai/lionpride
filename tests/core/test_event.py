@@ -1103,8 +1103,8 @@ async def test_exception_group_retryable_all_logic():
     than automate futile retries.
     """
     from lionpride.errors import (
-        ConnectionError,
         ExecutionError,
+        LionConnectionError,
         LionprideError,
         ValidationError,
     )
@@ -1113,7 +1113,7 @@ async def test_exception_group_retryable_all_logic():
     class AllRetryableEvent(Event):
         async def _invoke(self) -> Any:
             errors = [
-                ConnectionError("network error"),  # default_retryable=True
+                LionConnectionError("network error"),  # default_retryable=True
                 ExecutionError("execution failed"),  # default_retryable=True
                 LionprideError("generic error", retryable=True),
             ]
@@ -1130,7 +1130,7 @@ async def test_exception_group_retryable_all_logic():
     class MixedRetryableEvent(Event):
         async def _invoke(self) -> Any:
             errors = [
-                ConnectionError("network error"),  # retryable=True
+                LionConnectionError("network error"),  # retryable=True
                 ValidationError("bad input"),  # default_retryable=False (!)
                 ExecutionError("execution failed"),  # retryable=True
             ]
@@ -1166,7 +1166,7 @@ async def test_exception_group_retryable_all_logic():
         async def _invoke(self) -> Any:
             errors = [
                 ValueError("unknown stdlib exception"),  # Not LionprideError → defaults True
-                ConnectionError("network error"),  # retryable=True
+                LionConnectionError("network error"),  # retryable=True
                 RuntimeError("another unknown"),  # Not LionprideError → defaults True
             ]
             raise ExceptionGroup("mixed with unknown", errors)
@@ -1425,14 +1425,14 @@ async def test_exception_group_with_lionpride_error():
 
     This test covers line 152 in event.py.
     """
-    from lionpride.errors import ConnectionError, ValidationError
+    from lionpride.errors import LionConnectionError, ValidationError
 
     class LionprideErrorGroupEvent(Event):
         async def _invoke(self) -> Any:
             """Raise ExceptionGroup with LionprideError instances."""
             errors = [
                 ValidationError("invalid input", retryable=False),
-                ConnectionError("network failure", retryable=True),
+                LionConnectionError("network failure", retryable=True),
                 ValueError("standard error"),  # Non-LionprideError
             ]
             raise ExceptionGroup("mixed errors", errors)
@@ -1460,9 +1460,9 @@ async def test_exception_group_with_lionpride_error():
     assert "invalid input" in validation_error["message"]
     assert validation_error["retryable"] is False  # From LionprideError.to_dict()
 
-    # ConnectionError should have retryable=True from to_dict()
+    # LionConnectionError should have retryable=True from to_dict()
     connection_error = exceptions[1]
-    assert connection_error["error"] == "ConnectionError"
+    assert connection_error["error"] == "LionConnectionError"
     assert "network failure" in connection_error["message"]
     assert connection_error["retryable"] is True  # From LionprideError.to_dict()
 
@@ -1484,7 +1484,7 @@ async def test_lionpride_error_retryable_flag_respected():
 
     This test covers line 320 in event.py.
     """
-    from lionpride.errors import ConnectionError, ValidationError
+    from lionpride.errors import LionConnectionError, ValidationError
 
     # Test 1: LionprideError with retryable=False
     class NonRetryableErrorEvent(Event):
@@ -1501,13 +1501,13 @@ async def test_lionpride_error_retryable_flag_respected():
     # Test 2: LionprideError with retryable=True
     class RetryableErrorEvent(Event):
         async def _invoke(self) -> Any:
-            raise ConnectionError("network issue", retryable=True)
+            raise LionConnectionError("network issue", retryable=True)
 
     event2 = RetryableErrorEvent()
     await event2.invoke()
 
     assert event2.status == EventStatus.FAILED
-    assert isinstance(event2.execution.error, ConnectionError)
+    assert isinstance(event2.execution.error, LionConnectionError)
     assert event2.execution.retryable is True  # Should respect LionprideError flag
 
     # Test 3: Non-LionprideError defaults to retryable=True
@@ -1646,7 +1646,7 @@ async def test_event_timeout_exceeded():
     - Status: CANCELLED
     - Retryable: True (timeouts are transient)
     """
-    from lionpride.errors import TimeoutError as lionprideTimeoutError
+    from lionpride.errors import LionTimeoutError
     from lionpride.types._sentinel import Unset
 
     # Slow operation with short timeout
@@ -1660,7 +1660,7 @@ async def test_event_timeout_exceeded():
     # Timeout handling
     assert event.status == EventStatus.CANCELLED
     assert event.execution.response is Unset  # No response due to timeout
-    assert isinstance(event.execution.error, lionprideTimeoutError)
+    assert isinstance(event.execution.error, LionTimeoutError)
     assert "timed out after 0.1s" in str(event.execution.error)
     assert event.execution.retryable is True  # Timeouts are retryable
     assert event.execution.duration is not None
@@ -1669,7 +1669,7 @@ async def test_event_timeout_exceeded():
 @pytest.mark.asyncio
 async def test_event_timeout_different_event_types():
     """Test timeout works with different event types."""
-    from lionpride.errors import TimeoutError as lionprideTimeoutError
+    from lionpride.errors import LionTimeoutError
 
     # Test with SimpleEvent
     simple = SimpleEvent(return_value="fast", timeout=1.0)
@@ -1681,20 +1681,20 @@ async def test_event_timeout_different_event_types():
     slow = SlowEvent(delay=5.0, timeout=0.05)
     await slow.invoke()
     assert slow.status == EventStatus.CANCELLED
-    assert isinstance(slow.execution.error, lionprideTimeoutError)
+    assert isinstance(slow.execution.error, LionTimeoutError)
 
 
 @pytest.mark.asyncio
 async def test_event_timeout_error_conversion():
     """Test builtin TimeoutError is converted to lionprideTimeoutError."""
-    from lionpride.errors import TimeoutError as lionprideTimeoutError
+    from lionpride.errors import LionTimeoutError
 
     event = SlowEvent(delay=10.0, timeout=0.05)
 
     await event.invoke()
 
     # Error should be lionprideTimeoutError, not builtin TimeoutError
-    assert isinstance(event.execution.error, lionprideTimeoutError)
+    assert isinstance(event.execution.error, LionTimeoutError)
     assert not isinstance(event.execution.error, TimeoutError.__bases__)  # Not builtin
     assert event.execution.error.retryable is True  # lionprideTimeoutError has retryable
 

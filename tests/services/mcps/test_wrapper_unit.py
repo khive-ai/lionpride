@@ -737,3 +737,254 @@ class TestEdgeCases:
         MCPConnectionPool.load_config(str(config_file))
         assert "server1" in MCPConnectionPool._configs
         assert MCPConnectionPool._configs["server1"]["extra_field"] == "ignored"
+
+
+# =============================================================================
+# Security Tests - Command Allowlist (Issue #51)
+# =============================================================================
+
+
+from lionpride.services.mcps.wrapper import (
+    DEFAULT_ALLOWED_COMMANDS,
+    CommandNotAllowedError,
+)
+
+
+@pytest.fixture(autouse=False)
+def reset_security():
+    """Reset security settings before and after each security test."""
+    MCPConnectionPool.reset_security()
+    yield
+    MCPConnectionPool.reset_security()
+
+
+class TestCommandAllowlistSecurity:
+    """Test command allowlist security feature (Issue #51)."""
+
+    def test_default_allowed_commands_exist(self):
+        """Test that default allowed commands are defined."""
+        assert len(DEFAULT_ALLOWED_COMMANDS) > 0
+        # Core commands should be in defaults
+        assert "python" in DEFAULT_ALLOWED_COMMANDS
+        assert "python3" in DEFAULT_ALLOWED_COMMANDS
+        assert "node" in DEFAULT_ALLOWED_COMMANDS
+        assert "npx" in DEFAULT_ALLOWED_COMMANDS
+        assert "uv" in DEFAULT_ALLOWED_COMMANDS
+
+    def test_strict_mode_enabled_by_default(self, reset_security):
+        """Test that strict_mode is True by default."""
+        assert MCPConnectionPool._strict_mode is True
+
+    def test_allowed_commands_initialized_from_defaults(self, reset_security):
+        """Test that allowed commands are initialized from defaults."""
+        assert MCPConnectionPool._allowed_commands == set(DEFAULT_ALLOWED_COMMANDS)
+
+    def test_validate_command_allows_safe_commands(self, reset_security):
+        """Test that commands in allowlist are accepted."""
+        # Should not raise for allowed commands
+        MCPConnectionPool._validate_command("python")
+        MCPConnectionPool._validate_command("node")
+        MCPConnectionPool._validate_command("uv")
+
+    def test_validate_command_rejects_full_paths(self, reset_security):
+        """Test that full paths are rejected even for allowed commands.
+
+        This is a security feature: allowing paths would enable bypass via
+        malicious binaries in writable locations (e.g., /tmp/evil/python).
+        """
+        with pytest.raises(CommandNotAllowedError, match="path separators"):
+            MCPConnectionPool._validate_command("/usr/bin/python")
+
+        with pytest.raises(CommandNotAllowedError, match="path separators"):
+            MCPConnectionPool._validate_command("/usr/local/bin/node")
+
+        with pytest.raises(CommandNotAllowedError, match="path separators"):
+            MCPConnectionPool._validate_command("/home/user/.local/bin/uv")
+
+    def test_validate_command_blocks_disallowed_commands(self, reset_security):
+        """Test that commands not in allowlist raise CommandNotAllowedError."""
+        with pytest.raises(CommandNotAllowedError, match="not in the allowlist"):
+            MCPConnectionPool._validate_command("rm")
+
+        with pytest.raises(CommandNotAllowedError, match="not in the allowlist"):
+            MCPConnectionPool._validate_command("curl")
+
+        with pytest.raises(CommandNotAllowedError, match="not in the allowlist"):
+            MCPConnectionPool._validate_command("bash")
+
+    def test_validate_command_error_message_helpful(self, reset_security):
+        """Test that error message includes command name and suggestions."""
+        try:
+            MCPConnectionPool._validate_command("malicious-command")
+            pytest.fail("Should have raised CommandNotAllowedError")
+        except CommandNotAllowedError as e:
+            error_msg = str(e)
+            assert "malicious-command" in error_msg
+            assert "configure_security" in error_msg
+            assert "Allowed commands:" in error_msg
+
+    def test_strict_mode_false_allows_any_command(self, reset_security):
+        """Test that strict_mode=False allows any command."""
+        MCPConnectionPool.configure_security(strict_mode=False)
+
+        # Should not raise for any command when strict_mode is False
+        MCPConnectionPool._validate_command("rm")
+        MCPConnectionPool._validate_command("curl")
+        MCPConnectionPool._validate_command("/bin/bash")
+        MCPConnectionPool._validate_command("arbitrary-dangerous-command")
+
+    def test_configure_security_add_custom_command(self, reset_security):
+        """Test adding custom commands to allowlist."""
+        # Verify command is initially blocked
+        with pytest.raises(CommandNotAllowedError):
+            MCPConnectionPool._validate_command("custom-runner")
+
+        # Add custom command
+        MCPConnectionPool.configure_security(allowed_commands={"custom-runner"})
+
+        # Now should work
+        MCPConnectionPool._validate_command("custom-runner")
+
+        # Default commands should still work
+        MCPConnectionPool._validate_command("python")
+
+    def test_configure_security_replace_allowlist(self, reset_security):
+        """Test replacing allowlist entirely."""
+        MCPConnectionPool.configure_security(
+            allowed_commands={"only-this-one"},
+            extend_defaults=False,
+        )
+
+        # Only the specified command should work
+        MCPConnectionPool._validate_command("only-this-one")
+
+        # Default commands should no longer work
+        with pytest.raises(CommandNotAllowedError):
+            MCPConnectionPool._validate_command("python")
+
+    def test_configure_security_only_sets_provided_values(self, reset_security):
+        """Test that configure_security only modifies provided settings."""
+        original_commands = MCPConnectionPool._allowed_commands.copy()
+
+        # Only set strict_mode
+        MCPConnectionPool.configure_security(strict_mode=False)
+
+        # allowed_commands should be unchanged
+        assert MCPConnectionPool._allowed_commands == original_commands
+        assert MCPConnectionPool._strict_mode is False
+
+    def test_reset_security_restores_defaults(self, reset_security):
+        """Test that reset_security restores default settings."""
+        # Modify settings
+        MCPConnectionPool.configure_security(
+            allowed_commands={"custom"},
+            strict_mode=False,
+            extend_defaults=False,
+        )
+
+        # Verify modified
+        assert MCPConnectionPool._strict_mode is False
+        assert "python" not in MCPConnectionPool._allowed_commands
+
+        # Reset
+        MCPConnectionPool.reset_security()
+
+        # Verify restored
+        assert MCPConnectionPool._strict_mode is True
+        assert MCPConnectionPool._allowed_commands == set(DEFAULT_ALLOWED_COMMANDS)
+
+    async def test_create_client_validates_command(self, mock_fastmcp, reset_security):
+        """Test that _create_client validates commands."""
+        # Blocked command should raise
+        with pytest.raises(CommandNotAllowedError, match="not in the allowlist"):
+            await MCPConnectionPool._create_client({"command": "malicious-script"})
+
+    async def test_create_client_allows_safe_commands(self, mock_fastmcp, reset_security):
+        """Test that _create_client allows safe commands."""
+        # Allowed command should work
+        client = await MCPConnectionPool._create_client({"command": "python"})
+        assert client is mock_fastmcp._mock_client_instance
+
+    async def test_create_client_url_bypasses_validation(self, mock_fastmcp, reset_security):
+        """Test that URL-based connections bypass command validation."""
+        # URL connections should always work (no command to validate)
+        client = await MCPConnectionPool._create_client({"url": "http://localhost:8000"})
+        assert client is mock_fastmcp._mock_client_instance
+
+    async def test_get_client_validates_command(self, mock_fastmcp, reset_security):
+        """Test that get_client validates commands through the full path."""
+        MCPConnectionPool._configs = {"malicious": {"command": "dangerous-cmd"}}
+
+        with pytest.raises(CommandNotAllowedError):
+            await MCPConnectionPool.get_client({"server": "malicious"})
+
+    async def test_get_client_inline_config_validates_command(self, mock_fastmcp, reset_security):
+        """Test that inline config also validates commands."""
+        with pytest.raises(CommandNotAllowedError):
+            await MCPConnectionPool.get_client({"command": "dangerous-cmd"})
+
+
+class TestCommandAllowlistEdgeCases:
+    """Test edge cases for command allowlist."""
+
+    def test_empty_allowlist_blocks_all(self, reset_security):
+        """Test that empty allowlist blocks all commands."""
+        MCPConnectionPool.configure_security(
+            allowed_commands=set(),
+            extend_defaults=False,
+        )
+
+        with pytest.raises(CommandNotAllowedError):
+            MCPConnectionPool._validate_command("python")
+
+    def test_path_separators_rejected_in_strict_mode(self, reset_security):
+        """Test that path separators are rejected in strict mode.
+
+        This prevents allowlist bypass via malicious binaries in writable paths
+        like ./python, /tmp/python, or C:\\tmp\\python.
+        """
+        # Forward slash paths rejected
+        with pytest.raises(CommandNotAllowedError, match="path separators"):
+            MCPConnectionPool._validate_command("/usr/bin/python")
+
+        with pytest.raises(CommandNotAllowedError, match="path separators"):
+            MCPConnectionPool._validate_command("./python")
+
+        with pytest.raises(CommandNotAllowedError, match="path separators"):
+            MCPConnectionPool._validate_command("/tmp/malicious")
+
+        # Backslash paths also rejected
+        with pytest.raises(CommandNotAllowedError, match="path separators"):
+            MCPConnectionPool._validate_command("C:\\Python311\\python")
+
+        with pytest.raises(CommandNotAllowedError, match="path separators"):
+            MCPConnectionPool._validate_command(".\\python")
+
+    def test_path_separators_allowed_when_strict_mode_off(self, reset_security):
+        """Test that path separators are allowed when strict_mode is disabled."""
+        MCPConnectionPool.configure_security(strict_mode=False)
+
+        # No exception when strict mode is off
+        MCPConnectionPool._validate_command("/usr/bin/python")
+        MCPConnectionPool._validate_command("./custom-script")
+        MCPConnectionPool._validate_command("C:\\Python311\\python")
+
+    def test_command_with_version_suffix(self, reset_security):
+        """Test commands with version suffixes."""
+        # These are in defaults
+        MCPConnectionPool._validate_command("python3.11")
+        MCPConnectionPool._validate_command("python3.12")
+
+    def test_case_sensitivity(self, reset_security):
+        """Test that command matching is case-sensitive."""
+        MCPConnectionPool._validate_command("python")
+
+        # Python (capitalized) is not in allowlist
+        with pytest.raises(CommandNotAllowedError):
+            MCPConnectionPool._validate_command("Python")
+
+    def test_command_not_allowed_error_is_exception(self):
+        """Test that CommandNotAllowedError is a proper Exception."""
+        error = CommandNotAllowedError("test message")
+        assert isinstance(error, Exception)
+        assert str(error) == "test message"
