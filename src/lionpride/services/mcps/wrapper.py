@@ -157,22 +157,35 @@ class MCPConnectionPool:
     def _validate_command(cls, command: str) -> None:
         """Validate a command against the allowlist.
 
+        In strict mode, commands with path separators are rejected to prevent
+        attackers from bypassing the allowlist with paths like ./python or
+        /tmp/python. Only bare command names that will be resolved via PATH
+        are allowed.
+
         Args:
-            command: The command to validate (may be a full path)
+            command: The command to validate (must be bare name in strict mode)
 
         Raises:
-            CommandNotAllowedError: If strict_mode is True and command not in allowlist
+            CommandNotAllowedError: If strict_mode is True and:
+                - command contains path separators (/, \\)
+                - command not in allowlist
         """
         if not cls._strict_mode:
             return
 
-        # Extract base command name from full path (e.g., /usr/bin/python -> python)
-        base_command = Path(command).name
+        # In strict mode, reject any command with path separators
+        # This prevents bypass via ./python, /tmp/python, etc.
+        if "/" in command or "\\" in command:
+            raise CommandNotAllowedError(
+                f"Command '{command}' contains path separators which are not allowed "
+                f"in strict mode. Use bare command names (e.g., 'python' not './python'). "
+                f"This prevents allowlist bypass via malicious binaries in writable paths."
+            )
 
-        if base_command not in cls._allowed_commands:
+        if command not in cls._allowed_commands:
             allowed_list = ", ".join(sorted(cls._allowed_commands))
             raise CommandNotAllowedError(
-                f"Command '{command}' (base: '{base_command}') is not in the allowlist. "
+                f"Command '{command}' is not in the allowlist. "
                 f"Allowed commands: [{allowed_list}]. "
                 f"Use MCPConnectionPool.configure_security() to add custom commands "
                 f"or set strict_mode=False (not recommended)."

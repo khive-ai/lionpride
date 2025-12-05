@@ -30,6 +30,16 @@ class Flow(Element, Generic[E, P]):
     - progressions: Named sequences of item UUIDs (workflow stages)
     - items: Referenced elements (Nodes, Agents, etc.)
 
+    Thread Safety:
+        Flow-level methods (add_item, remove_item, add_progression, etc.) are
+        synchronized with RLock for thread-safe access. However, direct access
+        to `flow.items` or `flow.progressions` bypasses this lock.
+
+    Warning:
+        For concurrent access, use Flow methods instead of direct pile access.
+        Direct pile mutations (e.g., `flow.items.include(x)`) are NOT
+        synchronized with Flow's lock and may cause race conditions.
+
     Generic Parameters:
         E: Element type for items
         P: Progression type

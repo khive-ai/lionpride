@@ -682,3 +682,99 @@ class TestSignatureVerification:
             class StrictImpl:
                 def process(self, x: int, y: str) -> None:
                     pass
+
+
+class TestAllowInherited:
+    """Test allow_inherited parameter of @implements() decorator."""
+
+    def test_inherited_method_rejected_by_default(self):
+        """By default, inherited methods are not accepted."""
+
+        @runtime_checkable
+        class TestProtocol(Protocol):
+            def process(self, x: int) -> None: ...
+
+        class Base:
+            def process(self, x: int) -> None:
+                pass
+
+        with pytest.raises(TypeError, match="allow_inherited=True"):
+
+            @implements(TestProtocol)
+            class Child(Base):
+                pass  # process is inherited, not in class body
+
+    def test_allow_inherited_accepts_inherited_method(self):
+        """allow_inherited=True accepts inherited methods."""
+
+        @runtime_checkable
+        class TestProtocol(Protocol):
+            def process(self, x: int) -> None: ...
+
+        class Base:
+            def process(self, x: int) -> None:
+                pass
+
+        # Should not raise
+        @implements(TestProtocol, allow_inherited=True)
+        class Child(Base):
+            pass
+
+        assert hasattr(Child, "__protocols__")
+
+    def test_allow_inherited_still_requires_member_exists(self):
+        """allow_inherited=True still requires the member to exist somewhere."""
+
+        @runtime_checkable
+        class TestProtocol(Protocol):
+            def process(self, x: int) -> None: ...
+
+        class Base:
+            pass  # No process method
+
+        with pytest.raises(TypeError, match="not defined or inherited"):
+
+            @implements(TestProtocol, allow_inherited=True)
+            class Child(Base):
+                pass
+
+    def test_allow_inherited_with_signature_check(self):
+        """Signature checking works with inherited methods."""
+
+        @runtime_checkable
+        class TestProtocol(Protocol):
+            def process(self, x: int, y: str) -> None: ...
+
+        class Base:
+            def process(self, x: int) -> None:  # Missing 'y'
+                pass
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+
+            @implements(TestProtocol, allow_inherited=True)
+            class Child(Base):
+                pass
+
+            # Should warn about missing 'y' parameter
+            assert len(w) == 1
+            assert "y" in str(w[0].message)
+
+    def test_allow_inherited_with_override(self):
+        """Class can override inherited method, and that's checked."""
+
+        @runtime_checkable
+        class TestProtocol(Protocol):
+            def process(self, x: int) -> None: ...
+
+        class Base:
+            def process(self, x: int) -> None:
+                pass
+
+        # Should work - both inherited and overridden are valid
+        @implements(TestProtocol, allow_inherited=True)
+        class ChildWithOverride(Base):
+            def process(self, x: int) -> None:
+                pass
+
+        assert hasattr(ChildWithOverride, "__protocols__")

@@ -21,8 +21,14 @@ class Progression(Element):
     """Ordered sequence of UUIDs with Element identity.
 
     Performance optimizations:
-    - Uses deque for O(1) popleft/append operations
-    - Maintains auxiliary set for O(1) membership checks
+    - Uses list for ordered storage (O(1) append, O(n) popleft)
+    - Maintains auxiliary _members set for O(1) membership checks
+
+    Warning:
+        Do NOT mutate `order` directly (e.g., `progression.order.clear()`).
+        This will desynchronize the internal `_members` set, causing
+        `__contains__` to return incorrect results. Always use the provided
+        methods: append(), include(), remove(), popleft(), clear().
 
     Attributes:
         name: Optional progression name

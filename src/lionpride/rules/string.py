@@ -12,6 +12,11 @@ __all__ = ("StringRule",)
 DEFAULT_REGEX_MAX_INPUT_LENGTH = 10_000
 
 # Patterns that indicate potential ReDoS (nested quantifiers, overlapping groups)
+# Note: This is a heuristic check covering common catastrophic patterns.
+# It does NOT detect all ReDoS vulnerabilities (e.g., (a+)+$, (a|aa)+$,
+# nested groups with literals, large lookarounds, backreferences).
+# For untrusted patterns, consider using google-re2 or regex timeout.
+# The input length limit (10k chars) provides additional mitigation.
 _REDOS_PATTERNS = [
     r"\(\.\*\)\*",  # (.*)*
     r"\(\.\+\)\*",  # (.+)*

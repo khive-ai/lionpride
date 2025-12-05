@@ -346,10 +346,13 @@ def _check_signature_compatibility(
 def implements(
     *protocols: type,
     signature_check: Literal["error", "warn", "skip"] = "warn",
+    allow_inherited: bool = False,
 ):
-    """Declare protocol implementations (Rust-like: MUST define in class body).
+    """Declare protocol implementations.
 
-    Members must be defined in the decorated class body, not inherited.
+    By default (Rust-like), members must be defined in the decorated class body,
+    not inherited. Set allow_inherited=True to accept inherited implementations.
+
     Stores protocols on cls.__protocols__.
 
     Args:
@@ -358,9 +361,11 @@ def implements(
             - "error": Raise SignatureMismatchError on mismatch
             - "warn": Emit warning on mismatch (default)
             - "skip": Don't check signatures
+        allow_inherited: If True, accept inherited method implementations.
+            Default False requires explicit implementation in class body.
 
     Raises:
-        TypeError: If required members are not defined in class body
+        TypeError: If required members are not defined (considering allow_inherited)
         SignatureMismatchError: If signature_check="error" and signatures don't match
     """
 
@@ -378,9 +383,9 @@ def implements(
                 if callable(obj) or isinstance(obj, (property, classmethod)):
                     protocol_members[name] = obj
 
-            # Check each required member is in cls.__dict__ (not inherited)
+            # Check each required member exists
             for member_name, protocol_member in protocol_members.items():
-                # Check if member is in class body
+                # Check if member is in class body or inherited (based on allow_inherited)
                 # For Pydantic models, also check __annotations__ for fields
                 in_class_body = member_name in cls.__dict__
 
@@ -388,16 +393,35 @@ def implements(
                 if not in_class_body and hasattr(cls, "__annotations__"):
                     in_class_body = member_name in cls.__annotations__
 
-                if not in_class_body:
-                    protocol_name = protocol.__name__
-                    raise TypeError(
-                        f"{cls.__name__} declares @implements({protocol_name}) but does not "
-                        f"define '{member_name}' in its class body (inheritance not allowed)"
-                    )
+                # Check if member exists anywhere (including inherited)
+                has_member = hasattr(cls, member_name)
 
-                # Signature checking (if enabled and member is in class body)
-                if signature_check != "skip" and in_class_body:
-                    impl_member = cls.__dict__.get(member_name)
+                if allow_inherited:
+                    # When inheritance is allowed, just check the member exists
+                    if not has_member:
+                        protocol_name = protocol.__name__
+                        raise TypeError(
+                            f"{cls.__name__} declares @implements({protocol_name}) but "
+                            f"'{member_name}' is not defined or inherited"
+                        )
+                else:
+                    # Strict mode: require member in class body
+                    if not in_class_body:
+                        protocol_name = protocol.__name__
+                        raise TypeError(
+                            f"{cls.__name__} declares @implements({protocol_name}) but does not "
+                            f"define '{member_name}' in its class body. "
+                            f"Use allow_inherited=True to accept inherited implementations."
+                        )
+
+                # Signature checking (if enabled and member exists)
+                if signature_check != "skip":
+                    # Get the actual implementation (from class body or inherited)
+                    if in_class_body:
+                        impl_member = cls.__dict__.get(member_name)
+                    else:
+                        impl_member = getattr(cls, member_name, None)
+
                     if impl_member is None and hasattr(cls, "__annotations__"):
                         # Pydantic field - skip signature check (it's a field, not method)
                         continue

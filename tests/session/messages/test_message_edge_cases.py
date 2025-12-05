@@ -797,6 +797,23 @@ class TestInstructionContentImageUrlSecurity:
                 images=["https://example.com/image\x00.png"],
             )
 
+    def test_reject_url_with_percent_encoded_null_byte(self):
+        """URL with percent-encoded null byte (%00) should be rejected."""
+        # %00 is the percent-encoded form of null byte
+        # If unquoted later, it becomes a null byte for path truncation
+        with pytest.raises(ValueError, match="%00"):
+            InstructionContent.create(
+                instruction="test",
+                images=["https://example.com/image%00.png"],
+            )
+
+        # Also test uppercase variant
+        with pytest.raises(ValueError, match="%00"):
+            InstructionContent.create(
+                instruction="test",
+                images=["https://example.com/image%2F%00test.png"],
+            )
+
     def test_reject_url_with_newline(self):
         """URL with newline should be handled safely."""
         # Newlines can cause header injection in some contexts

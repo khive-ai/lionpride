@@ -786,12 +786,20 @@ class TestCommandAllowlistSecurity:
         MCPConnectionPool._validate_command("node")
         MCPConnectionPool._validate_command("uv")
 
-    def test_validate_command_allows_full_path(self, reset_security):
-        """Test that full paths to allowed commands work."""
-        # Should extract base command from full path
-        MCPConnectionPool._validate_command("/usr/bin/python")
-        MCPConnectionPool._validate_command("/usr/local/bin/node")
-        MCPConnectionPool._validate_command("/home/user/.local/bin/uv")
+    def test_validate_command_rejects_full_paths(self, reset_security):
+        """Test that full paths are rejected even for allowed commands.
+
+        This is a security feature: allowing paths would enable bypass via
+        malicious binaries in writable locations (e.g., /tmp/evil/python).
+        """
+        with pytest.raises(CommandNotAllowedError, match="path separators"):
+            MCPConnectionPool._validate_command("/usr/bin/python")
+
+        with pytest.raises(CommandNotAllowedError, match="path separators"):
+            MCPConnectionPool._validate_command("/usr/local/bin/node")
+
+        with pytest.raises(CommandNotAllowedError, match="path separators"):
+            MCPConnectionPool._validate_command("/home/user/.local/bin/uv")
 
     def test_validate_command_blocks_disallowed_commands(self, reset_security):
         """Test that commands not in allowlist raise CommandNotAllowedError."""
@@ -802,7 +810,7 @@ class TestCommandAllowlistSecurity:
             MCPConnectionPool._validate_command("curl")
 
         with pytest.raises(CommandNotAllowedError, match="not in the allowlist"):
-            MCPConnectionPool._validate_command("/bin/bash")
+            MCPConnectionPool._validate_command("bash")
 
     def test_validate_command_error_message_helpful(self, reset_security):
         """Test that error message includes command name and suggestions."""
@@ -929,25 +937,37 @@ class TestCommandAllowlistEdgeCases:
         with pytest.raises(CommandNotAllowedError):
             MCPConnectionPool._validate_command("python")
 
-    def test_windows_style_path(self, reset_security):
-        """Test handling of Windows-style paths.
+    def test_path_separators_rejected_in_strict_mode(self, reset_security):
+        """Test that path separators are rejected in strict mode.
 
-        Note: On POSIX systems, Path.name treats backslashes as literal characters.
-        This test documents the expected behavior on each platform.
+        This prevents allowlist bypass via malicious binaries in writable paths
+        like ./python, /tmp/python, or C:\\tmp\\python.
         """
-        import sys
-
-        if sys.platform == "win32":
-            # On Windows, Path correctly parses backslashes
-            MCPConnectionPool._validate_command("C:\\Python311\\python")
-        else:
-            # On POSIX, backslashes are literal - the whole string is the "name"
-            # This is expected behavior; MCP configs on POSIX use forward slashes
-            with pytest.raises(CommandNotAllowedError):
-                MCPConnectionPool._validate_command("C:\\Python311\\python")
-
-            # Forward slash paths work correctly on all platforms
+        # Forward slash paths rejected
+        with pytest.raises(CommandNotAllowedError, match="path separators"):
             MCPConnectionPool._validate_command("/usr/bin/python")
+
+        with pytest.raises(CommandNotAllowedError, match="path separators"):
+            MCPConnectionPool._validate_command("./python")
+
+        with pytest.raises(CommandNotAllowedError, match="path separators"):
+            MCPConnectionPool._validate_command("/tmp/malicious")
+
+        # Backslash paths also rejected
+        with pytest.raises(CommandNotAllowedError, match="path separators"):
+            MCPConnectionPool._validate_command("C:\\Python311\\python")
+
+        with pytest.raises(CommandNotAllowedError, match="path separators"):
+            MCPConnectionPool._validate_command(".\\python")
+
+    def test_path_separators_allowed_when_strict_mode_off(self, reset_security):
+        """Test that path separators are allowed when strict_mode is disabled."""
+        MCPConnectionPool.configure_security(strict_mode=False)
+
+        # No exception when strict mode is off
+        MCPConnectionPool._validate_command("/usr/bin/python")
+        MCPConnectionPool._validate_command("./custom-script")
+        MCPConnectionPool._validate_command("C:\\Python311\\python")
 
     def test_command_with_version_suffix(self, reset_security):
         """Test commands with version suffixes."""
