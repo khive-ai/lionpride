@@ -18,6 +18,9 @@ from pydantic import BaseModel, Field
 from lionpride.ln import json_dumps
 
 if TYPE_CHECKING:
+    import aiosqlite
+    from sqlalchemy.ext.asyncio import AsyncEngine
+
     from .logs import Log
 
 __all__ = (
@@ -169,7 +172,7 @@ class SQLiteWALLogAdapter(LogAdapter):
         self.db_path = Path(db_path)
         self.wal_mode = wal_mode
         self.auto_create = auto_create
-        self._connection = None
+        self._connection: aiosqlite.Connection | None = None
         self._initialized = False
 
     async def _ensure_initialized(self) -> None:
@@ -318,7 +321,7 @@ class PostgresLogAdapter(LogAdapter):
         self.table = _validate_sql_identifier(table, "table name")
         self.auto_create = auto_create
         self._initialized = False
-        self._engine = None
+        self._engine: AsyncEngine | None = None
 
     async def _ensure_initialized(self) -> None:
         """Ensure table exists."""

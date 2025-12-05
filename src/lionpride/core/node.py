@@ -69,7 +69,12 @@ class Node(Element, PydapterAdaptable, PydapterAsyncAdaptable):
         - Dataclasses (asdict)
         - Nested structures (recursive)
         - Base types (pass through)
+
+        Note: None is preserved as None (not converted to {}).
         """
+        if value is None:
+            return None
+
         from lionpride.ln import to_dict
 
         return to_dict(value, recursive=True, recursive_python_only=False)

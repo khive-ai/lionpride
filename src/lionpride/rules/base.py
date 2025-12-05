@@ -96,19 +96,26 @@ class RuleParams(Params):
     kw: dict = field(default_factory=dict)
     """Additional validation parameters"""
 
+    def __post_init__(self) -> None:
+        """Validate after dataclass initialization."""
+        self._validate()
+
     def _validate(self) -> None:
-        """Validate params - ensure exactly one of apply_types or apply_fields is set."""
-        super()._validate()
+        """Validate params.
 
-        both_set = bool(self.apply_types) and bool(self.apply_fields)
-        neither_set = not self.apply_types and not self.apply_fields
+        Rules can use multiple qualifier mechanisms (OR matching):
+        - apply_types for ANNOTATION qualifier (type-based matching)
+        - apply_fields for FIELD qualifier (field name matching)
+        - CONDITION qualifier for custom logic (requires rule_condition() override)
 
-        if both_set:
-            raise ValueError("Cannot set both apply_types and apply_fields")
-        if neither_set and self.default_qualifier != RuleQualifier.CONDITION:
-            raise ValueError(
-                "Must set apply_types or apply_fields unless using CONDITION qualifier"
-            )
+        If no qualifier mechanism is configured (empty sets), the rule can still
+        be applied explicitly via direct invocation. This is valid for rules like
+        ChoiceRule that may be used without auto-matching.
+        """
+        # Currently no strict validation required - rules can have empty qualifier sets
+        # for manual/explicit invocation. The validation hook is preserved for future
+        # constraints or subclass-specific validation.
+        pass
 
 
 class Rule:

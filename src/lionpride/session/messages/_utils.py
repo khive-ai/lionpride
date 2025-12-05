@@ -14,6 +14,7 @@ def _validate_image_url(url: str) -> None:
     """Validate image URL to prevent security vulnerabilities.
 
     Security checks:
+        - Reject null bytes (path truncation attacks)
         - Reject file:// URLs (local file access)
         - Reject javascript: URLs (XSS attacks)
         - Reject data:// URLs (DoS via large embedded images)
@@ -28,6 +29,10 @@ def _validate_image_url(url: str) -> None:
     """
     if not url or not isinstance(url, str):
         raise ValueError(f"Image URL must be non-empty string, got: {type(url).__name__}")
+
+    # Reject null bytes (path truncation attacks)
+    if "\x00" in url:
+        raise ValueError("Image URL contains null byte - potential path truncation attack")
 
     try:
         parsed = urlparse(url)

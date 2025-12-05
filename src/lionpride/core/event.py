@@ -9,7 +9,7 @@ from typing import Any, final
 
 from pydantic import Field, field_serializer, field_validator
 
-from ..errors import TimeoutError as lionprideTimeoutError
+from ..errors import LionTimeoutError
 from ..libs.concurrency import Lock
 from ..protocols import Invocable, Serializable, implements
 from ..types import Enum, MaybeSentinel, MaybeUnset, Unset, is_sentinel
@@ -267,15 +267,15 @@ class Event(Element):
             self.execution.retryable = False
 
         except TimeoutError:
-            lionpride_timeout = lionprideTimeoutError(
+            lion_timeout = LionTimeoutError(
                 f"Operation timed out after {self.timeout}s",
                 retryable=True,
             )
 
             self.execution.response = Unset
-            self.execution.error = lionpride_timeout
+            self.execution.error = lion_timeout
             self.execution.status = EventStatus.CANCELLED
-            self.execution.retryable = lionpride_timeout.retryable
+            self.execution.retryable = lion_timeout.retryable
 
         except Exception as e:
             from lionpride.errors import LionprideError

@@ -14,7 +14,7 @@ import httpx
 import pytest
 from pydantic import BaseModel, SecretStr
 
-from lionpride.errors import ConnectionError
+from lionpride.errors import LionConnectionError
 from lionpride.services.types.endpoint import APICalling, Endpoint, EndpointConfig
 from lionpride.services.utilities.resilience import CircuitBreaker, RetryConfig
 
@@ -766,7 +766,7 @@ class TestEndpoint:
             nonlocal call_count
             call_count += 1
             if call_count < 2:
-                raise ConnectionError("Retry me")
+                raise LionConnectionError("Retry me")
             return {"result": "success"}
 
         endpoint._call = mock_call
@@ -822,7 +822,7 @@ class TestEndpoint:
             nonlocal call_count
             call_count += 1
             if call_count < 2:
-                raise ConnectionError("Retry error")
+                raise LionConnectionError("Retry error")
             return {"result": "success"}
 
         endpoint._call = mock_call

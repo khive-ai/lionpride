@@ -6,6 +6,8 @@
 Updated to use the new RuleRegistry-based API.
 """
 
+from collections import deque
+
 import pytest
 
 from lionpride.rules import RuleRegistry, ValidationError, Validator
@@ -18,10 +20,10 @@ class TestValidationLog:
 
     @pytest.mark.asyncio
     async def test_validation_log_initialized(self):
-        """Test that validation_log is initialized as empty list."""
+        """Test that validation_log is initialized as empty deque."""
         validator = Validator()
         assert hasattr(validator, "validation_log")
-        assert isinstance(validator.validation_log, list)
+        assert isinstance(validator.validation_log, deque)
         assert len(validator.validation_log) == 0
 
     @pytest.mark.asyncio

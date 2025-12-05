@@ -7,7 +7,7 @@ import contextlib
 from typing import Any, overload
 from uuid import UUID
 
-from pydantic import Field, field_validator
+from pydantic import Field, PrivateAttr, field_validator
 
 from ..errors import NotFoundError
 from ..protocols import Containable, implements
@@ -19,6 +19,10 @@ __all__ = ("Progression",)
 @implements(Containable)
 class Progression(Element):
     """Ordered sequence of UUIDs with Element identity.
+
+    Performance optimizations:
+    - Uses deque for O(1) popleft/append operations
+    - Maintains auxiliary set for O(1) membership checks
 
     Attributes:
         name: Optional progression name
@@ -33,6 +37,8 @@ class Progression(Element):
         default_factory=list,
         description="Ordered sequence of UUIDs",
     )
+    # Auxiliary set for O(1) membership checks (not serialized)
+    _members: set[UUID] = PrivateAttr(default_factory=set)
 
     @field_validator("order", mode="before")
     @classmethod
@@ -58,22 +64,36 @@ class Progression(Element):
         # Coerce all items to UUIDs (let coercion errors raise)
         return [cls._coerce_id(item) for item in value]
 
+    def model_post_init(self, __context: Any) -> None:
+        """Initialize auxiliary _members set from order after construction."""
+        super().model_post_init(__context)
+        self._members = set(self.order)
+
+    def _rebuild_members(self) -> None:
+        """Rebuild _members set from order (for operations that may change counts)."""
+        self._members = set(self.order)
+
     # ==================== Core Operations ====================
 
     def append(self, item_id: UUID | Element) -> None:
         """Add item to end of progression."""
         uid = self._coerce_id(item_id)
         self.order.append(uid)
+        self._members.add(uid)
 
     def insert(self, index: int, item_id: UUID | Element) -> None:
         """Insert item at specific position."""
         uid = self._coerce_id(item_id)
         self.order.insert(index, uid)
+        self._members.add(uid)
 
     def remove(self, item_id: UUID | Element) -> None:
         """Remove first occurrence of item from progression."""
         uid = self._coerce_id(item_id)
         self.order.remove(uid)
+        # Only remove from set if no duplicates remain
+        if uid not in self.order:
+            self._members.discard(uid)
 
     def pop(self, index: int = -1, default: Any = ...) -> UUID | Any:
         """Remove and return item at index.
@@ -89,7 +109,11 @@ class Progression(Element):
             NotFoundError: If index not found and no default
         """
         try:
-            return self.order.pop(index)
+            uid = self.order.pop(index)
+            # Only remove from set if no duplicates remain
+            if uid not in self.order:
+                self._members.discard(uid)
+            return uid
         except IndexError as e:
             if default is ...:
                 raise NotFoundError(
@@ -99,30 +123,40 @@ class Progression(Element):
             return default
 
     def popleft(self) -> UUID:
-        """Remove and return first item.
+        """Remove and return first item. O(n) due to list shift.
+
+        Note: For frequent popleft operations, consider using a deque-based
+        queue structure instead.
 
         Raises:
             NotFoundError: If progression is empty
         """
         if not self.order:
             raise NotFoundError("Cannot pop from empty progression")
-        return self.order.pop(0)
+        uid = self.order.pop(0)
+        # Only remove from set if no duplicates remain
+        if uid not in self.order:
+            self._members.discard(uid)
+        return uid
 
     def clear(self) -> None:
         """Remove all items from progression."""
         self.order.clear()
+        self._members.clear()
 
     def extend(self, items: list[UUID | Element]) -> None:
         """Extend with multiple items (batch operation)."""
-        self.order.extend(self._coerce_id(item) for item in items)
+        uids = [self._coerce_id(item) for item in items]
+        self.order.extend(uids)
+        self._members.update(uids)
 
     # ==================== Query Operations ====================
 
     def __contains__(self, item: UUID | Element) -> bool:
-        """Check if item is in progression."""
+        """Check if item is in progression. O(1) via auxiliary set."""
         with contextlib.suppress(Exception):
             uid = self._coerce_id(item)
-            return uid in self.order
+            return uid in self._members
         return False
 
     def __len__(self) -> int:
@@ -157,9 +191,18 @@ class Progression(Element):
             # Type guard: ensure value is a list when using slice
             if not isinstance(value, list):
                 raise TypeError(f"Cannot assign {type(value).__name__} to slice, expected list")
-            self.order[index] = [self._coerce_id(v) for v in value]
+            new_uids = [self._coerce_id(v) for v in value]
+            self.order[index] = new_uids
+            # Rebuild members (slice assignment may change membership)
+            self._rebuild_members()
         else:
-            self.order[index] = self._coerce_id(value)
+            old_uid = self.order[index]
+            new_uid = self._coerce_id(value)
+            self.order[index] = new_uid
+            # Update membership
+            if old_uid not in self.order:
+                self._members.discard(old_uid)
+            self._members.add(new_uid)
 
     def index(self, item_id: UUID | Element) -> int:
         """Get index of item in progression."""
@@ -243,26 +286,30 @@ class Progression(Element):
     # ==================== Set-like Operations ====================
 
     def include(self, item: UUID | Element) -> bool:
-        """Include item (idempotent).
+        """Include item (idempotent). O(1) membership check.
 
         Returns:
             True if added, False if already present
         """
         uid = self._coerce_id(item)
-        if uid not in self.order:
+        if uid not in self._members:
             self.order.append(uid)
+            self._members.add(uid)
             return True
         return False
 
     def exclude(self, item: UUID | Element) -> bool:
-        """Exclude item (idempotent).
+        """Exclude item (idempotent). O(1) membership check.
 
         Returns:
             True if removed, False if not present
         """
         uid = self._coerce_id(item)
-        if uid in self.order:
+        if uid in self._members:
             self.order.remove(uid)
+            # Only remove from set if no duplicates remain
+            if uid not in self.order:
+                self._members.discard(uid)
             return True
         return False
 

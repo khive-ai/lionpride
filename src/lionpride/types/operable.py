@@ -153,6 +153,7 @@ class Operable:
         for i in self.__op_fields__:
             if i.name == key:
                 return i
+        return default
 
     def get_specs(
         self,

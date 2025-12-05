@@ -281,28 +281,13 @@ class TestNodeRoundtrip:
         restored = Node.from_dict(data)
         assert_node_fields_match(original, restored)
 
-    @pytest.mark.xfail(
-        reason="BUG: Node content=None becomes {} after roundtrip due to field_serializer behavior"
-    )
     def test_node_roundtrip_none_content(self) -> None:
-        """Test Node with None content - KNOWN BUG: None becomes {}."""
+        """Test Node with None content preserves None (not converted to {})."""
         original = Node(content=None, embedding=None)
         for mode in ["python", "json", "db"]:
             data = original.to_dict(mode=mode)
             restored = Node.from_dict(data)
             assert restored.content is None
-            assert restored.embedding is None
-            assert_element_fields_match(original, restored)
-
-    def test_node_roundtrip_none_content_actual_behavior(self) -> None:
-        """Test Node with None content - documents actual behavior."""
-        original = Node(content=None, embedding=None)
-        for mode in ["python", "json", "db"]:
-            data = original.to_dict(mode=mode)
-            restored = Node.from_dict(data)
-            # Actual behavior: None content becomes empty dict
-            # This is a data loss bug - content=None is semantically different from content={}
-            assert restored.content == {}  # BUG: should be None
             assert restored.embedding is None
             assert_element_fields_match(original, restored)
 
@@ -423,14 +408,10 @@ class TestPileRoundtrip:
         assert len(restored) == 0
         assert_element_fields_match(original, restored)
 
-    @pytest.mark.xfail(
-        reason="BUG: Pile.from_dict doesn't auto-detect node_metadata key from db mode"
-    )
     def test_pile_roundtrip_empty_db_mode_auto_detect(self) -> None:
-        """Test that Pile.from_dict should auto-detect node_metadata like Element does."""
+        """Test that Pile.from_dict auto-detects node_metadata like Element does."""
         original: Pile[Element] = Pile()
         data = original.to_dict(mode="db")
-        # This should work but doesn't - Pile.from_dict lacks backward compat for node_metadata
         restored = Pile.from_dict(data)
         assert len(restored) == 0
 
@@ -564,12 +545,8 @@ class TestFlowRoundtrip:
         restored = Flow.from_dict(data)
         assert_flow_fields_match(original, restored)
 
-    @pytest.mark.xfail(
-        reason="BUG: Flow db mode roundtrip fails - nested Pile fields have node_metadata "
-        "that Flow._validate_piles doesn't handle (no meta_key propagation)"
-    )
     def test_flow_roundtrip_db_mode(self) -> None:
-        """Test Flow roundtrip in db mode - KNOWN BUG with nested Piles."""
+        """Test Flow roundtrip in db mode with nested Piles."""
         original = self._create_flow_with_progressions()
         data = original.to_dict(mode="db")
         restored = Flow.from_dict(data)
@@ -586,11 +563,8 @@ class TestFlowRoundtrip:
         assert len(restored.progressions) == 0
         assert_element_fields_match(original, restored)
 
-    @pytest.mark.xfail(
-        reason="BUG: Empty Flow db mode roundtrip fails due to nested Pile node_metadata issue"
-    )
     def test_flow_roundtrip_empty_db_mode(self) -> None:
-        """Test empty Flow roundtrip in db mode - KNOWN BUG."""
+        """Test empty Flow roundtrip in db mode."""
         original = Flow(name="empty_flow")
         data = original.to_dict(mode="db")
         restored = Flow.from_dict(data)
@@ -848,9 +822,8 @@ class TestNestedStructureRoundtrip:
         assert messages[1].role == MessageRole.ASSISTANT
         assert messages[2].role == MessageRole.ASSISTANT
 
-    @pytest.mark.xfail(reason="BUG: Flow db mode fails with nested Pile node_metadata issue")
     def test_flow_containing_messages_db_mode(self) -> None:
-        """Test Flow containing Messages in db mode - KNOWN BUG."""
+        """Test Flow containing Messages in db mode."""
         msg1 = Message(
             content=InstructionContent.create(instruction="Test"),
             metadata={"msg_index": 0},

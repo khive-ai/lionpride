@@ -20,7 +20,7 @@ class TestRetryConfig:
 
     def test_default_values(self):
         """Test default configuration values."""
-        from lionpride.errors import ConnectionError
+        from lionpride.errors import LionConnectionError
         from lionpride.services.utilities.resilience import CircuitBreakerOpenError
 
         config = RetryConfig()
@@ -29,7 +29,7 @@ class TestRetryConfig:
         assert config.max_delay == 60.0
         assert config.exponential_base == 2.0
         assert config.jitter is True
-        assert config.retry_on == (ConnectionError, CircuitBreakerOpenError)
+        assert config.retry_on == (LionConnectionError, CircuitBreakerOpenError)
 
     def test_custom_values(self):
         """Test custom configuration values."""

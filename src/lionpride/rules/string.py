@@ -8,6 +8,20 @@ from .base import Rule, RuleParams, RuleQualifier
 
 __all__ = ("StringRule",)
 
+# Default max input length for regex matching (ReDoS protection)
+DEFAULT_REGEX_MAX_INPUT_LENGTH = 10_000
+
+# Patterns that indicate potential ReDoS (nested quantifiers, overlapping groups)
+_REDOS_PATTERNS = [
+    r"\(\.\*\)\*",  # (.*)*
+    r"\(\.\+\)\*",  # (.+)*
+    r"\(\.\*\)\+",  # (.*)+
+    r"\(\.\+\)\+",  # (.+)+
+    r"\(\[.*?\]\+\)\+",  # ([...]+)+
+    r"\(\[.*?\]\*\)\*",  # ([...]*)*
+]
+_REDOS_DETECTOR = re.compile("|".join(_REDOS_PATTERNS))
+
 
 def _get_string_params() -> RuleParams:
     """Default params for string rule."""
@@ -26,7 +40,7 @@ class StringRule(Rule):
     Features:
     - Type checking (must be str)
     - Length constraints (min_length, max_length)
-    - Pattern matching (regex)
+    - Pattern matching (regex) with ReDoS protection
     - Auto-conversion from any type to string
 
     Usage:
@@ -39,6 +53,7 @@ class StringRule(Rule):
         min_length: int | None = None,
         max_length: int | None = None,
         pattern: str | None = None,
+        regex_max_input_length: int = DEFAULT_REGEX_MAX_INPUT_LENGTH,
         params: RuleParams | None = None,
         **kw,
     ):
@@ -47,16 +62,36 @@ class StringRule(Rule):
         Args:
             min_length: Minimum string length (inclusive)
             max_length: Maximum string length (inclusive)
-            pattern: Regex pattern to match. Note: Complex patterns on untrusted
-                input could cause ReDoS. Use simple patterns or validate separately.
+            pattern: Regex pattern to match. Patterns with nested quantifiers
+                are rejected to prevent ReDoS attacks.
+            regex_max_input_length: Maximum input length for regex matching
+                (default 10,000 chars). Inputs exceeding this are rejected.
             params: Custom RuleParams (uses default if None)
             **kw: Additional validation kwargs
+
+        Raises:
+            ValueError: If pattern contains potential ReDoS vulnerabilities
         """
         if params is None:
             params = _get_string_params()
         super().__init__(params, **kw)
         self.min_length = min_length
         self.max_length = max_length
+        self.regex_max_input_length = regex_max_input_length
+
+        # Validate and compile pattern (ReDoS protection)
+        if pattern is not None:
+            if _REDOS_DETECTOR.search(pattern):
+                raise ValueError(
+                    f"Pattern '{pattern}' contains nested quantifiers that could cause "
+                    "ReDoS (Regular Expression Denial of Service). Use simpler patterns."
+                )
+            try:
+                self._compiled_pattern = re.compile(pattern)
+            except re.error as e:
+                raise ValueError(f"Invalid regex pattern '{pattern}': {e}") from e
+        else:
+            self._compiled_pattern = None
         self.pattern = pattern
 
     async def validate(self, v: Any, t: type, **kw) -> None:
@@ -78,9 +113,16 @@ class StringRule(Rule):
         if self.max_length is not None and len(v) > self.max_length:
             raise ValueError(f"String too long: got {len(v)} characters, maximum {self.max_length}")
 
-        # Check pattern matching
-        if self.pattern is not None and not re.match(self.pattern, v):
-            raise ValueError(f"String does not match required pattern: {self.pattern}")
+        # Check pattern matching (with ReDoS protection)
+        if self._compiled_pattern is not None:
+            # Reject inputs that exceed max length for regex matching
+            if len(v) > self.regex_max_input_length:
+                raise ValueError(
+                    f"String too long for regex matching: got {len(v)} characters, "
+                    f"maximum {self.regex_max_input_length}"
+                )
+            if not self._compiled_pattern.match(v):
+                raise ValueError(f"String does not match required pattern: {self.pattern}")
 
     async def perform_fix(self, v: Any, t: type) -> Any:
         """Attempt to convert value to string and re-validate.

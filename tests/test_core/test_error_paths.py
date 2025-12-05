@@ -13,13 +13,13 @@ import pytest
 from lionpride.core import Element
 from lionpride.errors import (
     ConfigurationError,
-    ConnectionError,
     ExecutionError,
     ExistsError,
+    LionConnectionError,
     LionprideError,
+    LionTimeoutError,
     NotFoundError,
     QueueFullError,
-    TimeoutError,
     ValidationError,
 )
 
@@ -92,13 +92,13 @@ class TestSpecializedErrorsRetryable:
         assert err.retryable is False
 
     def test_timeout_error_retryable(self):
-        """TimeoutError is retryable by default."""
-        err = TimeoutError("operation timed out")
+        """LionTimeoutError is retryable by default."""
+        err = LionTimeoutError("operation timed out")
         assert err.retryable is True
 
     def test_connection_error_retryable(self):
-        """ConnectionError is retryable by default."""
-        err = ConnectionError("connection lost")
+        """LionConnectionError is retryable by default."""
+        err = LionConnectionError("connection lost")
         assert err.retryable is True
 
     def test_inheritance_hierarchy(self):
@@ -107,8 +107,8 @@ class TestSpecializedErrorsRetryable:
             ValidationError(),
             ConfigurationError(),
             ExecutionError(),
-            ConnectionError(),
-            TimeoutError(),
+            LionConnectionError(),
+            LionTimeoutError(),
             NotFoundError(),
             ExistsError(),
             QueueFullError(),
@@ -127,8 +127,8 @@ class TestRetryableConsistency:
 
     def test_transient_errors_are_retryable(self):
         """Transient errors are retryable."""
-        assert ConnectionError().retryable is True
-        assert TimeoutError().retryable is True
+        assert LionConnectionError().retryable is True
+        assert LionTimeoutError().retryable is True
         assert QueueFullError().retryable is True
 
     def test_permanent_errors_are_not_retryable(self):

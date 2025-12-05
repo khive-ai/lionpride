@@ -245,6 +245,7 @@ class Flow(Element, Generic[E, P]):
 
     # ==================== Item Management ====================
 
+    @synchronized
     def add_item(
         self,
         item: E,
@@ -283,6 +284,7 @@ class Flow(Element, Generic[E, P]):
         for prog in resolved_progs:
             prog.append(item)
 
+    @synchronized
     def remove_item(self, item_id: UUID | str | Element) -> E:
         """Remove item from items pile and all progressions.
 
