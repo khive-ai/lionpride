@@ -1,18 +1,18 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for flow_report runner.
+"""Tests for ReportExecutor.
 
-The new flow_report uses Report's next_forms() scheduling and calls operate()
-directly instead of building a graph and calling flow().
+The new ReportExecutor uses completion events for dependency coordination
+and passes context between forms via report.available_data.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pydantic import BaseModel, Field
 
-from lionpride.work import Report, flow_report
+from lionpride.work import FormResult, Report, ReportExecutor, execute_report, stream_report
 
 
 class SimpleOutput(BaseModel):
@@ -34,45 +34,32 @@ class InsightsOutput(BaseModel):
     patterns: list[str]
 
 
-class TestFlowReportUnit:
-    """Unit tests for flow_report."""
+class TestFormResult:
+    """Tests for FormResult dataclass."""
+
+    def test_success_property_true_when_no_error(self):
+        """Test success is True when error is None."""
+        result = FormResult(name="test", result="value", error=None)
+        assert result.success is True
+
+    def test_success_property_false_when_error(self):
+        """Test success is False when error is set."""
+        result = FormResult(name="test", result=None, error=ValueError("failed"))
+        assert result.success is False
+
+    def test_progress_tracking(self):
+        """Test completed/total tracking."""
+        result = FormResult(name="step1", result="v", completed=3, total=5)
+        assert result.completed == 3
+        assert result.total == 5
+
+
+class TestReportExecutor:
+    """Tests for ReportExecutor class."""
 
     @pytest.mark.asyncio
-    async def test_flow_report_returns_deliverable(self):
-        """Test that flow_report returns the deliverable."""
-
-        class TestReport(Report):
-            output: SimpleOutput | None = None
-
-            assignment: str = "input -> output"
-            form_assignments: list[str] = ["input -> output"]
-
-        report = TestReport()
-        report.initialize(input="test")
-
-        mock_session = MagicMock()
-        mock_session.default_branch = MagicMock()
-        mock_session.default_branch.resources = {
-            "default_model"
-        }  # Single resource for auto-resolve
-        mock_session.get_branch = MagicMock(return_value=mock_session.default_branch)
-
-        mock_output = SimpleOutput(result="success")
-
-        with patch("lionpride.work.executor.operate") as mock_operate:
-            mock_operate.return_value = mock_output
-            deliverable = await flow_report(
-                session=mock_session,
-                report=report,
-            )
-
-        assert "output" in deliverable
-        assert isinstance(deliverable["output"], SimpleOutput)
-        assert deliverable["output"].result == "success"
-
-    @pytest.mark.asyncio
-    async def test_flow_report_fills_forms(self):
-        """Test that flow_report fills forms with results."""
+    async def test_execute_returns_deliverable(self):
+        """Test that execute returns the deliverable."""
 
         class TestReport(Report):
             output: SimpleOutput | None = None
@@ -88,26 +75,55 @@ class TestFlowReportUnit:
         mock_session.default_branch.resources = {"default_model"}
         mock_session.get_branch = MagicMock(return_value=mock_session.default_branch)
 
-        mock_output = SimpleOutput(result="filled")
+        mock_output = SimpleOutput(result="success")
 
         with patch("lionpride.work.executor.operate") as mock_operate:
             mock_operate.return_value = mock_output
-            await flow_report(
-                session=mock_session,
-                report=report,
-            )
+            executor = ReportExecutor(session=mock_session, report=report)
+            deliverable = await executor.execute()
 
-        # Check form was filled
-        form = next(iter(report.forms))
-        assert form.filled is True
-        assert form.output == mock_output
-
-        # Check form was marked completed
-        assert len(report.completed_forms) == 1
+        assert "output" in deliverable
+        assert isinstance(deliverable["output"], SimpleOutput)
+        assert deliverable["output"].result == "success"
 
     @pytest.mark.asyncio
-    async def test_flow_report_handles_sequential_dependencies(self):
-        """Test that flow_report handles sequential form execution."""
+    async def test_stream_execute_yields_form_results(self):
+        """Test that stream_execute yields FormResult objects."""
+
+        class TestReport(Report):
+            output: SimpleOutput | None = None
+
+            assignment: str = "input -> output"
+            form_assignments: list[str] = ["input -> output"]
+
+        report = TestReport()
+        report.initialize(input="test")
+
+        mock_session = MagicMock()
+        mock_session.default_branch = MagicMock()
+        mock_session.default_branch.resources = {"default_model"}
+        mock_session.get_branch = MagicMock(return_value=mock_session.default_branch)
+
+        mock_output = SimpleOutput(result="streamed")
+
+        with patch("lionpride.work.executor.operate") as mock_operate:
+            mock_operate.return_value = mock_output
+            executor = ReportExecutor(session=mock_session, report=report)
+
+            results = []
+            async for result in executor.stream_execute():
+                results.append(result)
+
+        assert len(results) == 1
+        assert isinstance(results[0], FormResult)
+        assert results[0].name == "output"
+        assert results[0].success is True
+        assert results[0].completed == 1
+        assert results[0].total == 1
+
+    @pytest.mark.asyncio
+    async def test_sequential_dependencies_via_completion_events(self):
+        """Test that sequential dependencies are handled via completion events."""
 
         class TestReport(Report):
             step1: SimpleOutput | None = None
@@ -127,11 +143,9 @@ class TestFlowReportUnit:
         mock_session.default_branch.resources = {"default_model"}
         mock_session.get_branch = MagicMock(return_value=mock_session.default_branch)
 
-        # Track execution order
         execution_order = []
 
         async def mock_operate_side_effect(session, branch, params):
-            # Determine which form based on capabilities
             if "step1" in params.capabilities:
                 execution_order.append("step1")
                 return SimpleOutput(result="s1")
@@ -141,18 +155,16 @@ class TestFlowReportUnit:
             return SimpleOutput(result="unknown")
 
         with patch("lionpride.work.executor.operate", side_effect=mock_operate_side_effect):
-            result = await flow_report(
-                session=mock_session,
-                report=report,
-            )
+            executor = ReportExecutor(session=mock_session, report=report)
+            result = await executor.execute()
 
         # Verify sequential execution (step1 before step2)
         assert execution_order == ["step1", "step2"]
         assert "step2" in result
 
     @pytest.mark.asyncio
-    async def test_flow_report_parallel_execution(self):
-        """Test that independent forms can execute in parallel."""
+    async def test_parallel_execution_with_max_concurrent(self):
+        """Test parallel execution respects max_concurrent."""
 
         class TestReport(Report):
             a: SimpleOutput | None = None
@@ -184,17 +196,59 @@ class TestFlowReportUnit:
             return SimpleOutput(result="unknown")
 
         with patch("lionpride.work.executor.operate", side_effect=mock_operate_side_effect):
-            result = await flow_report(
-                session=mock_session,
-                report=report,
-            )
+            executor = ReportExecutor(session=mock_session, report=report, max_concurrent=1)
+            result = await executor.execute()
 
         # Verify all forms completed
         assert len(report.completed_forms) == 3
         assert "c" in result
 
     @pytest.mark.asyncio
-    async def test_flow_report_with_branch_prefix(self):
+    async def test_context_passing_between_forms(self):
+        """Test that context is passed via available_data."""
+
+        class TestReport(Report):
+            analysis: AnalysisOutput | None = None
+            insights: InsightsOutput | None = None
+
+            assignment: str = "topic -> insights"
+            form_assignments: list[str] = [
+                "topic -> analysis",
+                "analysis -> insights",
+            ]
+
+        report = TestReport()
+        report.initialize(topic="test topic")
+
+        mock_session = MagicMock()
+        mock_session.default_branch = MagicMock()
+        mock_session.default_branch.resources = {"default_model"}
+        mock_session.get_branch = MagicMock(return_value=mock_session.default_branch)
+
+        contexts_received = []
+
+        async def mock_operate_side_effect(session, branch, params):
+            contexts_received.append(params.generate.context)
+            if "analysis" in params.capabilities:
+                return AnalysisOutput(summary="test", score=0.9)
+            elif "insights" in params.capabilities:
+                return InsightsOutput(patterns=["p1"])
+            return None
+
+        with patch("lionpride.work.executor.operate", side_effect=mock_operate_side_effect):
+            executor = ReportExecutor(session=mock_session, report=report)
+            await executor.execute()
+
+        # First call (analysis): should have topic in context
+        assert contexts_received[0] is not None
+        assert "topic" in contexts_received[0]
+
+        # Second call (insights): should have analysis in context
+        assert contexts_received[1] is not None
+        assert "analysis" in contexts_received[1]
+
+    @pytest.mark.asyncio
+    async def test_branch_prefix_resolution(self):
         """Test that branch prefix is respected."""
 
         class TestReport(Report):
@@ -220,18 +274,50 @@ class TestFlowReportUnit:
 
         with patch("lionpride.work.executor.operate") as mock_operate:
             mock_operate.return_value = SimpleOutput(result="done")
-            await flow_report(
-                session=mock_session,
-                branch=mock_branch,
-                report=report,
-            )
+            executor = ReportExecutor(session=mock_session, report=report, branch=mock_branch)
+            await executor.execute()
 
         # Verify get_branch was called with the worker branch name
         mock_session.get_branch.assert_called_with("worker")
 
+
+class TestCycleDetection:
+    """Tests for cycle detection in form dependencies."""
+
     @pytest.mark.asyncio
-    async def test_flow_report_verbose_output(self, capsys):
-        """Test that verbose mode prints progress."""
+    async def test_detects_direct_cycle(self):
+        """Test that executor detects A -> B -> A cycle."""
+
+        class TestReport(Report):
+            a: SimpleOutput | None = None
+            b: SimpleOutput | None = None
+
+            assignment: str = "input -> b"
+            form_assignments: list[str] = [
+                "b -> a",  # a depends on b
+                "a -> b",  # b depends on a - cycle!
+            ]
+
+        report = TestReport()
+        report.initialize(input="test")
+
+        mock_session = MagicMock()
+        mock_session.default_branch = MagicMock()
+        mock_session.default_branch.resources = {"default_model"}
+        mock_session.get_branch = MagicMock(return_value=mock_session.default_branch)
+
+        executor = ReportExecutor(session=mock_session, report=report)
+
+        with pytest.raises(RuntimeError, match="Circular dependency"):
+            await executor.execute()
+
+
+class TestExecuteReportFunction:
+    """Tests for execute_report convenience function."""
+
+    @pytest.mark.asyncio
+    async def test_execute_report_returns_deliverable(self):
+        """Test that execute_report returns the deliverable."""
 
         class TestReport(Report):
             output: SimpleOutput | None = None
@@ -247,112 +333,28 @@ class TestFlowReportUnit:
         mock_session.default_branch.resources = {"default_model"}
         mock_session.get_branch = MagicMock(return_value=mock_session.default_branch)
 
+        mock_output = SimpleOutput(result="success")
+
         with patch("lionpride.work.executor.operate") as mock_operate:
-            mock_operate.return_value = SimpleOutput(result="done")
-            await flow_report(
-                session=mock_session,
-                report=report,
-                verbose=True,
-            )
+            mock_operate.return_value = mock_output
+            deliverable = await execute_report(session=mock_session, report=report)
 
-        captured = capsys.readouterr()
-        assert "Executing report" in captured.out
-        assert "Forms: 1" in captured.out
-        assert "Executing form: output" in captured.out
+        assert "output" in deliverable
+        assert deliverable["output"].result == "success"
+
+
+class TestStreamReportFunction:
+    """Tests for stream_report convenience function."""
 
     @pytest.mark.asyncio
-    async def test_flow_report_context_from_available_data(self):
-        """Test that context is built from report.available_data."""
-
-        class TestReport(Report):
-            analysis: AnalysisOutput | None = None
-            insights: InsightsOutput | None = None
-
-            assignment: str = "topic -> insights"
-            form_assignments: list[str] = [
-                "topic -> analysis",
-                "analysis -> insights",
-            ]
-
-        report = TestReport()
-        report.initialize(topic="test topic")
-
-        mock_session = MagicMock()
-        mock_session.default_branch = MagicMock()
-        mock_session.default_branch.resources = {"default_model"}
-        mock_session.get_branch = MagicMock(return_value=mock_session.default_branch)
-
-        # Track context passed to operate
-        contexts_received = []
-
-        async def mock_operate_side_effect(session, branch, params):
-            contexts_received.append(params.generate.context)
-            if "analysis" in params.capabilities:
-                return AnalysisOutput(summary="test", score=0.9)
-            elif "insights" in params.capabilities:
-                return InsightsOutput(patterns=["p1"])
-            return None
-
-        with patch("lionpride.work.executor.operate", side_effect=mock_operate_side_effect):
-            await flow_report(
-                session=mock_session,
-                report=report,
-            )
-
-        # First call (analysis): should have topic in context
-        assert contexts_received[0] is not None
-        assert "topic" in contexts_received[0]
-
-        # Second call (insights): should have analysis in context
-        assert contexts_received[1] is not None
-        assert "analysis" in contexts_received[1]
-
-    @pytest.mark.asyncio
-    async def test_flow_report_missing_input_fails(self):
-        """Test that flow_report fails when required inputs are missing.
-
-        The new executor-based implementation will attempt to execute
-        and fail (rather than detect deadlock via polling).
-        """
+    async def test_stream_report_yields_form_results(self):
+        """Test that stream_report yields FormResult objects."""
 
         class TestReport(Report):
             output: SimpleOutput | None = None
 
             assignment: str = "input -> output"
-            form_assignments: list[str] = ["missing_field -> output"]
-
-        report = TestReport()
-        report.initialize(input="test")  # Note: missing_field not provided
-
-        mock_session = MagicMock()
-        mock_session.default_branch = MagicMock()
-        mock_session.default_branch.resources = {"default_model"}
-        mock_session.get_branch = MagicMock(return_value=mock_session.default_branch)
-
-        # The executor will fail because the form tries to execute without inputs
-        with pytest.raises(ExceptionGroup) as exc_info:
-            await flow_report(
-                session=mock_session,
-                report=report,
-            )
-        # Check the inner exception has the right message
-        assert any("missing required inputs" in str(e) for e in exc_info.value.exceptions)
-
-    @pytest.mark.asyncio
-    async def test_flow_report_max_concurrent(self):
-        """Test that max_concurrent limits parallel execution."""
-
-        class TestReport(Report):
-            a: SimpleOutput | None = None
-            b: SimpleOutput | None = None
-            c: SimpleOutput | None = None
-
-            assignment: str = "input -> c"
-            form_assignments: list[str] = [
-                "input -> a",
-                "input -> b",
-                "a, b -> c",
-            ]
+            form_assignments: list[str] = ["input -> output"]
 
         report = TestReport()
         report.initialize(input="test")
@@ -362,22 +364,14 @@ class TestFlowReportUnit:
         mock_session.default_branch.resources = {"default_model"}
         mock_session.get_branch = MagicMock(return_value=mock_session.default_branch)
 
-        async def mock_operate_side_effect(session, branch, params):
-            if "a" in params.capabilities:
-                return SimpleOutput(result="a")
-            elif "b" in params.capabilities:
-                return SimpleOutput(result="b")
-            elif "c" in params.capabilities:
-                return SimpleOutput(result="c")
-            return SimpleOutput(result="unknown")
+        mock_output = SimpleOutput(result="streamed")
 
-        with patch("lionpride.work.executor.operate", side_effect=mock_operate_side_effect):
-            result = await flow_report(
-                session=mock_session,
-                report=report,
-                max_concurrent=1,  # Limit to 1 concurrent execution
-            )
+        with patch("lionpride.work.executor.operate") as mock_operate:
+            mock_operate.return_value = mock_output
+            results = []
+            async for result in stream_report(session=mock_session, report=report):
+                results.append(result)
 
-        # Verify all forms completed
-        assert len(report.completed_forms) == 3
-        assert "c" in result
+        assert len(results) == 1
+        assert isinstance(results[0], FormResult)
+        assert results[0].name == "output"
