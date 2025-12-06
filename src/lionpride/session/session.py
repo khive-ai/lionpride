@@ -88,26 +88,51 @@ class Session(Element):
         branch = session.create_branch(name="main")
         op = await session.conduct("operate", branch, instruction="Analyze this")
         result = op.response
+
+    Note:
+        conversations, services, and operations are lazily initialized on first access
+        to minimize Session() construction overhead.
     """
 
     # -------------------------------------------------------------------------
-    # Fields
+    # Fields (using PrivateAttr for lazy initialization)
     # -------------------------------------------------------------------------
 
     user: str | None = None
     """User identifier for this session."""
 
-    conversations: Flow[Message, Branch] = Field(default_factory=lambda: Flow(item_type=Message))
-    """Message storage (items) and branch progressions."""
-
-    services: ServiceRegistry = Field(default_factory=ServiceRegistry)
-    """Registered models and tools."""
-
-    operations: OperationRegistry = Field(default_factory=OperationRegistry)
-    """Registered operation factories."""
+    # Lazy-initialized containers (None = not yet created)
+    _conversations: Flow[Message, Branch] | None = PrivateAttr(None)
+    _services: ServiceRegistry | None = PrivateAttr(None)
+    _operations: OperationRegistry | None = PrivateAttr(None)
 
     _default_branch_id: UUID | None = PrivateAttr(None)
     _default_backends: dict[str, str] = PrivateAttr(default_factory=dict)
+
+    # -------------------------------------------------------------------------
+    # Lazy Properties (initialize on first access)
+    # -------------------------------------------------------------------------
+
+    @property
+    def conversations(self) -> Flow[Message, Branch]:
+        """Message storage (items) and branch progressions. Lazily initialized."""
+        if self._conversations is None:
+            self._conversations = Flow(item_type=Message)
+        return self._conversations
+
+    @property
+    def services(self) -> ServiceRegistry:
+        """Registered models and tools. Lazily initialized."""
+        if self._services is None:
+            self._services = ServiceRegistry()
+        return self._services
+
+    @property
+    def operations(self) -> OperationRegistry:
+        """Registered operation factories. Lazily initialized."""
+        if self._operations is None:
+            self._operations = OperationRegistry()
+        return self._operations
 
     # -------------------------------------------------------------------------
     # Initialization
@@ -118,6 +143,7 @@ class Session(Element):
         user: str | UUID | None = None,
         conversations: Flow[Message, Branch] | None = None,
         services: ServiceRegistry | None = None,
+        operations: OperationRegistry | None = None,
         *,
         default_branch: Branch | UUID | str | None = None,
         default_generate_model: iModel | str | None = None,
@@ -130,16 +156,26 @@ class Session(Element):
 
         Args:
             user: User identifier.
-            conversations: Pre-built Flow (rare).
-            services: Pre-built ServiceRegistry (rare).
+            conversations: Pre-built Flow (rare, defers lazy init).
+            services: Pre-built ServiceRegistry (rare, defers lazy init).
+            operations: Pre-built OperationRegistry (rare, defers lazy init).
             default_branch: Auto-create or use this branch as default.
             default_generate_model: Default model for generate operations.
             default_parse_model: Default model for parse operations.
             default_capabilities: Capabilities granted to default branch.
             default_system: System message for default branch.
         """
-        d_ = {"user": user, "conversations": conversations, "services": services, **data}
+        # Only pass user to super - lazy containers are handled via PrivateAttr
+        d_ = {"user": user, **data}
         super().__init__(**{k: v for k, v in d_.items() if not_sentinel(v, True, True)})
+
+        # Set pre-built containers if provided (bypasses lazy init)
+        if conversations is not None:
+            self._conversations = conversations
+        if services is not None:
+            self._services = services
+        if operations is not None:
+            self._operations = operations
 
         # Collect default model names for branch resources
         default_resources: set[str] = set()
