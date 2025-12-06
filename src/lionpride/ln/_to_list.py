@@ -11,11 +11,12 @@ from typing import Any, ClassVar
 from lionpride.types import Params
 
 from ._hash import hash_dict
+from ._lazy_init import LazyInit
 
 __all__ = ("ToListParams", "to_list")
 
 
-_INITIALIZED = False
+_lazy = LazyInit()
 _MODEL_LIKE = None
 _MAP_LIKE = None
 _SINGLETONE_TYPES = None
@@ -23,6 +24,21 @@ _SKIP_TYPE = None
 _SKIP_TUPLE_SET = None
 _BYTE_LIKE = (str, bytes, bytearray)
 _TUPLE_SET = (tuple, set, frozenset)
+
+
+def _do_init() -> None:
+    """Initialize type constants."""
+    from pydantic import BaseModel
+    from pydantic_core import PydanticUndefinedType
+
+    from lionpride.types import UndefinedType, UnsetType
+
+    global _MODEL_LIKE, _MAP_LIKE, _SINGLETONE_TYPES, _SKIP_TYPE, _SKIP_TUPLE_SET
+    _MODEL_LIKE = (BaseModel,)
+    _MAP_LIKE = (Mapping, *_MODEL_LIKE)
+    _SINGLETONE_TYPES = (UndefinedType, UnsetType, PydanticUndefinedType)
+    _SKIP_TYPE = (*_BYTE_LIKE, *_MAP_LIKE, _Enum)
+    _SKIP_TUPLE_SET = (*_SKIP_TYPE, *_TUPLE_SET)
 
 
 def to_list(
@@ -51,20 +67,7 @@ def to_list(
     Raises:
         ValueError: If unique=True without flatten=True
     """
-    global _INITIALIZED
-    if _INITIALIZED is False:
-        from pydantic import BaseModel
-        from pydantic_core import PydanticUndefinedType
-
-        from lionpride.types import UndefinedType, UnsetType
-
-        global _MODEL_LIKE, _MAP_LIKE, _SINGLETONE_TYPES, _SKIP_TYPE, _SKIP_TUPLE_SET
-        _MODEL_LIKE = (BaseModel,)
-        _MAP_LIKE = (Mapping, *_MODEL_LIKE)
-        _SINGLETONE_TYPES = (UndefinedType, UnsetType, PydanticUndefinedType)
-        _SKIP_TYPE = (*_BYTE_LIKE, *_MAP_LIKE, _Enum)
-        _SKIP_TUPLE_SET = (*_SKIP_TYPE, *_TUPLE_SET)
-        _INITIALIZED = True
+    _lazy.ensure(_do_init)
 
     def _process_list(
         lst: list[Any],

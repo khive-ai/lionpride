@@ -120,8 +120,8 @@ class GeminiCodeEndpoint(Endpoint):
 
         return {"request": req_obj}, {}
 
-    async def stream(
-        self, request: dict | BaseModel, **kwargs
+    async def stream(  # type: ignore[override]
+        self, request: dict | BaseModel, **kwargs: Any
     ) -> AsyncIterator[GeminiChunk | dict | GeminiSession]:
         """Stream Gemini CLI response chunks.
 

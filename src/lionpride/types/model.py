@@ -81,7 +81,7 @@ class HashableModel(BaseModel):
             sort_keys=True,
         )
         if decode:
-            return json_bytes.decode("utf-8")
+            return json_bytes.decode("utf-8") if isinstance(json_bytes, bytes) else json_bytes
         return json_bytes
 
     @classmethod

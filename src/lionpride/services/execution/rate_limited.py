@@ -66,10 +66,11 @@ class RateLimitedProcessor(Processor):
             max_queue_size: Max queue size (default: 1000)
             max_denial_tracking: Max denial entries to track (default: 10000)
         """
-        super().__init__(
+        # pile is optional in RateLimitedProcessor - executor sets it after construction
+        super().__init__(  # type: ignore[arg-type]
             queue_capacity=queue_capacity,
             capacity_refresh_time=capacity_refresh_time,
-            pile=pile,
+            pile=pile,  # type: ignore[arg-type]
             executor=executor,
             concurrency_limit=concurrency_limit,
             max_queue_size=max_queue_size,
@@ -109,7 +110,7 @@ class RateLimitedProcessor(Processor):
 
     @override
     @classmethod
-    async def create(
+    async def create(  # type: ignore[override]
         cls,
         queue_capacity: int,
         capacity_refresh_time: float,

@@ -224,10 +224,11 @@ class SQLiteWALLogAdapter(LogAdapter):
 
     async def write(self, logs: list[Log]) -> int:
         """Write logs to SQLite."""
-        await self._ensure_initialized()
-
         if not logs:
             return 0
+
+        await self._ensure_initialized()
+        assert self._connection is not None  # Guaranteed by _ensure_initialized
 
         count = 0
         for log in logs:
@@ -267,6 +268,7 @@ class SQLiteWALLogAdapter(LogAdapter):
     ) -> list[dict[str, Any]]:
         """Read logs from SQLite."""
         await self._ensure_initialized()
+        assert self._connection is not None  # Guaranteed by _ensure_initialized
 
         query = "SELECT content FROM logs WHERE 1=1"
         params: list[Any] = []
@@ -386,10 +388,11 @@ class PostgresLogAdapter(LogAdapter):
 
     async def write(self, logs: list[Log]) -> int:
         """Write logs to PostgreSQL."""
-        await self._ensure_initialized()
-
         if not logs:
             return 0
+
+        await self._ensure_initialized()
+        assert self._engine is not None  # Guaranteed by _ensure_initialized
 
         try:
             from sqlalchemy import text
@@ -437,6 +440,7 @@ class PostgresLogAdapter(LogAdapter):
     ) -> list[dict[str, Any]]:
         """Read logs from PostgreSQL."""
         await self._ensure_initialized()
+        assert self._engine is not None  # Guaranteed by _ensure_initialized
 
         try:
             from sqlalchemy import text

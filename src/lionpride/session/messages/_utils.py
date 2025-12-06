@@ -60,7 +60,7 @@ def _validate_image_url(url: str) -> None:
 
 def _clean_multiline_strings(data: dict) -> dict:
     """Clean multiline strings for YAML block scalars (| not |-)."""
-    cleaned = {}
+    cleaned: dict[str, object] = {}
     for k, v in data.items():
         if isinstance(v, str) and "\n" in v:
             # Strip trailing whitespace from each line, ensure ends with newline for "|"

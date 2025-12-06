@@ -3,6 +3,7 @@
 
 import logging
 from collections.abc import Callable
+from typing import cast
 
 import tiktoken
 
@@ -82,7 +83,7 @@ class TokenCalculator:
         decoder: Callable | None = None,
         return_tokens: bool = False,
         return_decoded: bool = False,
-    ) -> int | list[int]:
+    ) -> int | list[int] | tuple[int, str]:
         if not s_:
             return 0
 
@@ -114,7 +115,8 @@ class TokenCalculator:
     ) -> int:
         try:
             if isinstance(i_, str):
-                return TokenCalculator.tokenize(i_, tokenizer=tokenizer)
+                # tokenize returns int when return_tokens=False (default)
+                return cast(int, TokenCalculator.tokenize(i_, tokenizer=tokenizer))
 
             if isinstance(i_, dict):
                 if "text" in i_:
@@ -146,7 +148,8 @@ class TokenCalculator:
     def _calculate_embed_item(s_, tokenizer: Callable) -> int:
         try:
             if isinstance(s_, str):
-                return TokenCalculator.tokenize(s_, tokenizer=tokenizer)
+                # tokenize returns int when return_tokens=False (default)
+                return cast(int, TokenCalculator.tokenize(s_, tokenizer=tokenizer))
 
             if isinstance(s_, list):
                 return sum(TokenCalculator._calculate_embed_item(x, tokenizer) for x in s_)

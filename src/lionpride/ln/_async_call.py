@@ -1,7 +1,11 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-import threading
+"""Async batch processing utilities with retry and concurrency control.
+
+Refactored for reduced cyclomatic complexity (33 -> <15) per #116.
+"""
+
 from collections.abc import AsyncGenerator, Callable
 from typing import Any, ParamSpec, TypeVar
 
@@ -17,20 +21,146 @@ from lionpride.libs.concurrency import (
 )
 from lionpride.types import Unset, not_sentinel
 
+from ._lazy_init import LazyInit
 from ._to_list import to_list
 
 T = TypeVar("T")
 P = ParamSpec("P")
 
-_INITIALIZED = False
+_lazy = LazyInit()
 _MODEL_LIKE = None
-_INIT_LOCK = threading.RLock()
 
 
 __all__ = (
     "alcall",
     "bcall",
 )
+
+
+def _do_init() -> None:
+    """Initialize Pydantic model type detection."""
+    global _MODEL_LIKE
+    from pydantic import BaseModel
+
+    _MODEL_LIKE = (BaseModel,)
+
+
+def _ensure_initialized() -> None:
+    """Lazy initialization of Pydantic model type detection."""
+    _lazy.ensure(_do_init)
+
+
+def _validate_func(func: Any) -> Callable:
+    """Validate and extract a single callable from func."""
+    if callable(func):
+        return func
+
+    # Try to extract from iterable
+    try:
+        func_list = list(func)
+    except TypeError:
+        raise ValueError("func must be callable or an iterable containing one callable.")
+
+    if len(func_list) != 1 or not callable(func_list[0]):
+        raise ValueError("Only one callable function is allowed.")
+
+    return func_list[0]
+
+
+def _normalize_input(
+    input_: Any,
+    *,
+    flatten: bool,
+    dropna: bool,
+    unique: bool,
+    flatten_tuple_set: bool,
+) -> list:
+    """Normalize input to a list."""
+    if flatten or dropna:
+        return to_list(
+            input_,
+            flatten=flatten,
+            dropna=dropna,
+            unique=unique,
+            flatten_tuple_set=flatten_tuple_set,
+        )
+
+    if isinstance(input_, list):
+        return input_
+
+    # Handle Pydantic models specially
+    if _MODEL_LIKE and isinstance(input_, _MODEL_LIKE):
+        return [input_]
+
+    # Try to iterate
+    try:
+        iter(input_)
+        return list(input_)
+    except TypeError:
+        return [input_]
+
+
+async def _call_with_timeout(
+    func: Callable,
+    item: Any,
+    is_coro: bool,
+    timeout: float | None,
+    **kwargs,
+) -> Any:
+    """Call function with optional timeout."""
+    if is_coro:
+        if timeout is not None:
+            with move_on_after(timeout) as cancel_scope:
+                result = await func(item, **kwargs)
+            if cancel_scope.cancelled_caught:
+                raise TimeoutError(f"Function call timed out after {timeout}s")
+            return result
+        return await func(item, **kwargs)
+    else:
+        if timeout is not None:
+            with move_on_after(timeout) as cancel_scope:
+                result = await run_sync(func, item, **kwargs)
+            if cancel_scope.cancelled_caught:
+                raise TimeoutError(f"Function call timed out after {timeout}s")
+            return result
+        return await run_sync(func, item, **kwargs)
+
+
+async def _execute_with_retry(
+    func: Callable,
+    item: Any,
+    index: int,
+    *,
+    is_coro: bool,
+    timeout: float | None,
+    initial_delay: float,
+    backoff: float,
+    max_attempts: int,
+    default: Any,
+    **kwargs,
+) -> tuple[int, Any]:
+    """Execute function with retry logic."""
+    attempts = 0
+    current_delay = initial_delay
+
+    while True:
+        try:
+            result = await _call_with_timeout(func, item, is_coro, timeout, **kwargs)
+            return index, result
+
+        except get_cancelled_exc_class():
+            raise
+
+        except Exception:
+            attempts += 1
+            if attempts <= max_attempts:
+                if current_delay:
+                    await sleep(current_delay)
+                    current_delay *= backoff
+            else:
+                if not_sentinel(default):
+                    return index, default
+                raise
 
 
 async def alcall(
@@ -89,113 +219,23 @@ async def alcall(
         TimeoutError: If retry_timeout exceeded
         ExceptionGroup: If return_exceptions=False and tasks raise
     """
+    _ensure_initialized()
 
-    global _INITIALIZED, _MODEL_LIKE
-    if _INITIALIZED is False:
-        with _INIT_LOCK:
-            # Double-checked locking pattern
-            if _INITIALIZED is False:
-                from pydantic import BaseModel
+    func = _validate_func(func)
+    input_ = _normalize_input(
+        input_,
+        flatten=input_flatten,
+        dropna=input_dropna,
+        unique=input_unique,
+        flatten_tuple_set=input_flatten_tuple_set,
+    )
 
-                _MODEL_LIKE = (BaseModel,)
-                _INITIALIZED = True
-
-    # Validate func is a single callable
-    if not callable(func):
-        # If func is not callable, maybe it's an iterable. Extract one callable if possible.
-        try:
-            func_list = list(func)  # Convert iterable to list
-        except TypeError:
-            raise ValueError("func must be callable or an iterable containing one callable.")
-
-        # Ensure exactly one callable is present
-        if len(func_list) != 1 or not callable(func_list[0]):
-            raise ValueError("Only one callable function is allowed.")
-
-        func = func_list[0]
-
-    # Process input if requested
-    if any((input_flatten, input_dropna)):
-        input_ = to_list(
-            input_,
-            flatten=input_flatten,
-            dropna=input_dropna,
-            unique=input_unique,
-            flatten_tuple_set=input_flatten_tuple_set,
-        )
-    else:
-        if not isinstance(input_, list):
-            # Attempt to iterate
-            if isinstance(input_, _MODEL_LIKE):
-                # Pydantic model, convert to list
-                input_ = [input_]
-            else:
-                try:
-                    iter(input_)
-                    # It's iterable (tuple), convert to list of its contents
-                    input_ = list(input_)
-                except TypeError:
-                    # Not iterable, just wrap in a list
-                    input_ = [input_]
-
-    # Optional initial delay before processing
     if delay_before_start:
         await sleep(delay_before_start)
 
     semaphore = Semaphore(max_concurrent) if max_concurrent else None
     throttle_delay = throttle_period or 0
-    coro_func = is_coro_func(func)
-
-    async def call_func(item: Any) -> T:
-        if coro_func:
-            # Async function - func returns Awaitable[T] at runtime
-            if retry_timeout is not None:
-                with move_on_after(retry_timeout) as cancel_scope:
-                    result = await func(item, **kwargs)  # type: ignore[misc]
-                if cancel_scope.cancelled_caught:
-                    raise TimeoutError(f"Function call timed out after {retry_timeout}s")
-                return result  # type: ignore[return-value]
-            else:
-                return await func(item, **kwargs)  # type: ignore[misc]
-        else:
-            # Sync function
-            if retry_timeout is not None:
-                with move_on_after(retry_timeout) as cancel_scope:
-                    result = await run_sync(func, item, **kwargs)
-                if cancel_scope.cancelled_caught:  # pragma: no cover
-                    raise TimeoutError(f"Function call timed out after {retry_timeout}s")
-                return result
-            else:
-                return await run_sync(func, item, **kwargs)
-
-    async def execute_task(i: Any, index: int) -> Any:
-        attempts = 0
-        current_delay = retry_initial_delay
-        while True:
-            try:
-                result = await call_func(i)
-                return index, result
-
-            # if cancelled, re-raise
-            except get_cancelled_exc_class():
-                raise
-
-            # handle other exceptions
-            except Exception:
-                attempts += 1
-                if attempts <= retry_attempts:
-                    if current_delay:
-                        await sleep(current_delay)
-                        current_delay *= retry_backoff
-                    # Retry loop continues
-                else:
-                    # Exhausted retries
-                    if not_sentinel(retry_default):
-                        return index, retry_default
-                    # No default, re-raise
-                    raise
-
-    # Preallocate result list and fill by index — preserves order with no lock/sort
+    is_coro = is_coro_func(func)
     n_items = len(input_)
     out: list[Any] = [None] * n_items
 
@@ -203,34 +243,52 @@ async def alcall(
         try:
             if semaphore:
                 async with semaphore:
-                    _, result = await execute_task(item, idx)
+                    _, result = await _execute_with_retry(
+                        func,
+                        item,
+                        idx,
+                        is_coro=is_coro,
+                        timeout=retry_timeout,
+                        initial_delay=retry_initial_delay,
+                        backoff=retry_backoff,
+                        max_attempts=retry_attempts,
+                        default=retry_default,
+                        **kwargs,
+                    )
             else:
-                _, result = await execute_task(item, idx)
+                _, result = await _execute_with_retry(
+                    func,
+                    item,
+                    idx,
+                    is_coro=is_coro,
+                    timeout=retry_timeout,
+                    initial_delay=retry_initial_delay,
+                    backoff=retry_backoff,
+                    max_attempts=retry_attempts,
+                    default=retry_default,
+                    **kwargs,
+                )
             out[idx] = result
         except BaseException as exc:
             out[idx] = exc
             if not return_exceptions:
-                raise  # Propagate to TaskGroup
+                raise
 
-    # Execute all tasks using task group
     try:
         async with create_task_group() as tg:
             for idx, item in enumerate(input_):
                 tg.start_soon(task_wrapper, item, idx)
-                # Apply throttle delay between starting tasks
                 if throttle_delay and idx < n_items - 1:
                     await sleep(throttle_delay)
     except ExceptionGroup as eg:
         if not return_exceptions:
-            # Surface only the non-cancellation subgroup to preserve structure & tracebacks
             rest = non_cancel_subgroup(eg)
             if rest is not None:
                 raise rest
-            raise  # pragma: no cover
+            raise
 
-    output_list = out  # already in original order
     return to_list(
-        output_list,
+        out,
         flatten=output_flatten,
         dropna=output_dropna,
         unique=output_unique,

@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Performance
+
+- Session lazy initialization: `conversations`, `services`, `operations` are now lazily created on first access (#112)
+- `alcall` cyclomatic complexity reduced from 33 to 10 (#116)
+- Extract shared `LazyInit` utility for thread-safe lazy initialization (#115)
+
+### Deprecated
+
+The following APIs are deprecated and will change in future versions:
+
+#### Session.request() - Branch Parameter Required (target: 2.0.0)
+
+Calling `Session.request()` without a `branch` parameter is deprecated. In a future version, `branch` will be required for access control.
+
+**Before (deprecated):**
+
+```python
+calling = await session.request("my_model", prompt="Hello")
+```
+
+**After (recommended):**
+
+```python
+calling = await session.request("my_model", prompt="Hello", branch=my_branch)
+```
+
+#### S3LogSubscriber - Direct Credentials (target: 2.0.0)
+
+Passing `aws_access_key_id` and `aws_secret_access_key` directly to `S3LogSubscriber` is deprecated. Use environment variable parameters instead.
+
+**Before (deprecated):**
+
+```python
+subscriber = S3LogSubscriber(
+    bucket="my-bucket",
+    aws_access_key_id="AKIA...",
+    aws_secret_access_key="secret..."
+)
+```
+
+**After (recommended):**
+
+```python
+# Set environment variables: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+subscriber = S3LogSubscriber(
+    bucket="my-bucket",
+    aws_access_key_id_env="AWS_ACCESS_KEY_ID",
+    aws_secret_access_key_env="AWS_SECRET_ACCESS_KEY"
+)
+```
+
 ## [1.0.0a6] - 2025-12-05
 
 ### Fixed

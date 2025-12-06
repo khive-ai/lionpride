@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import re
+from re import Pattern
 from typing import Any
 
 from .base import Rule, RuleParams, RuleQualifier
@@ -85,6 +86,7 @@ class StringRule(Rule):
         self.regex_max_input_length = regex_max_input_length
 
         # Validate and compile pattern (ReDoS protection)
+        self._compiled_pattern: Pattern[str] | None
         if pattern is not None:
             if _REDOS_DETECTOR.search(pattern):
                 raise ValueError(

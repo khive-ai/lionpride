@@ -174,6 +174,8 @@ async def react_stream(
     if params._is_sentinel(params.generate):
         raise ValidationError("react requires 'generate' params")
 
+    # Type narrowing - assert generate is not None after validation
+    assert params.generate is not None
     gen_params = params.generate
     instruction = gen_params.instruction
     if not instruction:
@@ -190,7 +192,7 @@ async def react_stream(
 
     # Extract model_name for API calls
     model_name = imodel_kwargs.get("model_name") or imodel_kwargs.get("model")
-    if not model_name and hasattr(imodel, "name"):
+    if not model_name and imodel is not None and hasattr(imodel, "name"):
         model_name = imodel.name
     if not model_name:
         raise ConfigurationError(

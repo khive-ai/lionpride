@@ -215,6 +215,7 @@ class Flow(Element, Generic[E, P]):
     def remove_progression(self, progression_id: UUID | str | P) -> P:
         """Remove progression by UUID or name. Raises NotFoundError if not found."""
         # Resolve name to UUID if needed
+        name_to_delete: str | None
         if isinstance(progression_id, str) and progression_id in self._progression_names:
             uid = self._progression_names[progression_id]
             name_to_delete = progression_id

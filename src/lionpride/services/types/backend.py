@@ -17,18 +17,18 @@ from pydantic import (
 )
 
 from lionpride.core import Element, Event, EventStatus
-from lionpride.types import HashableModel, MaybeUnset, Unset, is_sentinel
+from lionpride.types import HashableModel, Unset, UnsetType, is_sentinel
 
-from .hook import HookBroadcaster, HookEvent, HookPhase
+from .hook import HookBroadcaster, HookEvent, HookPhase, HookRegistry
 
 logger = logging.getLogger(__name__)
 
 
 # Module-level cache for schema field keys (keyed by class)
-_SCHEMA_FIELD_KEYS_CACHE: dict[type, set[str]] = {}
+_SCHEMA_FIELD_KEYS_CACHE: dict[type[BaseModel], set[str]] = {}
 
 
-def _get_schema_field_keys(cls: type) -> set[str]:
+def _get_schema_field_keys(cls: type[BaseModel]) -> set[str]:
     """Get cached schema field keys for validation."""
     if cls not in _SCHEMA_FIELD_KEYS_CACHE:
         _SCHEMA_FIELD_KEYS_CACHE[cls] = set(cls.model_json_schema().get("properties", {}).keys())
@@ -46,7 +46,8 @@ class ServiceConfig(HashableModel):
     kwargs: dict = Field(default_factory=dict)
 
     @model_validator(mode="before")
-    def _validate_kwargs(cls, data: dict):  # noqa: N805
+    @classmethod
+    def _validate_kwargs(cls, data: dict[str, Any]) -> dict[str, Any]:
         kwargs = data.pop("kwargs", {})
         field_keys = _get_schema_field_keys(cls)
         for k in list(data.keys()):
@@ -105,13 +106,13 @@ class NormalizedResponse(HashableModel):
 
     status: str = Field(..., description="Response status: 'success' or 'error'")
     data: Any = None
-    error: str | None = Field(None, description="Error message if status='error'")
-    raw_response: dict = Field(..., description="Original unmodified response")
-    metadata: dict | None = Field(None, description="Provider-specific metadata")
+    error: str | None = Field(default=None, description="Error message if status='error'")
+    raw_response: dict[str, Any] = Field(..., description="Original unmodified response")
+    metadata: dict[str, Any] | None = Field(default=None, description="Provider-specific metadata")
 
-    def to_dict(self) -> dict:
+    def _to_dict(self, **kwargs: Any) -> dict[str, Any]:
         """Convert to dict, excluding None values."""
-        return self.model_dump(exclude_none=True)
+        return self.model_dump(exclude_none=True, **kwargs)
 
 
 class Calling(Event):
@@ -131,11 +132,14 @@ class Calling(Event):
     _post_invoke_hook_event: HookEvent | None = PrivateAttr(None)
 
     @property
-    def response(self) -> MaybeUnset[NormalizedResponse]:
+    def response(self) -> NormalizedResponse | UnsetType:
         """Get normalized response from execution."""
         if is_sentinel(self.execution.response):
             return Unset
-        return self.execution.response
+        resp = self.execution.response
+        if isinstance(resp, NormalizedResponse):
+            return resp
+        return Unset
 
     @property
     @abstractmethod
@@ -201,36 +205,38 @@ class Calling(Event):
 
     def create_pre_invoke_hook(
         self,
-        hook_registry,
+        hook_registry: HookRegistry,
         exit_hook: bool | None = None,
         hook_timeout: float = 30.0,
-        hook_params: dict | None = None,
-    ):
+        hook_params: dict[str, Any] | None = None,
+    ) -> None:
         """Create pre-invocation hook event."""
         h_ev = HookEvent(
             hook_phase=HookPhase.PreInvocation,
             event_like=self,
             registry=hook_registry,
-            exit=exit_hook,
+            exit=exit_hook if exit_hook is not None else False,
             timeout=hook_timeout,
+            streaming=False,
             params=hook_params or {},
         )
         self._pre_invoke_hook_event = h_ev
 
     def create_post_invoke_hook(
         self,
-        hook_registry,
+        hook_registry: HookRegistry,
         exit_hook: bool | None = None,
         hook_timeout: float = 30.0,
-        hook_params: dict | None = None,
-    ):
+        hook_params: dict[str, Any] | None = None,
+    ) -> None:
         """Create post-invocation hook event."""
         h_ev = HookEvent(
             hook_phase=HookPhase.PostInvocation,
             event_like=self,
             registry=hook_registry,
-            exit=exit_hook,
+            exit=exit_hook if exit_hook is not None else False,
             timeout=hook_timeout,
+            streaming=False,
             params=hook_params or {},
         )
         self._post_invoke_hook_event = h_ev

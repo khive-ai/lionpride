@@ -75,10 +75,14 @@ filterwarnings = [
   "ignore::RuntimeWarning",
   "ignore::pydantic.warnings.PydanticDeprecatedSince20",
   "ignore:Pydantic serializer warnings:UserWarning:pydantic",
-  # testcontainers deprecation warnings (third-party library)
-  "ignore:The @wait_container_is_ready decorator is deprecated:DeprecationWarning:testcontainers",
+  # testcontainers deprecation warnings (third-party library, emitted at import time)
+  "ignore:.*@wait_container_is_ready.*:DeprecationWarning",
   # Expected warning from async default factory test
   "ignore:Async default factories are not yet fully supported:UserWarning",
+  # Internal deprecation warnings (intentional API evolution)
+  "ignore:Calling Session.request.*without a branch parameter is deprecated:DeprecationWarning",
+  "ignore:Passing aws_access_key_id directly is deprecated:DeprecationWarning",
+  "ignore:Passing aws_secret_access_key directly is deprecated:DeprecationWarning",
 ]
 
 [tool.coverage.run]

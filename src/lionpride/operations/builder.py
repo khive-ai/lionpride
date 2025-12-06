@@ -86,10 +86,14 @@ class OperationGraphBuilder:
         params = parameters
 
         # Create unified Operation node (Node + Event)
+        # Note: timeout and streaming have defaults in Event but must be explicitly provided
+        # due to Pydantic model inheritance behavior with mypy
         op = Operation(
             operation_type=operation,
             parameters=params,
             metadata=metadata or {},
+            timeout=None,
+            streaming=False,
         )
 
         # Store name in metadata for reference
@@ -189,7 +193,13 @@ class OperationGraphBuilder:
 
     def get_by_id(self, operation_id: UUID) -> Operation | None:
         """Get operation by UUID, or None if not found."""
-        return self.graph.nodes.get(operation_id, None)
+        node = self.graph.nodes.get(operation_id, None)
+        if node is None:
+            return None
+        # Safe cast - we only add Operation nodes to this graph
+        if isinstance(node, Operation):
+            return node
+        return None
 
     def add_aggregation(
         self,
@@ -225,10 +235,14 @@ class OperationGraphBuilder:
         params = parameters
 
         # Create operation node
+        # Note: timeout and streaming have defaults in Event but must be explicitly provided
+        # due to Pydantic model inheritance behavior with mypy
         op = Operation(
             operation_type=operation,
             parameters=params,
             metadata={},
+            timeout=None,
+            streaming=False,
         )
         op.metadata["name"] = name
         op.metadata["aggregation"] = True

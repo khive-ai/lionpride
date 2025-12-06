@@ -56,7 +56,11 @@ class TestGenerateParamsInstructionMessage:
             GenerateParams()
 
     def test_instruction_message_with_context(self):
-        """Test instruction_message includes context in Message."""
+        """Test instruction_message includes context in Message.
+
+        GenerateParams.context is dict[str, Any] but InstructionContent.context
+        is list[JsonValue], so the dict gets wrapped in a list.
+        """
         params = GenerateParams(
             instruction="test instruction",
             context={"key": "value", "number": 42},
@@ -65,7 +69,8 @@ class TestGenerateParamsInstructionMessage:
         msg = params.instruction_message
 
         assert msg is not None
-        assert msg.content.context == {"key": "value", "number": 42}
+        # Context dict is wrapped in a list when converted to InstructionContent
+        assert msg.content.context == [{"key": "value", "number": 42}]
 
     def test_instruction_message_with_images(self):
         """Test instruction_message includes images in Message."""

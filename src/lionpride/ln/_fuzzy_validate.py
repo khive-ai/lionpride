@@ -95,7 +95,9 @@ def fuzzy_validate_pydantic(
                 recursive_python_only=False,
             )
             if isinstance(fallback, dict) and fallback:
-                candidates = [fallback]
+                # Ensure dict has string keys for model validation
+                str_fallback = {str(k): v for k, v in fallback.items()}
+                candidates = [str_fallback]
 
         if not candidates:
             raise ValidationError("Failed to extract valid JSON from input")
@@ -104,7 +106,7 @@ def fuzzy_validate_pydantic(
     field_names = list(model_type.model_fields.keys()) if fuzzy_match else None
 
     def _apply_fuzzy_match(d: dict[str, Any]) -> dict[str, Any]:
-        if not fuzzy_match:
+        if not fuzzy_match or field_names is None:
             return d
         if fuzzy_match_params is None:
             return fuzzy_match_keys(d, field_names, handle_unmatched="remove")

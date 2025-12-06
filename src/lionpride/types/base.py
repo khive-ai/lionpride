@@ -185,7 +185,7 @@ class Params:
                     if k not in kwargs and isinstance(
                         v, (MutableSequence, MutableMapping, MutableSet)
                     ):
-                        dict_[k] = v.copy()
+                        dict_[k] = v.copy() if hasattr(v, "copy") else list(v)
                 return _out(dict_)
 
             case "deep":
@@ -286,7 +286,7 @@ class DataClass:
                     if k not in kwargs and isinstance(
                         v, (MutableSequence, MutableMapping, MutableSet)
                     ):
-                        dict_[k] = v.copy()
+                        dict_[k] = v.copy() if hasattr(v, "copy") else list(v)
                 return _out(dict_)
 
             case "deep":

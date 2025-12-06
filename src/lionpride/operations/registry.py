@@ -7,15 +7,15 @@ from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from lionpride.session import Branch, Session
+    pass
 
 __all__ = ("OperationRegistry",)
 
-# Factory signature: (session, branch, parameters) -> result
-OperationFactory = Callable[
-    ["Session", "Branch | str", dict[str, Any]],
-    Awaitable[Any],
-]
+# Factory signature: (session, branch, parameters, ...) -> result
+# Using Any for parameters to accommodate both typed params and dict
+# The actual operations use typed Params objects, but the registry
+# needs to be flexible to support all operation types
+OperationFactory = Callable[..., Awaitable[Any]]
 
 
 class OperationRegistry:

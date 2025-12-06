@@ -7,11 +7,22 @@ import contextlib
 import copy
 from typing import Any
 
+from ._lazy_init import LazyInit
+
 __all__ = ("hash_dict",)
 
 # Global initialization state
-_INITIALIZED = False
+_lazy = LazyInit()
 PydanticBaseModel = None
+
+
+def _do_init() -> None:
+    """Initialize Pydantic BaseModel reference."""
+    global PydanticBaseModel
+    from pydantic import BaseModel
+
+    PydanticBaseModel = BaseModel
+
 
 # --- Canonical Representation Generator ---
 _PRIMITIVE_TYPES = (str, int, float, bool, type(None))
@@ -118,12 +129,7 @@ def hash_dict(data: Any, strict: bool = False) -> int:
     Raises:
         TypeError: If generated representation is not hashable
     """
-    global _INITIALIZED, PydanticBaseModel
-    if _INITIALIZED is False:
-        from pydantic import BaseModel
-
-        PydanticBaseModel = BaseModel
-        _INITIALIZED = True
+    _lazy.ensure(_do_init)
 
     data_to_process = data
     if strict:

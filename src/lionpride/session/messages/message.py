@@ -1,7 +1,7 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Any
+from typing import Any, cast
 
 from pydantic import field_serializer, field_validator
 
@@ -113,4 +113,4 @@ class Message(Node):
         current["metadata"] = metadata
         if sender is not None:
             current["sender"] = sender
-        return self.from_dict(current)
+        return cast("Message", self.from_dict(current))

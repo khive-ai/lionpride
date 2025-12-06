@@ -296,10 +296,10 @@ class ClaudeSession:
 
 
 def _extract_summary(session: ClaudeSession) -> dict[str, Any]:
-    tool_counts = {}
-    tool_details = []
-    file_operations = {"reads": [], "writes": [], "edits": []}
-    key_actions = []
+    tool_counts: dict[str, int] = {}
+    tool_details: list[dict[str, Any]] = []
+    file_operations: dict[str, list[str]] = {"reads": [], "writes": [], "edits": []}
+    key_actions: list[str] = []
 
     # Process tool uses from the clean materialized view
     for tool_use in session.tool_uses:
@@ -397,6 +397,9 @@ async def _ndjson_from_cli(request: ClaudeCodeRequest):
     """
     from lionpride.libs.string_handlers import fuzzy_json
 
+    if CLAUDE_CLI is None:
+        raise RuntimeError("Claude CLI not found. Please install @anthropic-ai/claude-code")
+
     workspace = request.cwd()
     workspace.mkdir(parents=True, exist_ok=True)
 
@@ -411,6 +414,9 @@ async def _ndjson_from_cli(request: ClaudeCodeRequest):
     decoder = codecs.getincrementaldecoder("utf-8")()
     json_decoder = json.JSONDecoder()
     buffer: str = ""  # text buffer that may hold >1 JSON objects
+
+    if proc.stdout is None:
+        raise RuntimeError("Failed to capture stdout from Claude CLI")
 
     try:
         while True:
@@ -452,7 +458,9 @@ async def _ndjson_from_cli(request: ClaudeCodeRequest):
 
         # 4) propagate non-zero exit code
         if await proc.wait() != 0:
-            err = (await proc.stderr.read()).decode().strip()
+            err = ""
+            if proc.stderr is not None:
+                err = (await proc.stderr.read()).decode().strip()
             raise RuntimeError(err or "CLI exited non-zero")
 
     finally:
