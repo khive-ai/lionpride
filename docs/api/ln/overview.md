@@ -30,8 +30,6 @@ from lionpride.ln import (
     # Async call utilities
     alcall,
     bcall,
-    AlcallParams,
-    BcallParams,
 
     # Fuzzy matching and validation
     fuzzy_match_keys,
@@ -72,8 +70,6 @@ from lionpride.ln import (
 |----------|----------|---------|
 | [`alcall`](#alcall) | Async | Apply function to each list element asynchronously with retry/concurrency |
 | [`bcall`](#bcall) | Async | Process input in batches using alcall |
-| [`AlcallParams`](#alcallparams) | Async | Reusable parameter configurations for alcall |
-| [`BcallParams`](#bcallparams) | Async | Reusable parameter configurations for bcall |
 | [`fuzzy_match_keys`](#fuzzy_match_keys) | Fuzzy | Validate and correct dict keys using fuzzy matching |
 | [`fuzzy_validate_pydantic`](#fuzzy_validate_pydantic) | Fuzzy | Parse text/dict into Pydantic model with fuzzy parsing |
 | [`fuzzy_validate_mapping`](#fuzzy_validate_mapping) | Fuzzy | Validate any input into dict with expected keys |
@@ -148,35 +144,6 @@ async def bcall(
 ```
 
 **Yields**: `list[T | BaseException]` - Results for each batch
-
-**See**: [async_call.md](async_call.md) for detailed API reference
-
-### `AlcallParams`
-
-Reusable parameter dataclass for alcall with callable interface.
-
-```python
-@dataclass(slots=True, init=False, frozen=True)
-class AlcallParams(Params):
-    async def __call__(
-        self,
-        input_: list[Any],
-        func: Callable[..., T],
-        **kw: Any,
-    ) -> list[T]: ...
-```
-
-**See**: [async_call.md](async_call.md) for detailed API reference
-
-### `BcallParams`
-
-Reusable parameter dataclass for bcall (extends AlcallParams).
-
-```python
-@dataclass(slots=True, init=False, frozen=True)
-class BcallParams(AlcallParams):
-    batch_size: int
-```
 
 **See**: [async_call.md](async_call.md) for detailed API reference
 

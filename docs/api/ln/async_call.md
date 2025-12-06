@@ -309,7 +309,6 @@ results = await alcall(
 **See Also:**
 
 - `bcall()`: Batch processing wrapper using alcall
-- `AlcallParams`: Reusable parameter configuration object
 - `to_list()`: Input/output preprocessing utility
 
 ---
@@ -409,195 +408,6 @@ all_results = [
 **See Also:**
 
 - `alcall()`: Underlying function for batch processing
-- `BcallParams`: Reusable parameter configuration for bcall
-
----
-
-## Parameter Classes
-
-### `AlcallParams`
-
-Dataclass for reusable `alcall()` parameter configurations.
-
-**Signature:**
-
-```python
-from lionpride.ln import AlcallParams
-
-@dataclass(slots=True, init=False, frozen=True)
-class AlcallParams(Params):
-    # Input processing
-    input_flatten: bool
-    input_dropna: bool
-    input_unique: bool
-    input_flatten_tuple_set: bool
-
-    # Output processing
-    output_flatten: bool
-    output_dropna: bool
-    output_unique: bool
-    output_flatten_tuple_set: bool
-
-    # Retry and timeout
-    delay_before_start: float
-    retry_initial_delay: float
-    retry_backoff: float
-    retry_default: Any
-    retry_timeout: float
-    retry_attempts: int
-
-    # Concurrency and throttling
-    max_concurrent: int
-    throttle_period: float
-
-    # Additional kwargs
-    kw: dict[str, Any] = Unset
-
-    async def __call__(
-        self,
-        input_: list[Any],
-        func: Callable[..., T],
-        **kw: Any,
-    ) -> list[T]:
-        ...
-```
-
-**Attributes:**
-
-All fields correspond to `alcall()` parameters. See `alcall()` documentation for detailed parameter descriptions.
-
-**Methods:**
-
-#### `__call__()`
-
-Execute `alcall()` with configured parameters.
-
-**Parameters:**
-
-- `input_` (list[Any]): Items to process
-- `func` (Callable): Function to apply
-- `**kw` (Any): Override parameters (merged with configured parameters)
-
-**Returns:**
-
-- list[T]: Results from `alcall()`
-
-**Examples:**
-
-```python
-from lionpride.ln import AlcallParams
-from lionpride.types import Unset
-
-# Create reusable configuration
-api_config = AlcallParams(
-    max_concurrent=5,
-    retry_attempts=3,
-    retry_initial_delay=1,
-    retry_backoff=2,
-    retry_timeout=10,
-    throttle_period=0.2,
-    return_exceptions=True,
-    # Unset for unused parameters
-    input_flatten=Unset,
-    input_dropna=Unset,
-    # ... other fields
-)
-
-# Use configuration multiple times
-results1 = await api_config(urls1, fetch_data)
-results2 = await api_config(urls2, fetch_data)
-
-# Override parameters per call
-results3 = await api_config(
-    urls3,
-    fetch_data,
-    max_concurrent=10,  # Override default
-)
-
-# Access default kwargs
-default_kw = api_config.default_kw()
-# {'max_concurrent': 5, 'retry_attempts': 3, ...}
-```
-
-**Design Notes:**
-
-- **Frozen**: Immutable after creation (prevents accidental modification)
-- **Slots**: Memory-efficient attribute storage
-- **None Sentinel**: Uses `none_as_sentinel=True` for proper `None` vs `Unset` handling
-- **Callable**: Implements `__call__()` for function-like usage
-
----
-
-### `BcallParams`
-
-Dataclass for reusable `bcall()` parameter configurations. Extends `AlcallParams` with `batch_size`.
-
-**Signature:**
-
-```python
-from lionpride.ln import BcallParams
-
-@dataclass(slots=True, init=False, frozen=True)
-class BcallParams(AlcallParams):
-    batch_size: int
-
-    async def __call__(
-        self,
-        input_: list[Any],
-        func: Callable[..., T],
-        **kw: Any,
-    ) -> AsyncGenerator[list[T], None]:
-        ...
-```
-
-**Additional Attributes:**
-
-**batch_size** : int
-
-Number of items per batch. Must be positive integer.
-
-**Methods:**
-
-#### `__call__()`
-
-Execute `bcall()` with configured parameters.
-
-**Parameters:**
-
-- `input_` (list[Any]): Items to process
-- `func` (Callable): Function to apply
-- `**kw` (Any): Override parameters
-
-**Returns:**
-
-- AsyncGenerator[list[T], None]: Batch results generator
-
-**Examples:**
-
-```python
-from lionpride.ln import BcallParams
-
-# Create batch configuration
-batch_config = BcallParams(
-    batch_size=10,
-    max_concurrent=3,
-    retry_attempts=2,
-    # ... other AlcallParams fields
-)
-
-# Stream batch results
-async for batch in batch_config(urls, fetch_data):
-    process_batch(batch)
-
-# Override batch size per call
-async for batch in batch_config(urls, fetch_data, batch_size=20):
-    process_batch(batch)
-```
-
-**See Also:**
-
-- `AlcallParams`: Parent class with shared parameters
-- `bcall()`: Underlying batch processing function
 
 ---
 
@@ -764,41 +574,6 @@ async for batch in bcall(items, process_item, batch_size=50):
     print(f"Progress: {processed}/{total} ({processed/total*100:.1f}%)")
 ```
 
-### Reusable Configurations
-
-```python
-from lionpride.ln import AlcallParams, BcallParams
-from lionpride.types import Unset
-
-# Define configuration once
-api_params = AlcallParams(
-    max_concurrent=5,
-    retry_attempts=3,
-    retry_initial_delay=1,
-    retry_backoff=2,
-    throttle_period=0.2,
-    return_exceptions=True,
-    input_flatten=Unset,  # Unset unused params
-    # ... set all required fields
-)
-
-# Reuse across multiple calls
-results1 = await api_params(urls1, fetch_data)
-results2 = await api_params(urls2, fetch_data)
-results3 = await api_params(urls3, fetch_data, max_concurrent=10)  # Override
-
-# Batch configuration
-batch_params = BcallParams(
-    batch_size=50,
-    max_concurrent=5,
-    retry_attempts=2,
-    # ... other params
-)
-
-async for batch in batch_params(items, process_item):
-    handle_batch(batch)
-```
-
 ### Common Pitfalls
 
 #### Pitfall 1: Forgetting input_flatten for input_unique
@@ -899,16 +674,6 @@ Results maintain input order regardless of completion sequence because:
 3. **Failure Isolation**: Batch-level retry doesn't reprocess successful batches
 4. **Different Use Cases**: `alcall()` for bounded datasets, `bcall()` for large/unbounded
 
-### Why Parameter Dataclasses?
-
-`AlcallParams` and `BcallParams` provide reusable configurations because:
-
-1. **DRY Principle**: Define once, use many times
-2. **Type Safety**: Dataclass validation ensures parameter correctness
-3. **Immutability**: Frozen dataclasses prevent accidental modification
-4. **Override Flexibility**: `__call__(**kw)` allows per-call overrides
-5. **Documentation**: Explicit fields improve IDE autocomplete and type hints
-
 ### Why Support Both Sync and Async Functions?
 
 Automatic sync/async detection via `is_coro_func()` enables:
@@ -938,7 +703,7 @@ See [User Guides](../../user_guide/) including [API Design](../../user_guide/api
 
 ```python
 # Standard imports for ln.async_call examples
-from lionpride.ln import alcall, bcall, AlcallParams, BcallParams
+from lionpride.ln import alcall, bcall
 from lionpride.types import Unset
 ```
 
@@ -1103,41 +868,4 @@ failed_files = [
     for i, r in enumerate(results)
     if isinstance(r, Exception)
 ]
-```
-
-### Example 5: Reusable Configuration for Different Environments
-
-```python
-from lionpride.ln import AlcallParams
-from lionpride.types import Unset
-
-# Production config - strict retry and rate limits
-prod_config = AlcallParams(
-    max_concurrent=5,
-    retry_attempts=5,
-    retry_initial_delay=2,
-    retry_backoff=2,
-    retry_timeout=30,
-    throttle_period=0.2,
-    return_exceptions=False,  # Fail fast
-    input_flatten=Unset,
-    # ... set all fields
-)
-
-# Development config - fast iteration
-dev_config = AlcallParams(
-    max_concurrent=50,
-    retry_attempts=1,
-    retry_timeout=10,
-    throttle_period=0,
-    return_exceptions=True,  # Continue on errors
-    # ... set all fields
-)
-
-# Select config based on environment
-import os
-config = prod_config if os.getenv("ENV") == "prod" else dev_config
-
-# Use same code with different configs
-results = await config(items, process_item)
 ```
