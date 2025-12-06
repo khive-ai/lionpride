@@ -69,47 +69,6 @@ from lionpride.session.messages.content import (
 )
 
 # ===========================
-# Fixtures
-# ===========================
-
-
-@pytest.fixture
-def system_content():
-    """System message content."""
-    return SystemContent.create(system_message="You are a helpful assistant")
-
-
-@pytest.fixture
-def instruction_content():
-    """User instruction content."""
-    return InstructionContent.create(instruction="What is the capital of France?")
-
-
-@pytest.fixture
-def assistant_content():
-    """Assistant response content."""
-    return AssistantResponseContent.create(assistant_response="The capital is Paris.")
-
-
-@pytest.fixture
-def action_request_content():
-    """Action request content."""
-    return ActionRequestContent.create(function="get_weather", arguments={"city": "NYC"})
-
-
-@pytest.fixture
-def action_response_content():
-    """Action response content (success)."""
-    return ActionResponseContent.create(request_id="req_123", result={"temp": 72})
-
-
-@pytest.fixture
-def action_error_content():
-    """Action response content (error)."""
-    return ActionResponseContent.create(request_id="req_456", error="API timeout")
-
-
-# ===========================
 # Test: Role Inference
 # ===========================
 

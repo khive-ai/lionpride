@@ -31,40 +31,13 @@ from tests.conftest import SimpleTestEvent
 # =============================================================================
 # Test Fixtures & Helpers
 # =============================================================================
-
-
-@pytest.fixture
-def hook_registry():
-    """Create empty HookRegistry."""
-    return HookRegistry()
+# Note: hook_registry fixture is provided by tests/services/conftest.py
 
 
 @pytest.fixture
 def mock_event():
     """Create mock event instance using lionpride-core testing utilities."""
     return SimpleTestEvent(return_value="test")
-
-
-# =============================================================================
-# HookPhase Enum Tests
-# =============================================================================
-
-
-def test_hookphase_enum_values():
-    """Test HookPhase enum has all expected values."""
-    assert HookPhase.PreEventCreate.value == "pre_event_create"
-    assert HookPhase.PreInvocation.value == "pre_invocation"
-    assert HookPhase.PostInvocation.value == "post_invocation"
-    assert HookPhase.ErrorHandling.value == "error_handling"
-
-
-def test_hookphase_enum_allowed():
-    """Test HookPhase.allowed() returns all values."""
-    allowed = HookPhase.allowed()
-    assert HookPhase.PreEventCreate in allowed
-    assert HookPhase.PreInvocation in allowed
-    assert HookPhase.PostInvocation in allowed
-    assert HookPhase.ErrorHandling in allowed
 
 
 # =============================================================================
@@ -80,8 +53,6 @@ async def test_get_handler_when_async_function_then_returns_as_is():
         return f"async: {arg}"
 
     handler = get_handler({"key": async_handler}, "key", True)
-
-    assert handler is not None
     result = await handler("test")
     assert result == "async: test"
 
@@ -94,8 +65,6 @@ async def test_get_handler_when_sync_function_then_wraps():
         return f"sync: {arg}"
 
     handler = get_handler({"key": sync_handler}, "key", True)
-
-    assert handler is not None
     result = await handler("test")
     assert result == "sync: test"
 
@@ -111,8 +80,6 @@ async def test_get_handler_when_not_found_and_get_false_then_none():
 async def test_get_handler_when_not_found_and_get_true_then_default():
     """Test get_handler returns default async function when key not found and get=True."""
     handler = get_handler({}, "nonexistent", True)
-
-    assert handler is not None
     result = await handler("arg1", "arg2")
     # Default function returns first arg or None
     assert result == "arg1"

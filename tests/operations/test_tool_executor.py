@@ -11,7 +11,6 @@ Tests for:
 
 from unittest.mock import MagicMock
 
-import pytest
 from pydantic import BaseModel
 
 from lionpride.rules import ActionRequest, ActionResponse

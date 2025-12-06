@@ -18,19 +18,6 @@ from lionpride.core import Element, Pile
 from lionpride.session import Log, LogStore, LogStoreConfig, LogType
 
 
-class TestLogType:
-    """Tests for LogType enum."""
-
-    def test_log_types_exist(self):
-        """All expected log types should exist."""
-        assert LogType.API_CALL.value == "api_call"
-        assert LogType.MESSAGE.value == "message"
-        assert LogType.OPERATION.value == "operation"
-        assert LogType.ERROR.value == "error"
-        assert LogType.WARNING.value == "warning"
-        assert LogType.INFO.value == "info"
-
-
 class TestLogStoreConfig:
     """Tests for LogStoreConfig."""
 

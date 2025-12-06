@@ -25,7 +25,7 @@ from lionpride.services.types.backend import (
 from lionpride.services.types.hook import HookEvent, HookPhase, HookRegistry
 
 # =============================================================================
-# Test Fixtures
+# Test Fixtures & Mock Classes
 # =============================================================================
 
 
@@ -88,12 +88,6 @@ class MockServiceBackend(ServiceBackend):
             data=self.result_value,
             raw_response={"result": self.result_value},
         )
-
-
-@pytest.fixture
-def hook_registry():
-    """Create empty hook registry."""
-    return HookRegistry()
 
 
 @pytest.fixture

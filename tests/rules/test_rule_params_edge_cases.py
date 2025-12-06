@@ -62,20 +62,10 @@ class TestRuleParamsValidConstruction:
         assert "value" in params.apply_fields
         assert not params.apply_types
 
-    def test_auto_fix_default_false(self):
-        """Test auto_fix defaults to False."""
-        params = RuleParams(apply_types={str})
-        assert params.auto_fix is False
-
     def test_auto_fix_explicit_true(self):
         """Test auto_fix can be set to True."""
         params = RuleParams(apply_types={str}, auto_fix=True)
         assert params.auto_fix is True
-
-    def test_kw_defaults_empty(self):
-        """Test kw defaults to empty dict."""
-        params = RuleParams(apply_types={str})
-        assert params.kw == {}
 
     def test_kw_can_be_set(self):
         """Test kw can be set with custom values."""

@@ -106,7 +106,7 @@ import pytest
 # ==================== Fixtures ====================
 from conftest import TestElement, create_test_elements
 
-from lionpride.core import Element, Flow, Pile, Progression
+from lionpride.core import Element, Flow, Node, Pile, Progression
 from lionpride.errors import ExistsError, NotFoundError
 from lionpride.ln import to_dict
 
@@ -654,9 +654,10 @@ def test_flow_to_dict_with_exclude_set(flow):
 
 def test_flow_from_dict():
     """Test Flow deserialization from dict."""
-    # Create flow and serialize
-    f1 = Flow[TestElement, Progression](
-        items=[TestElement(value=i, name=f"item{i}") for i in range(3)],
+    # Use Node (production class) for serialization roundtrip tests
+    # TestElement's lion_class would be 'conftest.TestElement' which can't be imported
+    f1 = Flow[Node, Progression](
+        items=[Node(content={"value": i, "name": f"item{i}"}) for i in range(3)],
         name="test",
     )
     prog = Progression(name="prog1")
@@ -1305,9 +1306,9 @@ def test_flow_field_validator_with_list_of_elements():
 
 def test_flow_field_validator_with_list_of_dicts():
     """Test field validator with list[dict] deserialization (lines 112-122)."""
-    # Create serialized Flow dict that will go through deserialization path
-    item1 = TestElement(value=1, name="item1")
-    item2 = TestElement(value=2, name="item2")
+    # Use Node (production class) for serialization tests
+    item1 = Node(content={"value": 1, "name": "item1"})
+    item2 = Node(content={"value": 2, "name": "item2"})
 
     # Serialize items to dicts
     flow_dict = {
@@ -1318,13 +1319,13 @@ def test_flow_field_validator_with_list_of_dicts():
     }
 
     # Deserialize - field validator should handle list[dict]
-    flow = Flow[TestElement, Progression].from_dict(flow_dict)
+    flow = Flow[Node, Progression].from_dict(flow_dict)
 
     assert len(flow.items) == 2
     # Verify deserialized correctly
     for item in flow.items:
-        assert isinstance(item, Element)
-        assert hasattr(item, "value")
+        assert isinstance(item, Node)
+        assert "value" in item.content
 
 
 def test_flow_referential_integrity_validation_failure():

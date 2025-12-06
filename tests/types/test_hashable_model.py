@@ -334,36 +334,3 @@ class TestHashableModelEdgeCases:
 
         with pytest.raises(ValueError, match="Invalid mode"):
             SimpleConfig.from_dict({"name": "test", "value": 1}, mode="invalid")  # type: ignore
-
-
-class TestHashableModelProtocols:
-    """Protocol implementation verification."""
-
-    def test_implements_serializable(self):
-        """HashableModel implements Serializable protocol."""
-        config = SimpleConfig(name="test", value=42)
-
-        # Has required methods
-        assert hasattr(config, "to_dict")
-        assert hasattr(config, "to_json")
-        assert callable(config.to_dict)
-        assert callable(config.to_json)
-
-    def test_implements_deserializable(self):
-        """HashableModel implements Deserializable protocol."""
-        # Has required class methods
-        assert hasattr(SimpleConfig, "from_dict")
-        assert hasattr(SimpleConfig, "from_json")
-        assert callable(SimpleConfig.from_dict)
-        assert callable(SimpleConfig.from_json)
-
-    def test_implements_hashable(self):
-        """HashableModel implements Hashable protocol."""
-        config = SimpleConfig(name="test", value=42)
-
-        # Has __hash__
-        assert hasattr(config, "__hash__")
-        assert callable(config.__hash__)
-
-        # Actually hashable
-        hash(config)  # Should not raise

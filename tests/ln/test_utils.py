@@ -1,6 +1,8 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
+from datetime import UTC
+
 import pytest
 from hypothesis import (
     given,
@@ -26,11 +28,12 @@ class TestNowUtc:
 
     @pytest.mark.unit
     def test_now_utc_returns_datetime(self):
-        """Test now_utc returns datetime object."""
+        """Test now_utc returns datetime object with UTC timezone."""
+        from datetime import datetime, timezone
+
         result = now_utc()
-        assert result is not None
-        assert hasattr(result, "year")
-        assert hasattr(result, "month")
+        assert isinstance(result, datetime)
+        assert result.tzinfo == UTC
 
 
 # =============================================================================

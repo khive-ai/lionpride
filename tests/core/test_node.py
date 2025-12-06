@@ -110,7 +110,6 @@ from __future__ import annotations
 from uuid import UUID
 
 import pytest
-from conftest import TestElement
 from pydantic import BaseModel
 
 from lionpride.core.node import NODE_REGISTRY, Node
@@ -1669,25 +1668,26 @@ def test_node_content_element_not_in_registry():
     Expected:
         Content deserialized as custom Element via Element.from_dict() fallback
     """
-    # Use TestElement (NOT Node, so not in NODE_REGISTRY)
-    custom = TestElement(value=42, name="test_element")
+    # Use Progression (Element subclass, NOT Node, so not in NODE_REGISTRY)
+    from lionpride.core import Progression
+
+    custom = Progression(name="test_progression", order=[])
     custom_dict = custom.to_dict()
 
     # Verify lion_class present but NOT in NODE_REGISTRY
     lion_class = custom_dict.get("metadata", {}).get("lion_class")
     assert lion_class is not None
-    assert "TestElement" in lion_class
-    # TestElement is Element, not Node, so not auto-registered in NODE_REGISTRY
+    assert "Progression" in lion_class
+    # Progression is Element, not Node, so not auto-registered in NODE_REGISTRY
     assert lion_class not in NODE_REGISTRY
-    assert "TestElement" not in NODE_REGISTRY
+    assert "Progression" not in NODE_REGISTRY
 
     # Use as Node content - should trigger line 113 (Element.from_dict fallback)
     node = Node(content=custom_dict)
 
-    # Verify content deserialized as TestElement (via Element.from_dict)
-    assert isinstance(node.content, TestElement)
-    assert node.content.value == 42
-    assert node.content.name == "test_element"
+    # Verify content deserialized as Progression (via Element.from_dict)
+    assert isinstance(node.content, Progression)
+    assert node.content.name == "test_progression"
 
 
 def test_node_embedding_invalid_json_string():

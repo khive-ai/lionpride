@@ -50,7 +50,7 @@ import pytest
 from conftest import TestElement
 from pydantic import ValidationError
 
-from lionpride.core import Element
+from lionpride.core import Element, Node
 
 # Module-level test Element subclasses for polymorphic deserialization tests
 # (must be module-level so they can be dynamically imported via load_type_from_string)
@@ -969,16 +969,19 @@ class TestElementPolymorphicDeserialization:
 
     def test_polymorphic_with_full_qualified_name(self):
         """Should work with both short and fully qualified class names."""
-        obj = TestElement(value=42, name="test")
+        # Use Node (production class) to test polymorphic deserialization
+        # since it has a proper import path for lion_class resolution
+        obj = Node(content={"value": 42})
         data = obj.to_dict(mode="python")
 
         # Should contain fully qualified name
         assert "." in data["metadata"]["lion_class"]
-        assert data["metadata"]["lion_class"].endswith("TestElement")
+        assert data["metadata"]["lion_class"].endswith("Node")
 
         # Should deserialize correctly
         restored = Element.from_dict(data)
-        assert isinstance(restored, TestElement)
+        assert isinstance(restored, Node)
+        assert restored.content == {"value": 42}
 
     def test_polymorphic_unknown_class_error(self):
         """Should raise error for unknown lion_class."""
@@ -1008,13 +1011,12 @@ class TestElementPolymorphicDeserialization:
 
     def test_polymorphic_preserves_metadata(self):
         """Should preserve custom metadata during polymorphic deserialization."""
-        elem = TestElement(
-            value=42, name="important", metadata={"priority": "high", "owner": "alice"}
-        )
-        data = elem.to_dict(mode="python")
+        # Use Node (production class) for polymorphic test
+        node = Node(content={"value": 42}, metadata={"priority": "high", "owner": "alice"})
+        data = node.to_dict(mode="python")
 
         restored = Element.from_dict(data)
-        assert isinstance(restored, TestElement)
+        assert isinstance(restored, Node)
         assert restored.metadata["priority"] == "high"
         assert restored.metadata["owner"] == "alice"
         # lion_class should be removed from metadata after deserialization
@@ -1023,34 +1025,30 @@ class TestElementPolymorphicDeserialization:
     def test_polymorphic_recursion_prevention(self):
         """Should prevent infinite recursion when subclass inherits from_dict.
 
-        Problem: TestElement doesn't override from_dict, so it inherits Element.from_dict.
-        Without recursion detection: Element.from_dict sees lion_class="...TestElement",
-        loads TestElement, calls TestElement.from_dict, which is Element.from_dict,
-        which loads TestElement again → infinite loop.
+        Problem: Subclasses that don't override from_dict inherit Element.from_dict.
+        Without recursion detection: Element.from_dict sees lion_class, loads subclass,
+        calls subclass.from_dict (which is Element.from_dict), infinite loop.
 
         Solution: Compare target_cls.from_dict.__func__ vs cls.from_dict.__func__. If
         same implementation, use model_validate() directly (skip from_dict recursion).
-
-        Edge case: Subclasses that override from_dict won't trigger this (different __func__).
-        Only affects subclasses that inherit from_dict without changes.
         """
-        obj = TestElement(value=42, name="test")
+        # Use Node which inherits from_dict from Element
+        obj = Node(content={"value": 42})
         data = obj.to_dict(mode="python")
 
         # Should use model_validate instead of recursing
         restored = Element.from_dict(data)
-        assert isinstance(restored, TestElement)
-        assert restored.value == 42
+        assert isinstance(restored, Node)
+        assert restored.content == {"value": 42}
 
     def test_polymorphic_no_lion_class_uses_target_class(self):
         """Without lion_class, should use the calling class."""
-        data = {"value": 42, "name": "test"}  # No lion_class in metadata
+        data = {"content": {"value": 42}}  # No lion_class in metadata
 
-        # Calling TestElement.from_dict should create TestElement
-        restored = TestElement.from_dict(data)
-        assert isinstance(restored, TestElement)
-        assert restored.value == 42
-        assert restored.name == "test"
+        # Calling Node.from_dict should create Node
+        restored = Node.from_dict(data)
+        assert isinstance(restored, Node)
+        assert restored.content == {"value": 42}
 
 
 class TestElementSecurity:

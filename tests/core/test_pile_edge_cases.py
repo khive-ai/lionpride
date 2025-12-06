@@ -10,20 +10,9 @@ tested in tests/core/test_pile.py. This file covers edge cases only.
 import concurrent.futures
 import threading
 
-from lionpride.core import Element, Pile
+from conftest import TestElement, create_test_elements
 
-
-class SampleElement(Element):
-    """Simple Element subclass for testing."""
-
-    value: int = 0
-    name: str = ""
-
-
-def create_test_elements(n: int) -> list[SampleElement]:
-    """Create n unique test elements."""
-    return [SampleElement(value=i, name=f"elem_{i}") for i in range(n)]
-
+from lionpride.core import Node, Pile
 
 # =============================================================================
 # Single-Item Edge Cases (unique - tests boundary of 1 item)
@@ -35,7 +24,7 @@ class TestSingleItemPile:
 
     def test_remove_only_item_leaves_valid_empty_pile(self):
         """Removing the only item should leave valid empty pile state."""
-        item = SampleElement(value=42)
+        item = TestElement(value=42)
         pile = Pile(items=[item])
         pile.remove(item.id)
 
@@ -102,11 +91,11 @@ class TestIncludePreservesOriginal:
         This is a critical semantic test: include() is idempotent and should
         preserve the FIRST item added, not silently update it.
         """
-        original = SampleElement(value=42, name="original")
+        original = TestElement(value=42, name="original")
         pile = Pile(items=[original])
 
         # Create item with SAME ID but different data
-        modified = SampleElement(value=999, name="modified", id=original.id)
+        modified = TestElement(value=999, name="modified", id=original.id)
         pile.include(modified)
 
         # Original should be preserved
@@ -126,7 +115,7 @@ class TestThreadSafetyStress:
 
     def test_concurrent_add_remove_same_items_many_iterations(self):
         """Concurrent add/remove of same items across many iterations."""
-        pile: Pile[SampleElement] = Pile()
+        pile: Pile[TestElement] = Pile()
         items = create_test_elements(10)
         errors: list[tuple[str, Exception]] = []
         lock = threading.Lock()
@@ -173,7 +162,7 @@ class TestSerializationEdgeCases:
 
     def test_empty_pile_with_metadata_roundtrip(self):
         """Empty pile with metadata should roundtrip correctly."""
-        pile: Pile[SampleElement] = Pile()
+        pile: Pile[TestElement] = Pile()
         pile.metadata["custom_key"] = "custom_value"
         pile.metadata["nested"] = {"deep": "data"}
 
@@ -186,8 +175,9 @@ class TestSerializationEdgeCases:
 
     def test_pile_with_progression_name_roundtrip(self):
         """Pile with custom progression name should preserve it."""
-        items = create_test_elements(3)
-        pile: Pile[SampleElement] = Pile(items=items)
+        # Use Node (production class) for serialization roundtrip tests
+        items = [Node(content={"value": i}) for i in range(3)]
+        pile: Pile[Node] = Pile(items=items)
         pile._progression.name = "custom_order"
 
         data = pile.to_dict(mode="json")
