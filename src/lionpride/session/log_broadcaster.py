@@ -342,14 +342,12 @@ class S3LogSubscriber(LogSubscriber):
         if aws_access_key_id_env:
             resolved_access_key = os.environ.get(aws_access_key_id_env)
             if not resolved_access_key:
-                logger.warning(f"Environment variable '{aws_access_key_id_env}' not set or empty")
+                logger.warning("AWS access key environment variable not set or empty")
 
         if aws_secret_access_key_env:
             resolved_secret_key = os.environ.get(aws_secret_access_key_env)
             if not resolved_secret_key:
-                logger.warning(
-                    f"Environment variable '{aws_secret_access_key_env}' not set or empty"
-                )
+                logger.warning("AWS secret key environment variable not set or empty")
 
         # Fall back to direct params with deprecation warning
         if aws_access_key_id and not resolved_access_key:
