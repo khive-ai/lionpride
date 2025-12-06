@@ -24,6 +24,17 @@ from .hook import HookBroadcaster, HookEvent, HookPhase
 logger = logging.getLogger(__name__)
 
 
+# Module-level cache for schema field keys (keyed by class)
+_SCHEMA_FIELD_KEYS_CACHE: dict[type, set[str]] = {}
+
+
+def _get_schema_field_keys(cls: type) -> set[str]:
+    """Get cached schema field keys for validation."""
+    if cls not in _SCHEMA_FIELD_KEYS_CACHE:
+        _SCHEMA_FIELD_KEYS_CACHE[cls] = set(cls.model_json_schema().get("properties", {}).keys())
+    return _SCHEMA_FIELD_KEYS_CACHE[cls]
+
+
 class ServiceConfig(HashableModel):
     provider: str = Field(..., min_length=4, max_length=50)
     name: str = Field(..., min_length=4, max_length=100)
@@ -37,7 +48,7 @@ class ServiceConfig(HashableModel):
     @model_validator(mode="before")
     def _validate_kwargs(cls, data: dict):  # noqa: N805
         kwargs = data.pop("kwargs", {})
-        field_keys = list(cls.model_json_schema().get("properties", {}).keys())
+        field_keys = _get_schema_field_keys(cls)
         for k in list(data.keys()):
             if k not in field_keys:
                 kwargs[k] = data.pop(k)
