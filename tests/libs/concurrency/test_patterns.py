@@ -14,6 +14,18 @@ from lionpride.libs.concurrency import (
     retry,
 )
 
+# Optional hypothesis import for property-based testing
+try:
+    from hypothesis import (
+        given,
+        settings,
+        strategies as st,
+    )
+
+    HAS_HYPOTHESIS = True
+except ImportError:
+    HAS_HYPOTHESIS = False
+
 # Documentation: bounded_map applies func with concurrency limit. retry uses exponential
 # backoff with deadline awareness. gather/race coordinate concurrent execution.
 
@@ -482,3 +494,24 @@ async def test_retry_deadline_expired_immediately(anyio_backend):
 
     # Verify we made at least one attempt
     assert calls["n"] >= 1
+
+
+# Property-based tests (requires hypothesis)
+@pytest.mark.skipif(not HAS_HYPOTHESIS, reason="hypothesis not installed")
+@pytest.mark.anyio
+@given(
+    values=st.lists(st.integers(), max_size=50),
+    limit=st.integers(min_value=1, max_value=10),
+)
+@settings(max_examples=20, deadline=None)  # deadline=None is crucial for async tests
+async def test_bounded_map_preserves_order_property(anyio_backend, values, limit):
+    """Property-based test that bounded_map preserves order."""
+
+    async def echo(x):
+        # Use a near-zero sleep to ensure the async machinery is engaged
+        # without slowing down the tests.
+        await anyio.sleep(0)
+        return x
+
+    out = await bounded_map(echo, values, limit=limit)
+    assert out == values

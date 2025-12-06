@@ -3,6 +3,8 @@
 
 """Comprehensive tests for rate_limiter.py to achieve 100% coverage."""
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
 from lionpride.services.utilities.rate_limiter import RateLimitConfig, TokenBucket
@@ -151,34 +153,50 @@ class TestTokenBucket:
     @pytest.mark.asyncio
     async def test_refill_increases_tokens(self):
         """Test that refill increases token count over time."""
-        config = RateLimitConfig(capacity=10, refill_rate=10.0, initial_tokens=0)
-        bucket = TokenBucket(config)
+        # Use time mocking to avoid flaky sleep-based tests
+        mock_time = [0.0]  # Mutable container for time
 
-        # Manually trigger refill by calling _refill indirectly via acquire
-        import asyncio
+        def get_mock_time():
+            return mock_time[0]
 
-        await asyncio.sleep(0.5)  # Wait 0.5s for refill
+        with patch(
+            "lionpride.services.utilities.rate_limiter.current_time", side_effect=get_mock_time
+        ):
+            config = RateLimitConfig(capacity=10, refill_rate=10.0, initial_tokens=0)
+            bucket = TokenBucket(config)
 
-        result = await bucket.try_acquire(tokens=1)
-        # After 0.5s with 10 tokens/s rate, should have ~5 tokens
-        assert result is True
+            # Simulate 0.5 seconds passing
+            mock_time[0] = 0.5
+
+            result = await bucket.try_acquire(tokens=1)
+            # After 0.5s with 10 tokens/s rate, should have 5 tokens
+            assert result is True
+            # After acquiring 1, should have ~4 tokens
+            assert 3.9 <= bucket.tokens <= 4.1
 
     @pytest.mark.asyncio
     async def test_refill_respects_capacity(self):
         """Test that refill doesn't exceed capacity."""
-        config = RateLimitConfig(capacity=10, refill_rate=100.0, initial_tokens=8)
-        bucket = TokenBucket(config)
+        # Use time mocking to avoid flaky sleep-based tests
+        mock_time = [0.0]
 
-        import asyncio
+        def get_mock_time():
+            return mock_time[0]
 
-        await asyncio.sleep(0.5)  # Wait for refill (would add 50 tokens if unlimited)
+        with patch(
+            "lionpride.services.utilities.rate_limiter.current_time", side_effect=get_mock_time
+        ):
+            config = RateLimitConfig(capacity=10, refill_rate=100.0, initial_tokens=8)
+            bucket = TokenBucket(config)
 
-        # Access tokens after refill via try_acquire
-        result = await bucket.try_acquire(tokens=1)
-        assert result is True
-        # Should be capped at capacity (10), so after acquiring 1, should have ~9
-        assert bucket.tokens <= 9.0
-        assert bucket.tokens >= 8.0  # At least the original amount minus acquired
+            # Simulate 0.5 seconds passing (would add 50 tokens if unlimited)
+            mock_time[0] = 0.5
+
+            # Access tokens after refill via try_acquire
+            result = await bucket.try_acquire(tokens=1)
+            assert result is True
+            # Should be capped at capacity (10), so after acquiring 1, should have 9
+            assert bucket.tokens == 9.0
 
     @pytest.mark.asyncio
     async def test_to_dict(self):
@@ -297,18 +315,27 @@ class TestTokenBucket:
     @pytest.mark.asyncio
     async def test_reset_updates_last_refill_time(self):
         """Test that reset() updates last_refill timestamp."""
-        config = RateLimitConfig(capacity=10, refill_rate=1.0, initial_tokens=5)
-        bucket = TokenBucket(config)
+        # Use time mocking to avoid flaky sleep-based tests
+        mock_time = [0.0]
 
-        import asyncio
+        def get_mock_time():
+            return mock_time[0]
 
-        await asyncio.sleep(0.1)  # Let some time pass
+        with patch(
+            "lionpride.services.utilities.rate_limiter.current_time", side_effect=get_mock_time
+        ):
+            config = RateLimitConfig(capacity=10, refill_rate=1.0, initial_tokens=5)
+            bucket = TokenBucket(config)
 
-        old_last_refill = bucket.last_refill
-        await bucket.reset()
+            old_last_refill = bucket.last_refill  # Should be 0.0
 
-        # last_refill should be updated to current time
-        assert bucket.last_refill >= old_last_refill
+            # Simulate time passing
+            mock_time[0] = 0.1
+            await bucket.reset()
+
+            # last_refill should be updated to current time (0.1)
+            assert bucket.last_refill == 0.1
+            assert bucket.last_refill > old_last_refill
 
     @pytest.mark.asyncio
     async def test_release_returns_tokens_to_bucket(self):

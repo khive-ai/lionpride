@@ -10,63 +10,16 @@ Focus areas:
 - Stateless behavior (no message persistence)
 """
 
-from dataclasses import dataclass
 from unittest.mock import AsyncMock
 
 import pytest
+from conftest import MockNormalizedResponse
 
 from lionpride import Event, EventStatus
 from lionpride.errors import ConfigurationError, ExecutionError, ValidationError
 from lionpride.operations.operate.generate import generate
 from lionpride.operations.operate.types import GenerateParams
-from lionpride.session import Session
 from lionpride.session.messages import Message
-
-
-@dataclass
-class MockNormalizedResponse:
-    """Mock NormalizedResponse for testing."""
-
-    data: str = "mock response text"
-    raw_response: dict = None
-    metadata: dict = None
-
-    def __post_init__(self):
-        if self.raw_response is None:
-            self.raw_response = {"id": "mock-id", "choices": [{"message": {"content": self.data}}]}
-        if self.metadata is None:
-            self.metadata = {"usage": {"prompt_tokens": 10, "completion_tokens": 20}}
-
-
-@pytest.fixture
-def mock_model():
-    """Create a mock iModel for testing without API calls."""
-    from lionpride.services.providers.oai_chat import OAIChatEndpoint
-    from lionpride.services.types.imodel import iModel
-
-    # Create mock endpoint
-    endpoint = OAIChatEndpoint(config=None, name="mock_model", api_key="mock-key")
-    model = iModel(backend=endpoint)
-
-    async def mock_invoke(**kwargs):
-        class MockCalling(Event):
-            def __init__(self):
-                super().__init__()
-                self.status = EventStatus.COMPLETED
-                self.execution.response = MockNormalizedResponse()
-
-        return MockCalling()
-
-    object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_invoke))
-    return model
-
-
-@pytest.fixture
-def session_with_model(mock_model):
-    """Create session with registered mock model."""
-    session = Session()
-    session.services.register(mock_model, update=True)
-    return session, mock_model
 
 
 class TestGenerateValidation:

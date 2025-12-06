@@ -7,6 +7,7 @@ from functools import partial
 import anyio
 import pytest
 
+import lionpride.libs.concurrency as concurrency_module
 from lionpride.libs.concurrency import current_time, is_coro_func, run_sync, sleep
 
 
@@ -272,3 +273,42 @@ class TestSleep:
 
         # task2 should complete first despite being started second
         assert results == ["task2", "task1"]
+
+
+class TestPublicExports:
+    """Tests for module public exports."""
+
+    def test_public_exports_exist(self):
+        """Verify all expected public symbols are exported from the concurrency module."""
+        expected = {
+            "CancelScope",
+            "fail_after",
+            "move_on_after",
+            "fail_at",
+            "move_on_at",
+            "effective_deadline",
+            "get_cancelled_exc_class",
+            "is_cancelled",
+            "shield",
+            "TaskGroup",
+            "create_task_group",
+            "Lock",
+            "Semaphore",
+            "CapacityLimiter",
+            "Queue",
+            "PriorityQueue",
+            "QueueEmpty",
+            "QueueFull",
+            "gather",
+            "race",
+            "bounded_map",
+            "retry",
+            "track_resource",
+            "untrack_resource",
+            "LeakInfo",
+            "LeakTracker",
+            "ConcurrencyEvent",
+            "ExceptionGroup",
+        }
+        for name in expected:
+            assert hasattr(concurrency_module, name), f"missing export: {name}"

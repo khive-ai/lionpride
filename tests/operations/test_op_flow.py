@@ -14,7 +14,6 @@ import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
-from pydantic import BaseModel, Field
 
 from lionpride import Edge, EventStatus, Graph
 from lionpride.operations import Builder, flow

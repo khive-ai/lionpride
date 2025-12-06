@@ -11,7 +11,6 @@ import pytest
 from lionpride import Event, EventStatus
 from lionpride.operations.operate.interpret import interpret
 from lionpride.operations.operate.types import InterpretParams
-from lionpride.session import Session
 
 
 @dataclass

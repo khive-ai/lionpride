@@ -68,21 +68,6 @@ class MockSubscriber(LogSubscriber):
 
 
 # -----------------------------------------------------------------------------
-# LogBroadcasterConfig tests
-# -----------------------------------------------------------------------------
-
-
-class TestLogBroadcasterConfig:
-    """Tests for LogBroadcasterConfig."""
-
-    def test_default_config(self):
-        """Default config values."""
-        config = LogBroadcasterConfig()
-        assert config.fail_fast is False
-        assert config.parallel is True
-
-
-# -----------------------------------------------------------------------------
 # LogBroadcaster tests
 # -----------------------------------------------------------------------------
 

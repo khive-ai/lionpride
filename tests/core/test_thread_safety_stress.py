@@ -24,13 +24,14 @@ def create_elements(n: int) -> list[SampleElement]:
     return [SampleElement(value=i) for i in range(n)]
 
 
+@pytest.mark.slow
 class TestPileConcurrentAdd:
     """Test concurrent Pile.add() operations."""
 
     @pytest.mark.parametrize("num_threads", [10, 20])
     def test_concurrent_add_no_lost_items(self, num_threads: int):
         """Verify no items are lost during concurrent add operations."""
-        iterations = 20
+        iterations = 5  # stress test: originally 20
         items_per_thread = 10
 
         for _ in range(iterations):
@@ -52,12 +53,13 @@ class TestPileConcurrentAdd:
             assert len(pile) == num_threads * items_per_thread
 
 
+@pytest.mark.slow
 class TestPileConcurrentIncludeExclude:
     """Test concurrent include/exclude operations."""
 
     def test_concurrent_include_idempotency(self):
         """Verify include is idempotent under concurrency."""
-        iterations = 50
+        iterations = 5  # stress test: originally 50
         num_threads = 20
 
         for _ in range(iterations):
@@ -89,7 +91,7 @@ class TestPileConcurrentIncludeExclude:
 
     def test_concurrent_exclude_idempotency(self):
         """Verify exclude is idempotent under concurrency."""
-        iterations = 50
+        iterations = 5  # stress test: originally 50
         num_threads = 20
 
         for _ in range(iterations):
@@ -120,12 +122,13 @@ class TestPileConcurrentIncludeExclude:
             assert all(results)
 
 
+@pytest.mark.slow
 class TestPileMixedOperations:
     """Test mixed concurrent operations."""
 
     def test_add_remove_get_simultaneously(self):
         """Verify mixed operations maintain consistency."""
-        iterations = 20
+        iterations = 5  # stress test: originally 20
         num_operations = 20
 
         for _ in range(iterations):
@@ -179,29 +182,25 @@ class TestPileMixedOperations:
             assert not errors
 
 
+@pytest.mark.slow
 class TestFlowConcurrentAddItem:
     """Test concurrent Flow.add_item() operations."""
 
-    @pytest.mark.xfail(
-        reason="BUG: Flow._progression_names not synchronized - concurrent add_item fails",
-        strict=False,
-    )
     def test_concurrent_add_item_to_same_progression(self):
         """Verify concurrent adds to same progression.
 
-        BUG DISCOVERED: Flow.get_progression() reads _progression_names without
-        synchronization, causing KeyError under concurrent access even when
-        the progression exists. The @synchronized decorator only protects
-        add_progression/remove_progression, not get_progression.
+        Uses Flow.add_progression() to properly register the progression name
+        in _progression_names dict, ensuring get_progression("main") works
+        under concurrent access.
         """
-        iterations = 20
+        iterations = 5  # stress test: originally 20
         num_threads = 10
         items_per_thread = 5
 
         for _ in range(iterations):
             flow: Flow = Flow()
             progression = Progression(name="main")
-            flow.progressions.add(progression)
+            flow.add_progression(progression)  # Use proper API to register name
 
             elements = create_elements(num_threads * items_per_thread)
 

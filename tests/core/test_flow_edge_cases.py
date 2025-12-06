@@ -12,16 +12,10 @@ from __future__ import annotations
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
-from lionpride.core import Element, Flow, Progression
+from conftest import TestElement
+
+from lionpride.core import Flow, Progression
 from lionpride.errors import ExistsError
-
-
-class SampleElement(Element):
-    """Simple Element subclass for testing."""
-
-    value: int = 0
-    name: str = ""
-
 
 # =============================================================================
 # Progression Name Conflicts (unique - None names, name reuse after removal)
@@ -33,7 +27,7 @@ class TestProgressionNameConflicts:
 
     def test_multiple_progressions_with_none_name_allowed(self):
         """Multiple progressions with name=None are allowed (not indexed by name)."""
-        flow = Flow[SampleElement, Progression]()
+        flow = Flow[TestElement, Progression]()
         prog1 = Progression(name=None, order=[])
         prog2 = Progression(name=None, order=[])
 
@@ -47,7 +41,7 @@ class TestProgressionNameConflicts:
 
     def test_remove_progression_frees_name_for_reuse(self):
         """After removing progression, its name can be reused."""
-        flow = Flow[SampleElement, Progression]()
+        flow = Flow[TestElement, Progression]()
         prog1 = Progression(name="reusable", order=[])
         flow.add_progression(prog1)
 
@@ -69,7 +63,7 @@ class TestConcurrentNameConflicts:
 
     def test_concurrent_add_same_name_only_one_wins(self):
         """Concurrent additions with same name: exactly one succeeds."""
-        flow = Flow[SampleElement, Progression]()
+        flow = Flow[TestElement, Progression]()
         success_count = [0]
         failure_count = [0]
         lock = threading.Lock()
@@ -101,11 +95,11 @@ class TestRemoveProgressionConsistency:
 
     def test_remove_by_name_and_uuid_same_internal_state(self):
         """Removing by name vs UUID should produce identical internal state."""
-        flow1 = Flow[SampleElement, Progression]()
+        flow1 = Flow[TestElement, Progression]()
         prog1 = Progression(name="test", order=[])
         flow1.add_progression(prog1)
 
-        flow2 = Flow[SampleElement, Progression]()
+        flow2 = Flow[TestElement, Progression]()
         prog2 = Progression(name="test", order=[])
         flow2.add_progression(prog2)
 
@@ -129,8 +123,8 @@ class TestSerializationOrderPreservation:
 
     def test_roundtrip_preserves_non_sequential_order(self):
         """Serialization preserves exact order, not just membership."""
-        flow = Flow[SampleElement, Progression](name="order_test")
-        items = [SampleElement(value=i, name=f"item{i}") for i in range(10)]
+        flow = Flow[TestElement, Progression](name="order_test")
+        items = [TestElement(value=i, name=f"item{i}") for i in range(10)]
         for item in items:
             flow.items.add(item)
 
@@ -147,8 +141,8 @@ class TestSerializationOrderPreservation:
 
     def test_roundtrip_items_in_multiple_progressions(self):
         """Same item can be in multiple progressions after roundtrip."""
-        flow = Flow[SampleElement, Progression](name="multi_prog")
-        items = [SampleElement(value=i, name=f"item{i}") for i in range(5)]
+        flow = Flow[TestElement, Progression](name="multi_prog")
+        items = [TestElement(value=i, name=f"item{i}") for i in range(5)]
         for item in items:
             flow.items.add(item)
 
