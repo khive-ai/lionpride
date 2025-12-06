@@ -483,7 +483,7 @@ class iModel(Element):  # noqa: N801
         if not isinstance(v, dict):
             raise ValueError("backend must be a dict or ServiceBackend instance")
 
-        from lionpride import Element
+        from lionpride.core import Element
 
         backend = Element.from_dict(v)  # Polymorphic type restoration
 

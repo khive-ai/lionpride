@@ -10,7 +10,7 @@ from typing import Any, Self, get_origin, get_type_hints
 
 from pydantic import Field, field_validator, model_validator
 
-from lionpride import concurrency, schema_handlers
+from lionpride.libs import concurrency, schema_handlers
 
 from .backend import Calling, NormalizedResponse, ServiceBackend, ServiceConfig
 
