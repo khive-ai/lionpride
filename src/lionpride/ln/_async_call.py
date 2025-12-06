@@ -6,7 +6,6 @@
 Refactored for reduced cyclomatic complexity (33 -> <15) per #116.
 """
 
-import threading
 from collections.abc import AsyncGenerator, Callable
 from typing import Any, ParamSpec, TypeVar
 
@@ -22,14 +21,14 @@ from lionpride.libs.concurrency import (
 )
 from lionpride.types import Unset, not_sentinel
 
+from ._lazy_init import LazyInit
 from ._to_list import to_list
 
 T = TypeVar("T")
 P = ParamSpec("P")
 
-_INITIALIZED = False
+_lazy = LazyInit()
 _MODEL_LIKE = None
-_INIT_LOCK = threading.RLock()
 
 
 __all__ = (
@@ -38,18 +37,17 @@ __all__ = (
 )
 
 
+def _do_init() -> None:
+    """Initialize Pydantic model type detection."""
+    global _MODEL_LIKE
+    from pydantic import BaseModel
+
+    _MODEL_LIKE = (BaseModel,)
+
+
 def _ensure_initialized() -> None:
     """Lazy initialization of Pydantic model type detection."""
-    global _INITIALIZED, _MODEL_LIKE
-    if _INITIALIZED:
-        return
-    with _INIT_LOCK:
-        if _INITIALIZED:
-            return
-        from pydantic import BaseModel
-
-        _MODEL_LIKE = (BaseModel,)
-        _INITIALIZED = True
+    _lazy.ensure(_do_init)
 
 
 def _validate_func(func: Any) -> Callable:
