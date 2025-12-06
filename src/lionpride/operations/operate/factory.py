@@ -57,6 +57,8 @@ async def operate(
     if params._is_sentinel(params.generate):
         raise ValidationError("operate requires 'generate' params")
 
+    # Type narrowing - generate is not None after validation
+    assert params.generate is not None
     gen_params = params.generate
 
     if params._is_sentinel(gen_params.imodel) and session.default_generate_model is None:

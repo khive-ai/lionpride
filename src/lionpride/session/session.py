@@ -279,12 +279,18 @@ class Session(Element):
                 raise ValueError("system must be Message or UUID")
             self.conversations.add_item(system)
 
+        # Convert Message objects to UUIDs for the order list
+        order: list[UUID] = []
+        if messages:
+            for msg in messages:
+                order.append(msg.id if isinstance(msg, Message) else msg)
+
         branch = Branch(
             session_id=self.id,
             name=name or f"branch_{len(self.branches)}",
             capabilities=capabilities or set(),
             resources=resources or set(),
-            order=list(messages) if messages else [],
+            order=order,
         )
 
         if system is not None:
@@ -471,7 +477,9 @@ class Session(Element):
             KeyError: If operation not registered.
         """
         resolved = self._resolve_branch(branch)
-        op = Operation(operation_type=operation_type, parameters=params)
+        op = Operation(
+            operation_type=operation_type, parameters=params, timeout=None, streaming=False
+        )
         op.bind(self, resolved)
         await op.invoke()
         return op

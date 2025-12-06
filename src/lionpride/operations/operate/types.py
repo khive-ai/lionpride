@@ -96,7 +96,7 @@ class GenerateParams(Params):
     instruction: str | Message
     """Instruction text or Message (required)."""
 
-    imodel: iModel | str = None
+    imodel: iModel | str | None = None
     """Model to use for generation."""
 
     context: dict[str, Any] | None = None
@@ -133,9 +133,12 @@ class GenerateParams(Params):
             return self.instruction
 
         # Create Message from string instruction
+        # Note: context here is dict but InstructionContent.create expects list
+        # We wrap the context dict in a list if present
+        context_list = [self.context] if self.context is not None else None
         content = InstructionContent.create(
             instruction=self.instruction,
-            context=self.context,
+            context=context_list,
             images=self.images,
             image_detail=self.image_detail,
             tool_schemas=self.tool_schemas,
@@ -154,13 +157,13 @@ class ParseParams(Params):
 
     _config = ModelConfig(none_as_sentinel=True, empty_as_sentinel=True)
 
-    text: str = None
+    text: str | None = None
     """Raw text to parse."""
 
     target_keys: list[str] = field(default_factory=list)
     """Expected keys for fuzzy matching."""
 
-    imodel: iModel | str = None
+    imodel: iModel | str | None = None
     """Model for LLM reparse fallback."""
 
     similarity_threshold: float = 0.85
@@ -213,10 +216,10 @@ class InterpretParams(Params):
 
     _config = ModelConfig(none_as_sentinel=True, empty_as_sentinel=True)
 
-    text: str = None
+    text: str | None = None
     """Raw user instruction to refine."""
 
-    imodel: iModel | str = None
+    imodel: iModel | str | None = None
     """Model to use for interpretation."""
 
     domain: str = "general"
@@ -253,10 +256,10 @@ class CommunicateParams(Params):
     _config = ModelConfig(none_as_sentinel=True, empty_as_sentinel=True)
 
     # Composed params (1 level deep)
-    generate: GenerateParams = None
+    generate: GenerateParams | None = None
     """Generate parameters."""
 
-    parse: ParseParams = None
+    parse: ParseParams | None = None
     """Parse parameters."""
 
     # Validation (IPU pipeline)

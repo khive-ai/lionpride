@@ -210,7 +210,9 @@ class Endpoint(ServiceBackend):
             raise ValueError("Config must be a dict or EndpointConfig instance")
 
         # Initialize ServiceBackend with config and resilience components
-        super().__init__(
+        # Endpoint defines circuit_breaker and retry_config as class attributes
+        # mypy doesn't understand this pattern, so we use type: ignore
+        super().__init__(  # type: ignore[call-arg]
             config=_config,
             circuit_breaker=circuit_breaker,
             retry_config=retry_config,
@@ -333,11 +335,16 @@ class Endpoint(ServiceBackend):
         # This ensures each retry attempt counts against circuit breaker metrics
         base_call = self._call
 
+        # Type for inner_call - either base_call or circuit breaker wrapped
+        from collections.abc import Callable, Coroutine
+
+        inner_call: Callable[..., Coroutine[Any, Any, Any]]
+
         # Step 1: Wrap _call with circuit breaker (if configured)
         if self.circuit_breaker:
 
-            async def cb_wrapped_call(p, h, **kw):
-                return await self.circuit_breaker.execute(base_call, p, h, **kw)
+            async def cb_wrapped_call(p: dict[Any, Any], h: dict[Any, Any], **kw: Any) -> Any:
+                return await self.circuit_breaker.execute(base_call, p, h, **kw)  # type: ignore[union-attr]
 
             inner_call = cb_wrapped_call
         else:

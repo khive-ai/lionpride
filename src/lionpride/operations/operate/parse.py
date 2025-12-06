@@ -33,6 +33,8 @@ async def parse(
     if params._is_sentinel(params.text):
         raise ValidationError("No text provided for parsing")
 
+    # Type narrowing - text is not None after validation
+    assert params.text is not None
     try:
         return _direct_parse(
             text=params.text,

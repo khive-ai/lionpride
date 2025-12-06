@@ -220,9 +220,9 @@ class GeminiSession:
 
 def _extract_summary(session: GeminiSession) -> dict[str, Any]:
     """Extract summary from session data."""
-    tool_counts = {}
-    tool_details = []
-    file_operations = {"reads": [], "writes": [], "edits": []}
+    tool_counts: dict[str, int] = {}
+    tool_details: list[dict[str, Any]] = []
+    file_operations: dict[str, list[str]] = {"reads": [], "writes": [], "edits": []}
     key_actions = []
 
     for tool_use in session.tool_uses:
@@ -290,6 +290,9 @@ async def _ndjson_from_cli(request: GeminiCodeRequest):
 
     Robust against UTF-8 splits and uses json.JSONDecoder.raw_decode.
     """
+    if GEMINI_CLI is None:
+        raise RuntimeError("Gemini CLI not found. Please install the gemini CLI tool.")
+
     workspace = request.cwd()
     workspace.mkdir(parents=True, exist_ok=True)
 
@@ -304,6 +307,9 @@ async def _ndjson_from_cli(request: GeminiCodeRequest):
     decoder = codecs.getincrementaldecoder("utf-8")()
     json_decoder = json.JSONDecoder()
     buffer: str = ""
+
+    if proc.stdout is None:
+        raise RuntimeError("Failed to capture stdout from Gemini CLI")
 
     try:
         while True:
@@ -334,7 +340,9 @@ async def _ndjson_from_cli(request: GeminiCodeRequest):
                 log.error("Skipped unrecoverable JSON tail: %.120s...", buffer)
 
         if await proc.wait() != 0:
-            err = (await proc.stderr.read()).decode().strip()
+            err = ""
+            if proc.stderr is not None:
+                err = (await proc.stderr.read()).decode().strip()
             raise RuntimeError(err or "Gemini CLI exited non-zero")
 
     finally:

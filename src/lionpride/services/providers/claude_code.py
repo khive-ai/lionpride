@@ -101,12 +101,13 @@ class ClaudeCodeEndpoint(Endpoint):
             )
 
         # Create ClaudeCodeRequest object
-        req_obj = ClaudeCodeRequest(messages=messages, **req_dict)
+        # Note: messages is converted to prompt in ClaudeCodeRequest
+        req_obj = ClaudeCodeRequest(prompt=messages, **req_dict)  # type: ignore[arg-type]
 
         return {"request": req_obj}, {}
 
-    async def stream(
-        self, request: dict | BaseModel, **kwargs
+    async def stream(  # type: ignore[override]
+        self, request: dict | BaseModel, **kwargs: Any
     ) -> AsyncIterator[ClaudeChunk | dict | ClaudeSession]:
         """Stream Claude Code CLI response chunks.
 

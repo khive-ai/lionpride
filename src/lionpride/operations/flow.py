@@ -78,7 +78,7 @@ class DependencyAwareExecutor:
         self.results: dict[UUID, Any] = {}
         self.errors: dict[UUID, Exception] = {}
         self.completion_events: dict[UUID, concurrency.Event] = {}
-        self.operation_branches: dict[UUID, Branch] = {}
+        self.operation_branches: dict[UUID, Branch | None] = {}
 
         # Concurrency limiter - acquired AFTER dependencies resolve
         self._limiter: CapacityLimiter | None = (

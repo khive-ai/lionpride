@@ -79,8 +79,16 @@ async def act(
                         output=f"{type(result.execution.error).__name__}: {result.execution.error}",
                     )
                 response = result.execution.response
-                output = response.data if hasattr(response, "data") else response
-            elif hasattr(result, "response") and hasattr(result.response, "data"):
+                output = (
+                    response.data
+                    if response is not None and hasattr(response, "data")
+                    else response
+                )
+            elif (
+                hasattr(result, "response")
+                and result.response is not None
+                and hasattr(result.response, "data")
+            ):
                 output = result.response.data
             elif hasattr(result, "data"):
                 output = result.data

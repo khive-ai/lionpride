@@ -33,6 +33,7 @@ from pydantic import BaseModel, Field, SecretStr
 from lionpride.ln import json_dumps
 
 if TYPE_CHECKING:
+    from .log_adapter import PostgresLogAdapter
     from .logs import Log
 
 __all__ = (
@@ -401,6 +402,7 @@ class S3LogSubscriber(LogSubscriber):
             return 0
 
         await self._ensure_client()
+        assert self._client is not None  # Guaranteed by _ensure_client
 
         # Generate key with timestamp
         ts = datetime.now(UTC).strftime("%Y/%m/%d/%H%M%S")
@@ -409,6 +411,7 @@ class S3LogSubscriber(LogSubscriber):
         # Convert logs to JSON
         log_dicts = [log.to_dict(mode="json") for log in logs]
         content = json_dumps(log_dicts, pretty=True)
+        content_bytes = content.encode("utf-8") if isinstance(content, str) else content
 
         try:
             # Extract secret values for boto3
@@ -431,7 +434,7 @@ class S3LogSubscriber(LogSubscriber):
                 await client.put_object(
                     Bucket=self.bucket,
                     Key=key,
-                    Body=content.encode("utf-8"),
+                    Body=content_bytes,
                     ContentType="application/json",
                 )
             logger.debug(f"Wrote {len(logs)} logs to s3://{self.bucket}/{key}")
@@ -471,7 +474,7 @@ class PostgresLogSubscriber(LogSubscriber):
         self.dsn = dsn
         self.table = table
         self.auto_create = auto_create
-        self._adapter = None
+        self._adapter: PostgresLogAdapter | None = None
 
     @property
     def name(self) -> str:
@@ -496,6 +499,7 @@ class PostgresLogSubscriber(LogSubscriber):
             return 0
 
         await self._ensure_adapter()
+        assert self._adapter is not None  # Guaranteed by _ensure_adapter
         return await self._adapter.write(logs)
 
     async def close(self) -> None:
@@ -771,7 +775,7 @@ class LogBroadcaster:
             outcomes = await concurrency.gather(*tasks, return_exceptions=True)
 
             for outcome in outcomes:
-                if isinstance(outcome, Exception):
+                if isinstance(outcome, BaseException):
                     continue
                 name, count = outcome
                 results[name] = count

@@ -250,7 +250,8 @@ class Validator:
 
         for spec in operable.get_specs():
             field_name = spec.name
-            if field_name is None:
+            # Skip specs without a name (check for sentinel)
+            if not isinstance(field_name, str):
                 continue
 
             # Only validate fields in capabilities

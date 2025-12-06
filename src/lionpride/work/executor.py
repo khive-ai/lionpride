@@ -110,7 +110,10 @@ class ReportExecutor:
             return self.session.get_branch(form.branch_name)
 
         if self._default_branch is None:
-            return self.session.default_branch
+            branch = self.session.default_branch
+            if branch is None:
+                raise ValueError("No default branch available in session")
+            return branch
 
         if isinstance(self._default_branch, str):
             return self.session.get_branch(self._default_branch)
@@ -245,19 +248,28 @@ class ReportExecutor:
         branch = self._resolve_branch(form)
 
         # Build params
+        # Type narrowing for structure_format - default to "json" if not set
+        from typing import Literal, cast
+
+        structure_fmt: Literal["json", "custom"] = cast(
+            Literal["json", "custom"],
+            self.structure_format if self.structure_format in ("json", "custom") else "json",
+        )
+        target_keys = list(request_model.model_fields.keys()) if request_model else []
+
         params = OperateParams(
             generate=GenerateParams(
                 instruction=instruction,
                 context=context if context else None,
                 request_model=request_model,
                 imodel=form.resources.resolve_gen_model(branch),
-                structure_format=self.structure_format,
+                structure_format=structure_fmt,
                 custom_renderer=self.custom_renderer,
             ),
             parse=ParseParams(
                 imodel=form.resources.resolve_parse_model(branch),
-                target_keys=list(request_model.model_fields.keys()) if request_model else None,
-                structure_format=self.structure_format,
+                target_keys=target_keys,
+                structure_format=structure_fmt,
                 custom_parser=self.custom_parser,
             ),
             operable=operable,

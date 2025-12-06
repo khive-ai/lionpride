@@ -6,7 +6,7 @@ from __future__ import annotations
 import functools
 import types
 from functools import reduce
-from typing import TYPE_CHECKING, Any, Union, get_args, get_origin
+from typing import TYPE_CHECKING, Any, Literal, Union, get_args, get_origin
 
 from .._sentinel import Unset, is_sentinel
 from ._protocol import SpecAdapter
@@ -299,15 +299,19 @@ class PydanticSpecAdapter(SpecAdapter["BaseModel"]):
     @classmethod
     def create_model(
         cls,
-        op: Operable,
+        operable: Operable,
         model_name: str,
         include: set[str] | None = None,
         exclude: set[str] | None = None,
-        base_type: type[BaseModel] | None = None,
-        doc: str | None = None,
+        **kwargs: Any,
     ) -> type[BaseModel]:
         """Generate Pydantic BaseModel from Operable using pydantic.create_model()."""
         from pydantic import BaseModel, create_model
+
+        # Extract pydantic-specific kwargs
+        base_type: type[BaseModel] | None = kwargs.get("base_type")
+        doc: str | None = kwargs.get("doc")
+        op = operable  # Alias for compatibility
 
         use_specs = op.get_specs(include=include, exclude=exclude)
         use_fields = {i.name: cls.create_field(i) for i in use_specs if i.name}
@@ -337,7 +341,8 @@ class PydanticSpecAdapter(SpecAdapter["BaseModel"]):
             actual_base = base_type or BaseModel
 
         # Create model using pydantic's create_model
-        model_cls = create_model(
+        # ignore needed because actual_base may be dynamically created via type()
+        model_cls = create_model(  # type: ignore[call-overload]
             model_name,
             __base__=actual_base,
             __doc__=doc,
@@ -358,9 +363,11 @@ class PydanticSpecAdapter(SpecAdapter["BaseModel"]):
 
         # "ignore" mode only includes successfully matched fields (no sentinel injection)
         # "raise" mode raises on unmatched keys for strict validation
-        handle_mode = "raise" if strict else "ignore"
+        handle_mode: Literal["ignore", "raise"] = "raise" if strict else "ignore"
 
-        matched = fuzzy_match_keys(data, model_cls.model_fields, handle_unmatched=handle_mode)
+        # Extract field names as a list for fuzzy matching
+        field_names = list(model_cls.model_fields.keys())
+        matched = fuzzy_match_keys(data, field_names, handle_unmatched=handle_mode)
 
         # Filter out sentinel values (Unset, Undefined)
         return {k: v for k, v in matched.items() if not_sentinel(v)}

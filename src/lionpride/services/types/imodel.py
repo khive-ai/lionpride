@@ -138,7 +138,9 @@ class iModel(Element):  # noqa: N801
                 }
             )
 
-        super().__init__(
+        # iModel sets model_config["extra"] = "allow" which allows these kwargs
+        # mypy doesn't understand Pydantic's config inheritance, so we use type: ignore
+        super().__init__(  # type: ignore[call-arg]
             backend=backend,
             rate_limiter=rate_limiter,
             executor=executor,
@@ -149,16 +151,22 @@ class iModel(Element):  # noqa: N801
     @property
     def name(self) -> str:
         """Service name from backend."""
+        if self.backend is None:
+            raise RuntimeError("Backend not configured")
         return self.backend.name
 
     @property
     def version(self) -> str:
         """Service version from backend."""
-        return self.backend.version
+        if self.backend is None:
+            raise RuntimeError("Backend not configured")
+        return self.backend.version or ""
 
     @property
     def tags(self) -> set[str]:
         """Service tags from backend."""
+        if self.backend is None:
+            raise RuntimeError("Backend not configured")
         return self.backend.tags
 
     async def create_calling(
@@ -198,6 +206,9 @@ class iModel(Element):  # noqa: N801
         """
         from .hook import HookEvent, HookPhase
 
+        if self.backend is None:
+            raise RuntimeError("Backend not configured")
+
         # Claude Code: auto-inject session_id for resume if available (lionagi v0 pattern)
         if (
             isinstance(self.backend, Endpoint)
@@ -220,6 +231,7 @@ class iModel(Element):  # noqa: N801
                 registry=self.hook_registry,
                 exit=create_event_exit_hook if create_event_exit_hook is not None else False,
                 timeout=create_event_hook_timeout,
+                streaming=False,
                 params=create_event_hook_params or {},
             )
             await h_ev.invoke()
@@ -230,17 +242,22 @@ class iModel(Element):  # noqa: N801
                 )
 
         # Type-based dispatch for Calling creation
+        calling: Calling
         if isinstance(self.backend, Endpoint):
             payload, headers = self.backend.create_payload(request=arguments)
             calling = APICalling(
                 backend=self.backend,
                 payload=payload,
                 headers=headers,
+                timeout=timeout,
+                streaming=streaming,
             )
         elif isinstance(self.backend, Tool):
             calling = ToolCalling(
                 backend=self.backend,
                 payload=arguments,  # Direct arguments dict, not wrapped
+                timeout=timeout,
+                streaming=streaming,
             )
         else:
             raise RuntimeError(f"Unsupported backend type: {type(self.backend)}")
@@ -382,15 +399,21 @@ class iModel(Element):  # noqa: N801
         When using the same iModel instance for multiple Claude Code calls,
         subsequent calls automatically resume the previous session context.
         """
+        from lionpride.types import is_sentinel
+
+        from .backend import NormalizedResponse
+
         if (
             isinstance(self.backend, Endpoint)
             and self.backend.config.provider == "claude_code"
-            and calling.execution.response is not None
+            and not is_sentinel(calling.execution.response)
         ):
+            response = calling.execution.response
             # session_id is in response metadata
-            session_id = calling.execution.response.metadata.get("session_id")
-            if session_id:
-                self.provider_metadata["session_id"] = session_id
+            if isinstance(response, NormalizedResponse) and response.metadata:
+                session_id = response.metadata.get("session_id")
+                if session_id:
+                    self.provider_metadata["session_id"] = session_id
 
     @field_serializer("backend")
     def _serialize_backend(self, backend: ServiceBackend) -> dict[str, Any] | None:
@@ -537,4 +560,6 @@ class iModel(Element):  # noqa: N801
 
     def __repr__(self) -> str:
         """String representation."""
+        if self.backend is None:
+            return "iModel(backend=None)"
         return f"iModel(backend={self.backend.name}, version={self.backend.version})"

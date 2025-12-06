@@ -93,6 +93,7 @@ class NumberRule(Rule):
         Raises:
             ValueError: If conversion or re-validation fails
         """
+        fixed: int | float
         try:
             # Try int first if target type is int
             if t is int:
