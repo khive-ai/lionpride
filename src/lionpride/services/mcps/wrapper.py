@@ -4,6 +4,8 @@
 import logging
 import os
 import re
+import warnings
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +17,9 @@ __all__ = (
     "MCP_ENV_ALLOWLIST",
     "CommandNotAllowedError",
     "MCPConnectionPool",
+    "MCPConnectionPoolInstance",
+    "MCPSecurityConfig",
+    "create_mcp_pool",
     "filter_mcp_environment",
 )
 
@@ -171,11 +176,300 @@ logging.getLogger("mcp.server.lowlevel").setLevel(logging.WARNING)
 logging.getLogger("mcp.server.lowlevel.server").setLevel(logging.WARNING)
 
 
+@dataclass(frozen=True)
+class MCPSecurityConfig:
+    """Immutable security configuration for MCP connection pools.
+
+    This configuration is frozen at creation time and cannot be modified afterward,
+    preventing runtime security weakening.
+
+    Attributes:
+        allowed_commands: Set of command names allowed to execute.
+        strict_mode: If True, only allowlisted commands can execute.
+    """
+
+    allowed_commands: frozenset[str] = field(default_factory=lambda: DEFAULT_ALLOWED_COMMANDS)
+    strict_mode: bool = True
+
+    def __post_init__(self):
+        """Ensure allowed_commands is a frozenset."""
+        if not isinstance(self.allowed_commands, frozenset):
+            object.__setattr__(self, "allowed_commands", frozenset(self.allowed_commands))
+
+    def with_commands(self, additional_commands: set[str]) -> "MCPSecurityConfig":
+        """Create a new config with additional allowed commands.
+
+        Args:
+            additional_commands: Commands to add to the allowlist.
+
+        Returns:
+            New MCPSecurityConfig with extended allowlist.
+        """
+        return MCPSecurityConfig(
+            allowed_commands=self.allowed_commands | frozenset(additional_commands),
+            strict_mode=self.strict_mode,
+        )
+
+
+class MCPConnectionPoolInstance:
+    """Session-scoped connection pool for MCP clients.
+
+    Unlike the global MCPConnectionPool, this class maintains instance-level state,
+    making it safe for concurrent use across multiple sessions without state leakage.
+
+    Args:
+        security_config: Immutable security configuration. Defaults to strict mode
+            with standard allowed commands.
+        configs: Pre-loaded server configurations (from .mcp.json).
+
+    Example:
+        >>> # Create session-scoped pool
+        >>> security = MCPSecurityConfig(
+        ...     allowed_commands=frozenset({"python", "node", "my-runner"}),
+        ...     strict_mode=True,
+        ... )
+        >>> pool = MCPConnectionPoolInstance(security_config=security)
+        >>>
+        >>> # Load config and get client
+        >>> pool.load_config(".mcp.json")
+        >>> client = await pool.get_client({"server": "search"})
+        >>>
+        >>> # Cleanup when done
+        >>> await pool.cleanup()
+    """
+
+    def __init__(
+        self,
+        security_config: MCPSecurityConfig | None = None,
+        configs: dict[str, dict] | None = None,
+    ):
+        """Initialize session-scoped connection pool.
+
+        Args:
+            security_config: Immutable security config. If None, uses default strict mode.
+            configs: Pre-loaded server configurations.
+        """
+        self._security = security_config or MCPSecurityConfig()
+        self._clients: dict[str, Any] = {}
+        self._configs: dict[str, dict] = configs.copy() if configs else {}
+        self._lock = Lock()
+
+    @property
+    def security_config(self) -> MCPSecurityConfig:
+        """Get the immutable security configuration."""
+        return self._security
+
+    async def __aenter__(self):
+        """Context manager entry."""
+        return self
+
+    async def __aexit__(self, *_):
+        """Context manager exit - cleanup connections."""
+        await self.cleanup()
+
+    def _validate_command(self, command: str) -> None:
+        """Validate a command against the security config.
+
+        Args:
+            command: The command to validate.
+
+        Raises:
+            CommandNotAllowedError: If strict_mode and command not allowed.
+        """
+        if not self._security.strict_mode:
+            return
+
+        if "/" in command or "\\" in command:
+            raise CommandNotAllowedError(
+                f"Command '{command}' contains path separators which are not allowed "
+                f"in strict mode. Use bare command names (e.g., 'python' not './python')."
+            )
+
+        if command not in self._security.allowed_commands:
+            allowed_list = ", ".join(sorted(self._security.allowed_commands))
+            raise CommandNotAllowedError(
+                f"Command '{command}' is not in the allowlist. Allowed commands: [{allowed_list}]."
+            )
+
+    def load_config(self, path: str = ".mcp.json") -> None:
+        """Load MCP server configurations from file.
+
+        Args:
+            path: Path to .mcp.json configuration file.
+
+        Raises:
+            FileNotFoundError: If config file doesn't exist.
+            ValueError: If config file has invalid JSON or structure.
+        """
+        config_path = Path(path)
+        if not config_path.exists():
+            raise FileNotFoundError(f"MCP config file not found: {path}")
+
+        try:
+            content = config_path.read_text(encoding="utf-8")
+            data = orjson.loads(content)
+        except (ValueError, TypeError) as e:
+            raise ValueError(f"Invalid JSON in MCP config file: {e}") from e
+
+        if not isinstance(data, dict):
+            raise ValueError("MCP config must be a JSON object")
+
+        servers = data.get("mcpServers", {})
+        if not isinstance(servers, dict):
+            raise ValueError("mcpServers must be a dictionary")
+
+        self._configs.update(servers)
+
+    async def get_client(self, server_config: dict[str, Any]) -> Any:
+        """Get or create a pooled MCP client.
+
+        Args:
+            server_config: Either {"server": "name"} or full config with command/args.
+
+        Returns:
+            FastMCP Client instance (connected).
+
+        Raises:
+            ValueError: If server reference not found or config invalid.
+        """
+        if server_config.get("server") is not None:
+            server_name = server_config["server"]
+            if server_name not in self._configs:
+                self.load_config()
+                if server_name not in self._configs:
+                    raise ValueError(f"Unknown MCP server: {server_name}")
+
+            config = self._configs[server_name]
+            cache_key = f"server:{server_name}"
+        else:
+            config = server_config
+            cache_key = f"inline:{config.get('command')}:{id(config)}"
+
+        async with self._lock:
+            if cache_key in self._clients:
+                client = self._clients[cache_key]
+                if hasattr(client, "is_connected") and client.is_connected():
+                    return client
+                else:
+                    del self._clients[cache_key]
+
+            client = await self._create_client(config)
+            self._clients[cache_key] = client
+            return client
+
+    async def _create_client(self, config: dict[str, Any]) -> Any:
+        """Create a new MCP client from config."""
+        if not isinstance(config, dict):
+            raise ValueError("Config must be a dictionary")
+
+        if not any(config.get(k) is not None for k in ["url", "command"]):
+            raise ValueError("Config must have either 'url' or 'command' with non-None value")
+
+        try:
+            from fastmcp import Client as FastMCPClient
+        except ImportError as e:
+            raise ImportError("FastMCP not installed. Run: pip install fastmcp") from e
+
+        if config.get("url") is not None:
+            client = FastMCPClient(config["url"])
+        elif config.get("command") is not None:
+            command = config["command"]
+            self._validate_command(command)
+
+            args = config.get("args", [])
+            if not isinstance(args, list):
+                raise ValueError("Config 'args' must be a list")
+
+            debug_mode = (
+                config.get("debug", False) or os.environ.get("MCP_DEBUG", "").lower() == "true"
+            )
+
+            env = filter_mcp_environment(debug=debug_mode)
+            env.update(config.get("env", {}))
+
+            if not debug_mode:
+                env.setdefault("LOG_LEVEL", "ERROR")
+                env.setdefault("PYTHONWARNINGS", "ignore")
+                env.setdefault("FASTMCP_QUIET", "true")
+                env.setdefault("MCP_QUIET", "true")
+
+            from fastmcp.client.transports import StdioTransport
+
+            transport = StdioTransport(command=command, args=args, env=env)
+            client = FastMCPClient(transport)
+        else:
+            raise ValueError("Config must have 'url' or 'command' with non-None value")
+
+        await client.__aenter__()
+        return client
+
+    async def cleanup(self):
+        """Clean up all pooled connections."""
+        async with self._lock:
+            for cache_key, client in self._clients.items():
+                try:
+                    await client.__aexit__(None, None, None)
+                except Exception as e:
+                    logging.debug(f"Error cleaning up MCP client {cache_key}: {e}")
+            self._clients.clear()
+
+
+def create_mcp_pool(
+    allowed_commands: set[str] | None = None,
+    strict_mode: bool = True,
+    extend_defaults: bool = True,
+    configs: dict[str, dict] | None = None,
+) -> MCPConnectionPoolInstance:
+    """Factory function to create a session-scoped MCP connection pool.
+
+    Args:
+        allowed_commands: Additional commands to allow. If None, uses defaults only.
+        strict_mode: If True, only allowlisted commands can execute.
+        extend_defaults: If True, allowed_commands extends defaults. If False, replaces.
+        configs: Pre-loaded server configurations.
+
+    Returns:
+        New MCPConnectionPoolInstance with the specified security settings.
+
+    Example:
+        >>> # Create pool with custom commands
+        >>> pool = create_mcp_pool(allowed_commands={"my-runner"})
+        >>>
+        >>> # Create pool with only specific commands (no defaults)
+        >>> pool = create_mcp_pool(
+        ...     allowed_commands={"python", "node"},
+        ...     extend_defaults=False,
+        ... )
+    """
+    if allowed_commands is None:
+        base_commands = DEFAULT_ALLOWED_COMMANDS
+    elif extend_defaults:
+        base_commands = DEFAULT_ALLOWED_COMMANDS | frozenset(allowed_commands)
+    else:
+        base_commands = frozenset(allowed_commands)
+
+    security = MCPSecurityConfig(allowed_commands=base_commands, strict_mode=strict_mode)
+    return MCPConnectionPoolInstance(security_config=security, configs=configs)
+
+
 class MCPConnectionPool:
-    """Singleton connection pool for MCP clients.
+    """Global connection pool for MCP clients.
+
+    .. deprecated::
+        This class uses global state shared across all sessions. Use
+        :class:`MCPConnectionPoolInstance` or :func:`create_mcp_pool` for
+        session-scoped isolation.
 
     Manages FastMCP client instances with connection pooling and lifecycle management.
     Clients are cached by config and reused across calls for efficiency.
+
+    Warning:
+        This class uses class-level state that is shared globally. For session
+        isolation, use MCPConnectionPoolInstance instead:
+
+        >>> pool = create_mcp_pool(allowed_commands={"my-runner"})
+        >>> client = await pool.get_client({"server": "search"})
+        >>> await pool.cleanup()
 
     Security:
         By default, only commands in the allowlist can be executed (strict_mode=True).
@@ -191,12 +485,6 @@ class MCPConnectionPool:
         >>>
         >>> # Cleanup on shutdown
         >>> await MCPConnectionPool.cleanup()
-        >>>
-        >>> # Security configuration
-        >>> MCPConnectionPool.configure_security(
-        ...     allowed_commands={"python", "node", "custom-runner"},
-        ...     strict_mode=True,  # Default
-        ... )
     """
 
     _clients: dict[str, Any] = {}
@@ -224,6 +512,10 @@ class MCPConnectionPool:
     ) -> None:
         """Configure command execution security settings.
 
+        .. deprecated::
+            This method modifies global state affecting all sessions. Use
+            :func:`create_mcp_pool` with security options for session isolation.
+
         Args:
             allowed_commands: Set of allowed command names. If extend_defaults=True,
                 these are added to the default allowlist. If extend_defaults=False,
@@ -234,17 +526,18 @@ class MCPConnectionPool:
                 allowlist. If False, allowed_commands replaces it entirely.
 
         Example:
-            >>> # Add custom commands to defaults
+            >>> # Preferred: use create_mcp_pool for session isolation
+            >>> pool = create_mcp_pool(allowed_commands={"my-runner"})
+            >>>
+            >>> # Legacy: global configuration (deprecated)
             >>> MCPConnectionPool.configure_security(allowed_commands={"my-custom-runner"})
-            >>>
-            >>> # Replace allowlist entirely
-            >>> MCPConnectionPool.configure_security(
-            ...     allowed_commands={"python", "node"}, extend_defaults=False
-            ... )
-            >>>
-            >>> # Disable strict mode (DANGEROUS - allows any command)
-            >>> MCPConnectionPool.configure_security(strict_mode=False)
         """
+        warnings.warn(
+            "MCPConnectionPool.configure_security() modifies global state. "
+            "Use create_mcp_pool() for session-scoped isolation.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         if strict_mode is not None:
             cls._strict_mode = strict_mode
 
