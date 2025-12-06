@@ -121,9 +121,9 @@ class DependencyAwareExecutor:
                 if self.verbose:
                     name = op.metadata.get("name", str(op.id)[:8])
                     if op.id in self.errors:
-                        print(f"Operation '{name}' failed")
+                        logger.debug("Operation '%s' failed", name)
                     elif op.id in self.results:
-                        print(f"Operation '{name}' completed")
+                        logger.debug("Operation '%s' completed", name)
 
         # Compile results keyed by operation name for user-friendly access
         results_by_name = {}
@@ -236,7 +236,7 @@ class DependencyAwareExecutor:
                     self.operation_branches[node.id] = default_branch
 
         if self.verbose:
-            print(f"Pre-allocated branches for {len(self.operation_branches)} operations")
+            logger.debug("Pre-allocated branches for %d operations", len(self.operation_branches))
 
     async def _execute_operation(
         self,
@@ -261,10 +261,7 @@ class DependencyAwareExecutor:
         except Exception as e:
             self.errors[operation.id] = e
             if self.verbose:
-                import traceback
-
-                print(f"Operation {str(operation.id)[:8]} failed: {e}")
-                print(f"Traceback: {traceback.format_exc()}")
+                logger.exception("Operation %s failed: %s", str(operation.id)[:8], e)
 
             if self.stop_on_error:
                 self.completion_events[operation.id].set()
@@ -280,7 +277,11 @@ class DependencyAwareExecutor:
         predecessors = self.graph.get_predecessors(operation)
 
         if self.verbose and predecessors:
-            print(f"Operation {str(operation.id)[:8]} waiting for {len(predecessors)} dependencies")
+            logger.debug(
+                "Operation %s waiting for %d dependencies",
+                str(operation.id)[:8],
+                len(predecessors),
+            )
 
         for pred in predecessors:
             if pred.id in self.completion_events:
@@ -290,7 +291,7 @@ class DependencyAwareExecutor:
         """Invoke operation and store result."""
         if self.verbose:
             name = operation.metadata.get("name", str(operation.id)[:8])
-            print(f"Executing operation: {name}")
+            logger.debug("Executing operation: %s", name)
 
         branch = self.operation_branches.get(operation.id)
         if branch is None:
@@ -303,7 +304,7 @@ class DependencyAwareExecutor:
             self.results[operation.id] = operation.response
             if self.verbose:
                 name = operation.metadata.get("name", str(operation.id)[:8])
-                print(f"Completed operation: {name}")
+                logger.debug("Completed operation: %s", name)
         else:
             error_msg = f"Execution status: {operation.status}"
             if hasattr(operation.execution, "error") and operation.execution.error:
@@ -311,7 +312,7 @@ class DependencyAwareExecutor:
             self.errors[operation.id] = RuntimeError(error_msg)
             if self.verbose:
                 name = operation.metadata.get("name", str(operation.id)[:8])
-                print(f"Operation {name} failed: {error_msg}")
+                logger.warning("Operation %s failed: %s", name, error_msg)
 
 
 async def flow(

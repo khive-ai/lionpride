@@ -46,15 +46,14 @@ select = [
 ignore = [
   "E501",   # Line too long (handled by formatter)
   "E402",   # Module level import not at top (common pattern)
-  "E721",   # Type comparison with == instead of is (TODO: fix in cleanup PR)
-  "E722",   # Bare except (TODO: fix in cleanup PR)
-  "B008",   # Function call in default argument (TODO: fix in cleanup PR)
-  "B904",   # raise from err (TODO: fix in cleanup PR)
-  "SIM105", # contextlib.suppress (TODO: fix in cleanup PR)
-  "SIM112", # Environment variable casing (TODO: fix in cleanup PR)
-  "N806",   # Variable naming (TODO: fix in cleanup PR)
-  "RUF012", # Mutable ClassVar (TODO: fix in cleanup PR)
-  "UP007",  # Union → | syntax (type aliases, not annotations - low priority)
+  "E721",   # Type comparison with == instead of is (intentional in some cases)
+  "B008",   # Function call in default argument (Field() pattern)
+  "B904",   # raise from err - uses cause= parameter instead of Python chaining
+  "SIM105", # contextlib.suppress (explicit try/except preferred)
+  "SIM112", # Environment variable casing (intentional)
+  "N806",   # Variable naming - uppercase constants in functions (MAX_DEPTH, T, Model)
+  "RUF012", # Mutable ClassVar (intentional for registries)
+  "UP007",  # Union → | syntax (type aliases, not annotations)
 ]
 
 # Allow fix for all enabled rules (when `--fix` is provided)
