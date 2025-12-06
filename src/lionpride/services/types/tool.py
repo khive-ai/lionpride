@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import inspect
+import logging
 from collections.abc import Callable
 from typing import Any, Self, get_origin, get_type_hints
 
@@ -12,6 +13,8 @@ from pydantic import Field, field_validator, model_validator
 from lionpride import concurrency, schema_handlers
 
 from .backend import Calling, NormalizedResponse, ServiceBackend, ServiceConfig
+
+logger = logging.getLogger(__name__)
 
 __all__ = ("Tool", "ToolCalling", "ToolConfig")
 
@@ -290,14 +293,34 @@ class Tool(ServiceBackend):
         """Execute tool callable with sync/async detection.
 
         Args:
-            arguments: Dict of validated parameters to pass to callable
+            arguments: Dict of parameters to pass to callable
 
         Returns:
             NormalizedResponse wrapping the tool execution result
 
         Raises:
+            ValueError: If arguments fail validation against request_options schema
             Exception: Any exception raised by the tool callable
         """
+        # Validate arguments against request_options schema if defined
+        if self.config.request_options is not None:
+            # Get valid field names from the schema
+            valid_fields = set(self.config.request_options.model_fields.keys())
+
+            # Filter to only include valid fields (prevents injection of extra args)
+            filtered_arguments = {k: v for k, v in arguments.items() if k in valid_fields}
+
+            # Validate the filtered arguments
+            self.config.validate_payload(filtered_arguments)
+
+            # Use filtered arguments for execution
+            arguments = filtered_arguments
+        else:
+            logger.debug(
+                f"Tool '{self.name}' has no request_options defined - "
+                "arguments will not be validated against a schema"
+            )
+
         if concurrency.is_coro_func(self.func_callable):
             result = await self.func_callable(**arguments)
         else:

@@ -10,6 +10,7 @@ Branch is a named progression of message UUIDs with access control.
 from __future__ import annotations
 
 import contextlib
+import warnings
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID
@@ -17,7 +18,7 @@ from uuid import UUID
 from pydantic import Field, PrivateAttr
 
 from lionpride.core import Element, Flow, Graph, Progression
-from lionpride.errors import NotFoundError
+from lionpride.errors import AccessError, NotFoundError
 from lionpride.operations.node import Operation
 from lionpride.operations.registry import OperationRegistry
 from lionpride.services import ServiceRegistry, iModel
@@ -479,6 +480,7 @@ class Session(Element):
         self,
         service_name: str,
         *,
+        branch: Branch | UUID | str | None = None,
         poll_timeout: float | None = None,
         poll_interval: float | None = None,
         **kwargs,
@@ -487,13 +489,40 @@ class Session(Element):
 
         Args:
             service_name: Registered service name.
+            branch: Branch for access control check. If provided, service_name
+                must be in branch.resources. If None, access check is skipped
+                (deprecated behavior - will require branch in future versions).
             poll_timeout: Max wait seconds.
             poll_interval: Poll interval seconds.
             **kwargs: Service-specific args.
 
         Returns:
             Calling with execution results.
+
+        Raises:
+            AccessError: If branch provided and service not in branch.resources.
         """
+        # Access control check when branch is provided
+        if branch is not None:
+            resolved_branch = self.get_branch(branch)
+            if service_name not in resolved_branch.resources:
+                raise AccessError(
+                    f"Branch '{resolved_branch.name}' doesn't have access to service '{service_name}'",
+                    details={
+                        "requested": service_name,
+                        "available": list(resolved_branch.resources),
+                    },
+                )
+        else:
+            # Deprecation warning for missing branch parameter
+            warnings.warn(
+                "Calling Session.request() without a branch parameter is deprecated. "
+                "In a future version, branch will be required for access control. "
+                "Pass branch=<branch> to enable access control checks.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
         service = self.services.get(service_name)
         return await service.invoke(
             poll_timeout=poll_timeout,

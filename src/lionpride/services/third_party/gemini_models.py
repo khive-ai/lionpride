@@ -10,6 +10,7 @@ import inspect
 import json  # Required for JSONDecoder.raw_decode() (streaming JSON parsing)
 import logging
 import shutil
+import warnings
 from collections.abc import AsyncIterator, Callable
 from dataclasses import (
     dataclass,
@@ -100,6 +101,31 @@ class GeminiCodeRequest(BaseModel):
 
         data["prompt"] = "\n".join(prompts)
         return data
+
+    @model_validator(mode="after")
+    def _warn_dangerous_settings(self):
+        """Emit security warnings for dangerous CLI settings."""
+        if self.yolo:
+            warnings.warn(
+                "GeminiCodeRequest: yolo=True enables auto-approval of ALL actions "
+                "without confirmation. This bypasses safety prompts and may allow "
+                "unintended file modifications, command execution, or data access. "
+                "Only use in trusted, isolated environments.",
+                UserWarning,
+                stacklevel=4,
+            )
+
+        if not self.sandbox:
+            warnings.warn(
+                "GeminiCodeRequest: sandbox=False disables sandbox protection. "
+                "The Gemini CLI will have unrestricted access to the file system "
+                "and can execute arbitrary commands. This significantly increases "
+                "security risk. Only disable sandbox in controlled environments.",
+                UserWarning,
+                stacklevel=4,
+            )
+
+        return self
 
     def cwd(self) -> Path:
         """Get working directory, validating workspace path."""

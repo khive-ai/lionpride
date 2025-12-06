@@ -710,6 +710,145 @@ def test_tool_required_fields_with_request_options():
     assert "param2" not in required
 
 
+# =============================================================================
+# Tool.call() Validation Tests (Issue #88)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_tool_call_validates_arguments_with_request_options():
+    """Test Tool.call() validates arguments when request_options is defined."""
+    from lionpride import Element
+    from lionpride.services.types.tool import ToolConfig
+
+    class ValidatedRequest(BaseModel):
+        """Request model for validation testing."""
+
+        name: str = Field(..., min_length=1)
+        count: int = Field(default=1, ge=0)
+
+    def my_tool(name: str, count: int = 1) -> str:
+        return f"{name}-{count}"
+
+    config = ToolConfig(
+        provider="tool",
+        name="validated_tool",
+        request_options=ValidatedRequest,
+    )
+
+    tool = Tool.model_construct(
+        func_callable=my_tool,
+        config=config,
+        id=Element().id,
+        created_at=Element().created_at,
+        tool_schema=None,
+    )
+
+    # Valid arguments should pass
+    result = await tool.call({"name": "test", "count": 5})
+    assert result.status == "success"
+    assert result.data == "test-5"
+
+
+@pytest.mark.asyncio
+async def test_tool_call_rejects_invalid_arguments():
+    """Test Tool.call() raises ValueError for invalid arguments."""
+    from lionpride import Element
+    from lionpride.services.types.tool import ToolConfig
+
+    class StrictRequest(BaseModel):
+        """Request model with strict validation."""
+
+        name: str = Field(..., min_length=3)
+        age: int = Field(..., ge=0, le=120)
+
+    def my_tool(name: str, age: int) -> dict:
+        return {"name": name, "age": age}
+
+    config = ToolConfig(
+        provider="tool",
+        name="strict_tool",
+        request_options=StrictRequest,
+    )
+
+    tool = Tool.model_construct(
+        func_callable=my_tool,
+        config=config,
+        id=Element().id,
+        created_at=Element().created_at,
+        tool_schema=None,
+    )
+
+    # Invalid: name too short
+    with pytest.raises(ValueError, match="Invalid payload"):
+        await tool.call({"name": "ab", "age": 25})
+
+    # Invalid: age out of range
+    with pytest.raises(ValueError, match="Invalid payload"):
+        await tool.call({"name": "test", "age": 150})
+
+
+@pytest.mark.asyncio
+async def test_tool_call_filters_extra_arguments():
+    """Test Tool.call() filters out arguments not in request_options schema."""
+    from lionpride import Element
+    from lionpride.services.types.tool import ToolConfig
+
+    class LimitedRequest(BaseModel):
+        """Request model with limited fields."""
+
+        name: str
+
+    # Track what arguments actually get passed
+    received_args = {}
+
+    def my_tool(name: str) -> str:
+        received_args.update({"name": name})
+        return name
+
+    config = ToolConfig(
+        provider="tool",
+        name="limited_tool",
+        request_options=LimitedRequest,
+    )
+
+    tool = Tool.model_construct(
+        func_callable=my_tool,
+        config=config,
+        id=Element().id,
+        created_at=Element().created_at,
+        tool_schema=None,
+    )
+
+    # Call with extra arguments that should be filtered out
+    result = await tool.call({"name": "test", "extra_field": "ignored", "malicious": True})
+
+    assert result.status == "success"
+    assert result.data == "test"
+    # Extra arguments should not be in raw_response
+    assert "extra_field" not in result.raw_response["arguments"]
+    assert "malicious" not in result.raw_response["arguments"]
+
+
+@pytest.mark.asyncio
+async def test_tool_call_without_request_options_no_validation():
+    """Test Tool.call() proceeds without validation when no request_options."""
+
+    def my_tool(x: str, y: int = 0) -> str:
+        return f"{x}-{y}"
+
+    # Create tool without request_options
+    tool = Tool(
+        func_callable=my_tool,
+        config={"provider": "tool", "name": "unvalidated_tool"},
+    )
+
+    # Should work with valid arguments (no schema validation, just function signature)
+    result = await tool.call({"x": "test", "y": 42})
+    assert result.status == "success"
+    assert result.data == "test-42"
+
+
 # NOTE: Some code paths remain uncovered due to source code issues:
 # - Dead code: get_origin never returns type(None)
 # - Infinite recursion when setting tool_schema in _generate_schema

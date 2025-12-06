@@ -3,6 +3,7 @@
 
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +11,118 @@ import orjson
 
 from lionpride.libs.concurrency import Lock
 
-__all__ = ("CommandNotAllowedError", "MCPConnectionPool")
+__all__ = (
+    "MCP_ENV_ALLOWLIST",
+    "CommandNotAllowedError",
+    "MCPConnectionPool",
+    "filter_mcp_environment",
+)
+
+
+# Default environment variable allowlist for MCP subprocesses
+# Only these variables (or patterns) are inherited from the parent environment
+# This prevents accidental leakage of sensitive environment variables (API keys, tokens, etc.)
+MCP_ENV_ALLOWLIST: frozenset[str] = frozenset(
+    {
+        # System essentials
+        "PATH",
+        "HOME",
+        "USER",
+        "SHELL",
+        "TERM",
+        "TMPDIR",
+        "TMP",
+        "TEMP",
+        # Locale settings (LC_* handled via pattern)
+        "LANG",
+        "LANGUAGE",
+        # Python environment
+        "PYTHONPATH",
+        "PYTHONHOME",
+        "VIRTUAL_ENV",
+        "CONDA_PREFIX",
+        "CONDA_DEFAULT_ENV",
+        # Node.js environment
+        "NODE_PATH",
+        "NODE_ENV",
+        "NPM_CONFIG_PREFIX",
+        # MCP-specific variables (MCP_*, FASTMCP_* handled via pattern)
+    }
+)
+
+# Patterns for environment variables that should be allowed
+# These are checked via regex if the exact name is not in MCP_ENV_ALLOWLIST
+_MCP_ENV_PATTERNS: tuple[re.Pattern, ...] = (
+    re.compile(r"^LC_"),  # Locale settings: LC_ALL, LC_CTYPE, etc.
+    re.compile(r"^MCP_"),  # MCP-specific: MCP_DEBUG, MCP_QUIET, etc.
+    re.compile(r"^FASTMCP_"),  # FastMCP-specific: FASTMCP_QUIET, etc.
+)
+
+
+def filter_mcp_environment(
+    env: dict[str, str] | None = None,
+    allowlist: frozenset[str] | set[str] | None = None,
+    patterns: tuple[re.Pattern, ...] | None = None,
+    debug: bool = False,
+) -> dict[str, str]:
+    """Filter environment variables to only include allowed ones for MCP subprocesses.
+
+    This function filters environment variables to prevent accidental leakage of
+    sensitive data (API keys, tokens, credentials) to MCP subprocess environments.
+
+    Args:
+        env: Source environment dict. If None, uses os.environ.
+        allowlist: Set of exact variable names to allow. Defaults to MCP_ENV_ALLOWLIST.
+        patterns: Tuple of compiled regex patterns to match. Defaults to _MCP_ENV_PATTERNS
+            (LC_*, MCP_*, FASTMCP_*).
+        debug: If True, logs variables that were filtered out.
+
+    Returns:
+        Filtered environment dictionary containing only allowed variables.
+
+    Example:
+        >>> # Get filtered environment with defaults
+        >>> env = filter_mcp_environment()
+        >>> "PATH" in env  # Allowed
+        True
+        >>> "OPENAI_API_KEY" in env  # Filtered out (not in allowlist)
+        False
+        >>>
+        >>> # Custom allowlist
+        >>> env = filter_mcp_environment(allowlist={"PATH", "HOME", "MY_SAFE_VAR"})
+    """
+    if env is None:
+        env = dict(os.environ)
+    if allowlist is None:
+        allowlist = MCP_ENV_ALLOWLIST
+    if patterns is None:
+        patterns = _MCP_ENV_PATTERNS
+
+    filtered = {}
+    excluded = []
+
+    for key, value in env.items():
+        # Check exact match first
+        if key in allowlist:
+            filtered[key] = value
+            continue
+
+        # Check pattern match
+        if any(pattern.match(key) for pattern in patterns):
+            filtered[key] = value
+            continue
+
+        # Not allowed
+        excluded.append(key)
+
+    if debug and excluded:
+        logging.debug(
+            "MCP subprocess environment filtered. Excluded %d variables: %s",
+            len(excluded),
+            ", ".join(sorted(excluded)[:10]) + ("..." if len(excluded) > 10 else ""),
+        )
+
+    return filtered
 
 
 class CommandNotAllowedError(Exception):
@@ -323,14 +435,20 @@ class MCPConnectionPool:
             if not isinstance(args, list):
                 raise ValueError("Config 'args' must be a list")
 
-            # Merge environment variables - user config takes precedence
-            env = os.environ.copy()
+            # Check debug mode
+            debug_mode = (
+                config.get("debug", False) or os.environ.get("MCP_DEBUG", "").lower() == "true"
+            )
+
+            # SECURITY: Filter environment variables to prevent leaking secrets
+            # Only allowlisted variables are passed to the subprocess
+            env = filter_mcp_environment(debug=debug_mode)
+
+            # Merge user-specified environment variables (these take precedence)
             env.update(config.get("env", {}))
 
             # Suppress server logging unless debug mode is enabled
-            if not (
-                config.get("debug", False) or os.environ.get("MCP_DEBUG", "").lower() == "true"
-            ):
+            if not debug_mode:
                 # Common environment variables to suppress logging
                 env.setdefault("LOG_LEVEL", "ERROR")
                 env.setdefault("PYTHONWARNINGS", "ignore")

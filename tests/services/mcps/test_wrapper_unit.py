@@ -988,3 +988,226 @@ class TestCommandAllowlistEdgeCases:
         error = CommandNotAllowedError("test message")
         assert isinstance(error, Exception)
         assert str(error) == "test message"
+
+
+# =============================================================================
+# Environment Filtering Tests (Issue #98)
+# =============================================================================
+
+
+from lionpride.services.mcps.wrapper import (
+    MCP_ENV_ALLOWLIST,
+    filter_mcp_environment,
+)
+
+
+class TestEnvironmentFiltering:
+    """Test MCP subprocess environment filtering (Issue #98)."""
+
+    def test_mcp_env_allowlist_contains_essentials(self):
+        """Test that MCP_ENV_ALLOWLIST contains essential system variables."""
+        assert "PATH" in MCP_ENV_ALLOWLIST
+        assert "HOME" in MCP_ENV_ALLOWLIST
+        assert "USER" in MCP_ENV_ALLOWLIST
+        assert "SHELL" in MCP_ENV_ALLOWLIST
+        assert "LANG" in MCP_ENV_ALLOWLIST
+
+    def test_mcp_env_allowlist_contains_python_vars(self):
+        """Test that MCP_ENV_ALLOWLIST contains Python-related variables."""
+        assert "PYTHONPATH" in MCP_ENV_ALLOWLIST
+        assert "VIRTUAL_ENV" in MCP_ENV_ALLOWLIST
+
+    def test_mcp_env_allowlist_contains_node_vars(self):
+        """Test that MCP_ENV_ALLOWLIST contains Node.js-related variables."""
+        assert "NODE_PATH" in MCP_ENV_ALLOWLIST
+        assert "NODE_ENV" in MCP_ENV_ALLOWLIST
+
+    def test_filter_mcp_environment_allows_allowlisted_vars(self):
+        """Test that allowlisted variables pass through."""
+        test_env = {
+            "PATH": "/usr/bin",
+            "HOME": "/home/user",
+            "OPENAI_API_KEY": "secret",
+        }
+        filtered = filter_mcp_environment(env=test_env)
+
+        assert "PATH" in filtered
+        assert "HOME" in filtered
+        assert filtered["PATH"] == "/usr/bin"
+        assert filtered["HOME"] == "/home/user"
+
+    def test_filter_mcp_environment_blocks_secrets(self):
+        """Test that secret-like variables are filtered out."""
+        test_env = {
+            "PATH": "/usr/bin",
+            "OPENAI_API_KEY": "sk-secret",
+            "ANTHROPIC_API_KEY": "ant-secret",
+            "AWS_SECRET_ACCESS_KEY": "aws-secret",
+            "DATABASE_PASSWORD": "db-secret",
+            "GITHUB_TOKEN": "ghp-secret",
+        }
+        filtered = filter_mcp_environment(env=test_env)
+
+        assert "PATH" in filtered
+        assert "OPENAI_API_KEY" not in filtered
+        assert "ANTHROPIC_API_KEY" not in filtered
+        assert "AWS_SECRET_ACCESS_KEY" not in filtered
+        assert "DATABASE_PASSWORD" not in filtered
+        assert "GITHUB_TOKEN" not in filtered
+
+    def test_filter_mcp_environment_allows_lc_pattern(self):
+        """Test that LC_* locale variables pass through via pattern."""
+        test_env = {
+            "LC_ALL": "en_US.UTF-8",
+            "LC_CTYPE": "en_US.UTF-8",
+            "LC_MESSAGES": "en_US.UTF-8",
+        }
+        filtered = filter_mcp_environment(env=test_env)
+
+        assert "LC_ALL" in filtered
+        assert "LC_CTYPE" in filtered
+        assert "LC_MESSAGES" in filtered
+
+    def test_filter_mcp_environment_allows_mcp_pattern(self):
+        """Test that MCP_* variables pass through via pattern."""
+        test_env = {
+            "MCP_DEBUG": "true",
+            "MCP_QUIET": "true",
+            "MCP_SERVER_NAME": "test",
+        }
+        filtered = filter_mcp_environment(env=test_env)
+
+        assert "MCP_DEBUG" in filtered
+        assert "MCP_QUIET" in filtered
+        assert "MCP_SERVER_NAME" in filtered
+
+    def test_filter_mcp_environment_allows_fastmcp_pattern(self):
+        """Test that FASTMCP_* variables pass through via pattern."""
+        test_env = {
+            "FASTMCP_QUIET": "true",
+            "FASTMCP_DEBUG": "true",
+        }
+        filtered = filter_mcp_environment(env=test_env)
+
+        assert "FASTMCP_QUIET" in filtered
+        assert "FASTMCP_DEBUG" in filtered
+
+    def test_filter_mcp_environment_custom_allowlist(self):
+        """Test custom allowlist overrides defaults."""
+        test_env = {
+            "PATH": "/usr/bin",
+            "HOME": "/home/user",
+            "CUSTOM_VAR": "value",
+        }
+        custom_allowlist = {"CUSTOM_VAR"}
+        filtered = filter_mcp_environment(env=test_env, allowlist=custom_allowlist)
+
+        assert "CUSTOM_VAR" in filtered
+        assert "PATH" not in filtered  # Not in custom allowlist
+        assert "HOME" not in filtered
+
+    def test_filter_mcp_environment_empty_allowlist(self):
+        """Test empty allowlist filters everything except patterns."""
+        test_env = {
+            "PATH": "/usr/bin",
+            "MCP_DEBUG": "true",  # Still allowed by pattern
+        }
+        filtered = filter_mcp_environment(env=test_env, allowlist=set())
+
+        assert "PATH" not in filtered
+        assert "MCP_DEBUG" in filtered  # Pattern still works
+
+    def test_filter_mcp_environment_empty_patterns(self):
+        """Test empty patterns only uses allowlist."""
+        test_env = {
+            "PATH": "/usr/bin",
+            "LC_ALL": "en_US.UTF-8",
+            "MCP_DEBUG": "true",
+        }
+        filtered = filter_mcp_environment(
+            env=test_env,
+            allowlist={"PATH"},
+            patterns=(),
+        )
+
+        assert "PATH" in filtered
+        assert "LC_ALL" not in filtered  # Pattern disabled
+        assert "MCP_DEBUG" not in filtered  # Pattern disabled
+
+    def test_filter_mcp_environment_debug_logging(self, caplog):
+        """Test debug mode logs excluded variables."""
+        import logging
+
+        test_env = {
+            "PATH": "/usr/bin",
+            "SECRET_KEY": "secret",
+        }
+
+        with caplog.at_level(logging.DEBUG):
+            filter_mcp_environment(env=test_env, debug=True)
+
+        # Debug log should mention filtering
+        assert any("filtered" in record.message.lower() for record in caplog.records) or any(
+            "excluded" in record.message.lower() for record in caplog.records
+        )
+
+    def test_filter_mcp_environment_uses_os_environ_by_default(self):
+        """Test that None env defaults to os.environ."""
+        with patch.dict(os.environ, {"PATH": "/test/path", "HOME": "/test/home"}, clear=True):
+            filtered = filter_mcp_environment()
+
+            assert "PATH" in filtered
+            assert filtered["PATH"] == "/test/path"
+
+    async def test_create_client_uses_filtered_environment(self, mock_fastmcp):
+        """Test that _create_client uses filtered environment."""
+        config = {"command": "python"}
+
+        # Set up environment with secret
+        with patch.dict(
+            os.environ,
+            {"PATH": "/usr/bin", "OPENAI_API_KEY": "secret"},
+            clear=True,
+        ):
+            await MCPConnectionPool._create_client(config)
+
+        # Verify StdioTransport was called with filtered env
+        call_kwargs = mock_fastmcp._mock_transport_class.call_args.kwargs
+        env = call_kwargs["env"]
+
+        # PATH should be there (allowlisted)
+        assert "PATH" in env
+        # OPENAI_API_KEY should NOT be there (filtered)
+        assert "OPENAI_API_KEY" not in env
+
+    async def test_create_client_merges_config_env_after_filtering(self, mock_fastmcp):
+        """Test that config env is merged after filtering."""
+        config = {
+            "command": "python",
+            "env": {"MY_CUSTOM_VAR": "custom_value"},
+        }
+
+        with patch.dict(os.environ, {"PATH": "/usr/bin"}, clear=True):
+            await MCPConnectionPool._create_client(config)
+
+        call_kwargs = mock_fastmcp._mock_transport_class.call_args.kwargs
+        env = call_kwargs["env"]
+
+        # Custom var from config should be merged
+        assert env["MY_CUSTOM_VAR"] == "custom_value"
+
+    async def test_create_client_config_env_overrides_filtered(self, mock_fastmcp):
+        """Test that config env can override filtered values."""
+        config = {
+            "command": "python",
+            "env": {"PATH": "/custom/path"},
+        }
+
+        with patch.dict(os.environ, {"PATH": "/usr/bin"}, clear=True):
+            await MCPConnectionPool._create_client(config)
+
+        call_kwargs = mock_fastmcp._mock_transport_class.call_args.kwargs
+        env = call_kwargs["env"]
+
+        # Config PATH should override filtered PATH
+        assert env["PATH"] == "/custom/path"

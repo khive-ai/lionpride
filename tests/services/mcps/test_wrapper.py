@@ -320,16 +320,20 @@ class TestCreateClient:
                 "fastmcp.client.transports.StdioTransport", return_value=mock_transport
             ) as MockTransport,
             patch("fastmcp.Client", return_value=mock_client),
-            patch.dict(os.environ, {"EXISTING_VAR": "existing"}),
+            patch.dict(os.environ, {"PATH": "/usr/bin", "UNALLOWED_VAR": "secret"}),
         ):
             config = {"command": "python", "env": {"CUSTOM_VAR": "custom"}}
             await MCPConnectionPool._create_client(config)
 
             call_kwargs = MockTransport.call_args.kwargs
             env = call_kwargs["env"]
-            assert env["EXISTING_VAR"] == "existing"
+            # Allowed env vars are passed through
+            assert env["PATH"] == "/usr/bin"
+            # Config env vars are merged after filtering
             assert env["CUSTOM_VAR"] == "custom"
             assert env["LOG_LEVEL"] == "ERROR"  # Default suppression
+            # Unallowed env vars are filtered out (security fix for issue #98)
+            assert "UNALLOWED_VAR" not in env
 
     @pytest.mark.skipif(not HAS_FASTMCP, reason="fastmcp not installed")
     async def test_create_client_command_debug_mode(self):
