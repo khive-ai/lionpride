@@ -138,6 +138,72 @@ jobs:
             coverage.xml
 
   # =============================================================================
+  # Import time benchmark (ensure fast CLI cold start)
+  # =============================================================================
+  import-benchmark:
+    name: Import Benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Measure import time
+        id: benchmark
+        run: |
+          # Run 5 times and take median for stability
+          times=()
+          for i in {1..5}; do
+            time=$(uv run python -c "
+          import time
+          start = time.perf_counter()
+          import lionpride
+          elapsed_ms = (time.perf_counter() - start) * 1000
+          print(f'{elapsed_ms:.2f}')
+          ")
+            times+=($time)
+          done
+
+          # Sort and get median
+          IFS=$'\n' sorted=($(sort -n <<<"${times[*]}"))
+          median=${sorted[2]}
+
+          echo "Import times: ${times[*]}"
+          echo "Median: $median ms"
+          echo "import_time=$median" >> $GITHUB_OUTPUT
+
+          # Fail if import time exceeds 100ms threshold
+          threshold=100
+          if (( $(echo "$median > $threshold" | bc -l) )); then
+            echo "❌ Import time ($median ms) exceeds threshold ($threshold ms)"
+            exit 1
+          else
+            echo "✅ Import time ($median ms) is within threshold ($threshold ms)"
+          fi
+
+      - name: Report import time
+        if: always()
+        run: |
+          echo "## Import Time Benchmark" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Import time | ${{ steps.benchmark.outputs.import_time }} ms |" >> $GITHUB_STEP_SUMMARY
+          echo "| Threshold | 100 ms |" >> $GITHUB_STEP_SUMMARY
+
+  # =============================================================================
   # Build check (ensure package builds correctly)
   # =============================================================================
   build:
@@ -171,7 +237,7 @@ jobs:
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test, build]
+    needs: [lint, typecheck, test, build, import-benchmark]
     if: always()
     steps:
       - name: Check all jobs
@@ -186,6 +252,10 @@ jobs:
           fi
           if [ "${{ needs.build.result }}" != "success" ]; then
             echo "Build failed"
+            exit 1
+          fi
+          if [ "${{ needs.import-benchmark.result }}" != "success" ]; then
+            echo "Import benchmark failed (>100ms)"
             exit 1
           fi
           # typecheck is allowed to fail (continue-on-error)
