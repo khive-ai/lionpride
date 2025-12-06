@@ -123,7 +123,7 @@ class LogAdapter(ABC):
         Returns:
             Number of logs written
         """
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     async def read(
@@ -145,12 +145,12 @@ class LogAdapter(ABC):
         Returns:
             List of log dicts
         """
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     async def close(self) -> None:
         """Close the adapter and release resources."""
-        pass
+        pass  # pragma: no cover
 
 
 class SQLiteWALLogAdapter(LogAdapter):

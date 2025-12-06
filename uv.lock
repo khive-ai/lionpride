@@ -1639,13 +1639,16 @@ all = [
     { name = "asyncpg" },
     { name = "datamodel-code-generator" },
     { name = "fastmcp" },
+    { name = "mcp" },
     { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "urllib3" },
 ]
 log-all = [
     { name = "aioboto3" },
     { name = "aiosqlite" },
     { name = "asyncpg" },
     { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "urllib3" },
 ]
 log-postgres = [
     { name = "asyncpg" },
@@ -1653,12 +1656,14 @@ log-postgres = [
 ]
 log-s3 = [
     { name = "aioboto3" },
+    { name = "urllib3" },
 ]
 log-sqlite = [
     { name = "aiosqlite" },
 ]
 mcp = [
     { name = "fastmcp" },
+    { name = "mcp" },
 ]
 schema-gen = [
     { name = "datamodel-code-generator" },
@@ -1687,6 +1692,7 @@ dev = [
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "testcontainers", extra = ["minio"] },
     { name = "trio" },
+    { name = "urllib3" },
 ]
 docs = [
     { name = "mkdocs" },
@@ -1705,10 +1711,12 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "lionpride", extras = ["log-sqlite", "log-postgres", "log-s3"], marker = "extra == 'log-all'" },
     { name = "lionpride", extras = ["schema-gen", "mcp", "log-all"], marker = "extra == 'all'" },
+    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.23.0" },
     { name = "pydapter", specifier = ">=1.2.0" },
     { name = "python-dotenv", specifier = ">=1.2.1" },
     { name = "sqlalchemy", extras = ["asyncio"], marker = "extra == 'log-postgres'", specifier = ">=2.0.0" },
     { name = "tiktoken", specifier = ">=0.8.0" },
+    { name = "urllib3", marker = "extra == 'log-s3'", specifier = ">=2.6.0" },
 ]
 provides-extras = ["schema-gen", "mcp", "log-sqlite", "log-postgres", "log-s3", "log-all", "all"]
 
@@ -1736,6 +1744,7 @@ dev = [
     { name = "testcontainers", extras = ["postgres"], specifier = ">=3.7.0" },
     { name = "testcontainers", extras = ["postgres", "minio"], specifier = ">=4.0.0" },
     { name = "trio", specifier = ">=0.31.0" },
+    { name = "urllib3", specifier = ">=2.6.0" },
 ]
 docs = [
     { name = "mkdocs", specifier = ">=1.5.0" },
@@ -1852,7 +1861,7 @@ wheels = [
 
 [[package]]
 name = "mcp"
-version = "1.22.0"
+version = "1.23.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -1870,9 +1879,9 @@ dependencies = [
     { name = "typing-inspection" },
     { name = "uvicorn", marker = "sys_platform != 'emscripten'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a3/a2/c5ec0ab38b35ade2ae49a90fada718fbc76811dc5aa1760414c6aaa6b08a/mcp-1.22.0.tar.gz", hash = "sha256:769b9ac90ed42134375b19e777a2858ca300f95f2e800982b3e2be62dfc0ba01", size = 471788, upload-time = "2025-11-20T20:11:28.095Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/12/42/10c0c09ca27aceacd8c428956cfabdd67e3d328fe55c4abc16589285d294/mcp-1.23.1.tar.gz", hash = "sha256:7403e053e8e2283b1e6ae631423cb54736933fea70b32422152e6064556cd298", size = 596519, upload-time = "2025-12-02T18:41:12.807Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a9/bb/711099f9c6bb52770f56e56401cdfb10da5b67029f701e0df29362df4c8e/mcp-1.22.0-py3-none-any.whl", hash = "sha256:bed758e24df1ed6846989c909ba4e3df339a27b4f30f1b8b627862a4bade4e98", size = 175489, upload-time = "2025-11-20T20:11:26.542Z" },
+    { url = "https://files.pythonhosted.org/packages/9f/9e/26e1d2d2c6afe15dfba5ca6799eeeea7656dce625c22766e4c57305e9cc2/mcp-1.23.1-py3-none-any.whl", hash = "sha256:3ce897fcc20a41bd50b4c58d3aa88085f11f505dcc0eaed48930012d34c731d8", size = 231433, upload-time = "2025-12-02T18:41:11.195Z" },
 ]
 
 [[package]]
@@ -3839,11 +3848,11 @@ wheels = [
 
 [[package]]
 name = "urllib3"
-version = "2.5.0"
+version = "2.6.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/15/22/9ee70a2574a4f4599c47dd506532914ce044817c7752a79b6a51286319bc/urllib3-2.5.0.tar.gz", hash = "sha256:3fc47733c7e419d4bc3f6b3dc2b4f890bb743906a30d56ba4a5bfa4bbff92760", size = 393185, upload-time = "2025-06-18T14:07:41.644Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1c/43/554c2569b62f49350597348fc3ac70f786e3c32e7f19d266e19817812dd3/urllib3-2.6.0.tar.gz", hash = "sha256:cb9bcef5a4b345d5da5d145dc3e30834f58e8018828cbc724d30b4cb7d4d49f1", size = 432585, upload-time = "2025-12-05T15:08:47.885Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a7/c2/fe1e52489ae3122415c51f387e221dd0773709bad6c6cdaa599e8a2c5185/urllib3-2.5.0-py3-none-any.whl", hash = "sha256:e6b01673c0fa6a13e374b50871808eb3bf7046c4b125b216f6bf1cc604cff0dc", size = 129795, upload-time = "2025-06-18T14:07:40.39Z" },
+    { url = "https://files.pythonhosted.org/packages/56/1a/9ffe814d317c5224166b23e7c47f606d6e473712a2fad0f704ea9b99f246/urllib3-2.6.0-py3-none-any.whl", hash = "sha256:c90f7a39f716c572c4e3e58509581ebd83f9b59cced005b7db7ad2d22b0db99f", size = 131083, upload-time = "2025-12-05T15:08:45.983Z" },
 ]
 
 [[package]]
