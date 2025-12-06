@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a6] - 2025-12-05
+
+### Fixed
+
+- Resolve 16 discovered issues across core, security, and observability (#60)
+- Remove obsolete `_testing.py` module from package (#84)
+
+### Documentation
+
+- Remove AlcallParams/BcallParams references from API docs (#86)
+
+### Internal
+
+- Consolidate MockNormalizedResponse fixture to conftest.py (#87)
+- Consolidate test suite structure (#84)
+
 ## [1.0.0a5] - 2025-12-05
 
 ### Added
@@ -163,7 +179,8 @@ Initial alpha release of lionpride - foundational primitives for production AI a
 - Interactive Jupyter notebooks
 - 99%+ test coverage
 
-[Unreleased]: https://github.com/khive-ai/lionpride/compare/v1.0.0a5...HEAD
+[Unreleased]: https://github.com/khive-ai/lionpride/compare/v1.0.0a6...HEAD
+[1.0.0a6]: https://github.com/khive-ai/lionpride/releases/tag/v1.0.0a6
 [1.0.0a5]: https://github.com/khive-ai/lionpride/releases/tag/v1.0.0a5
 [1.0.0a4]: https://github.com/khive-ai/lionpride/releases/tag/v1.0.0a4
 [1.0.0a3]: https://github.com/khive-ai/lionpride/releases/tag/v1.0.0a3
