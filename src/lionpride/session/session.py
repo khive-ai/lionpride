@@ -90,8 +90,25 @@ class Session(Element):
         result = op.response
 
     Note:
-        conversations, services, and operations are lazily initialized on first access
-        to minimize Session() construction overhead.
+        Session is not thread-safe. The lazy initialization of internal containers
+        (conversations, services, operations) uses simple None-checks without
+        synchronization. For concurrent access, use external synchronization
+        or create separate Session instances per thread.
+
+    Lazy Initialization:
+        By default, conversations, services, and operations are lazily initialized
+        on first access to minimize Session() construction overhead. However,
+        passing certain parameters triggers eager initialization:
+
+        +---------------------------------------+----------+---------------+
+        | Construction                          | services | conversations |
+        +=======================================+==========+===============+
+        | Session()                             | LAZY     | LAZY          |
+        +---------------------------------------+----------+---------------+
+        | Session(default_generate_model=model) | EAGER    | LAZY          |
+        +---------------------------------------+----------+---------------+
+        | Session(default_branch=branch)        | LAZY     | EAGER         |
+        +---------------------------------------+----------+---------------+
     """
 
     # -------------------------------------------------------------------------

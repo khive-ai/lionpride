@@ -658,3 +658,54 @@ class TestSQLiteLogAdapterCorruptData:
         assert len(result) == 2
 
         await adapter.close()
+
+
+@pytest.mark.integration
+class TestSQLiteLogAdapterImportError:
+    """Tests for SQLiteWALLogAdapter import error handling.
+
+    Covers log_adapter.py lines 185-186 (aiosqlite ImportError).
+    """
+
+    @pytest.mark.asyncio
+    async def test_ensure_initialized_raises_import_error_when_aiosqlite_missing(
+        self, tmp_path: Path
+    ):
+        """Should raise ImportError with helpful message when aiosqlite not available."""
+        import builtins
+        import sys
+
+        # Store original import and modules
+        original_import = builtins.__import__
+        original_modules = dict(sys.modules)
+
+        # Remove aiosqlite from sys.modules if present
+        for key in list(sys.modules.keys()):
+            if "aiosqlite" in key:
+                del sys.modules[key]
+
+        def mock_import(name, *args, **kwargs):
+            if name == "aiosqlite" or name.startswith("aiosqlite."):
+                raise ImportError("No module named 'aiosqlite'")
+            return original_import(name, *args, **kwargs)
+
+        db_path = tmp_path / "import_error.db"
+
+        # Create fresh adapter instance
+        from lionpride.session.log_adapter import SQLiteWALLogAdapter
+
+        adapter = SQLiteWALLogAdapter(db_path=db_path)
+        # Reset initialized state to force re-initialization
+        adapter._initialized = False
+        adapter._connection = None
+
+        try:
+            with pytest.raises(ImportError, match="aiosqlite is required"):
+                # Patch import during _ensure_initialized
+                builtins.__import__ = mock_import
+                await adapter._ensure_initialized()
+        finally:
+            # Restore original import
+            builtins.__import__ = original_import
+            # Restore original modules
+            sys.modules.update(original_modules)
