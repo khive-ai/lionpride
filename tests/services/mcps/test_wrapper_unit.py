@@ -1211,3 +1211,203 @@ class TestEnvironmentFiltering:
 
         # Config PATH should override filtered PATH
         assert env["PATH"] == "/custom/path"
+
+
+# =============================================================================
+# Session-Scoped Pool Tests (Issue #91)
+# =============================================================================
+
+
+from lionpride.services.mcps.wrapper import (
+    DEFAULT_ALLOWED_COMMANDS,
+    CommandNotAllowedError,
+    MCPConnectionPoolInstance,
+    MCPSecurityConfig,
+    create_mcp_pool,
+)
+
+
+class TestMCPSecurityConfig:
+    """Test immutable security configuration."""
+
+    def test_default_config(self):
+        """Test default security config has strict mode and default commands."""
+        config = MCPSecurityConfig()
+        assert config.strict_mode is True
+        assert config.allowed_commands == DEFAULT_ALLOWED_COMMANDS
+
+    def test_config_is_frozen(self):
+        """Test that security config is immutable."""
+        config = MCPSecurityConfig()
+        with pytest.raises(AttributeError):
+            config.strict_mode = False
+
+    def test_with_commands_creates_new_config(self):
+        """Test with_commands returns new config with extended commands."""
+        config = MCPSecurityConfig()
+        new_config = config.with_commands({"my-runner"})
+
+        # Original unchanged
+        assert "my-runner" not in config.allowed_commands
+        # New config has additional command
+        assert "my-runner" in new_config.allowed_commands
+        # Defaults still present
+        assert "python" in new_config.allowed_commands
+
+    def test_custom_allowed_commands(self):
+        """Test creating config with custom allowed commands."""
+        config = MCPSecurityConfig(
+            allowed_commands=frozenset({"only-this"}),
+            strict_mode=True,
+        )
+        assert config.allowed_commands == frozenset({"only-this"})
+
+    def test_set_converted_to_frozenset(self):
+        """Test that set input is converted to frozenset."""
+        config = MCPSecurityConfig(allowed_commands={"a", "b"})
+        assert isinstance(config.allowed_commands, frozenset)
+
+
+class TestMCPConnectionPoolInstance:
+    """Test session-scoped connection pool."""
+
+    def test_init_default_security(self):
+        """Test pool initializes with default security."""
+        pool = MCPConnectionPoolInstance()
+        assert pool.security_config.strict_mode is True
+        assert pool.security_config.allowed_commands == DEFAULT_ALLOWED_COMMANDS
+
+    def test_init_custom_security(self):
+        """Test pool initializes with custom security config."""
+        security = MCPSecurityConfig(
+            allowed_commands=frozenset({"custom-only"}),
+            strict_mode=False,
+        )
+        pool = MCPConnectionPoolInstance(security_config=security)
+        assert pool.security_config.strict_mode is False
+        assert pool.security_config.allowed_commands == frozenset({"custom-only"})
+
+    def test_init_with_configs(self):
+        """Test pool initializes with pre-loaded configs."""
+        configs = {"server1": {"command": "python"}}
+        pool = MCPConnectionPoolInstance(configs=configs)
+        assert "server1" in pool._configs
+
+    def test_configs_are_copied(self):
+        """Test that configs are copied, not referenced."""
+        configs = {"server1": {"command": "python"}}
+        pool = MCPConnectionPoolInstance(configs=configs)
+        configs["server2"] = {"command": "node"}
+        assert "server2" not in pool._configs
+
+    def test_validate_command_strict_mode(self):
+        """Test command validation in strict mode."""
+        pool = MCPConnectionPoolInstance()
+        pool._validate_command("python")  # Should pass
+
+        with pytest.raises(CommandNotAllowedError):
+            pool._validate_command("not-allowed")
+
+    def test_validate_command_rejects_paths(self):
+        """Test that path separators are rejected in strict mode."""
+        pool = MCPConnectionPoolInstance()
+
+        with pytest.raises(CommandNotAllowedError):
+            pool._validate_command("./python")
+
+        with pytest.raises(CommandNotAllowedError):
+            pool._validate_command("/usr/bin/python")
+
+    def test_validate_command_non_strict_mode(self):
+        """Test command validation with strict mode off."""
+        security = MCPSecurityConfig(strict_mode=False)
+        pool = MCPConnectionPoolInstance(security_config=security)
+        # Should not raise - any command allowed
+        pool._validate_command("anything")
+        pool._validate_command("./with-path")
+
+    def test_security_config_property(self):
+        """Test security_config property returns config."""
+        pool = MCPConnectionPoolInstance()
+        assert isinstance(pool.security_config, MCPSecurityConfig)
+
+    def test_pools_have_independent_state(self):
+        """Test that multiple pool instances have independent state."""
+        pool1 = MCPConnectionPoolInstance(configs={"server1": {"command": "python"}})
+        pool2 = MCPConnectionPoolInstance(configs={"server2": {"command": "node"}})
+
+        assert "server1" in pool1._configs
+        assert "server1" not in pool2._configs
+        assert "server2" in pool2._configs
+        assert "server2" not in pool1._configs
+
+
+class TestCreateMCPPool:
+    """Test factory function for session-scoped pools."""
+
+    def test_default_pool(self):
+        """Test creating pool with defaults."""
+        pool = create_mcp_pool()
+        assert pool.security_config.strict_mode is True
+        assert pool.security_config.allowed_commands == DEFAULT_ALLOWED_COMMANDS
+
+    def test_with_additional_commands(self):
+        """Test creating pool with additional commands."""
+        pool = create_mcp_pool(allowed_commands={"my-runner"})
+        assert "my-runner" in pool.security_config.allowed_commands
+        assert "python" in pool.security_config.allowed_commands  # Defaults still present
+
+    def test_replace_defaults(self):
+        """Test creating pool with replaced commands (no defaults)."""
+        pool = create_mcp_pool(
+            allowed_commands={"only-this"},
+            extend_defaults=False,
+        )
+        assert pool.security_config.allowed_commands == frozenset({"only-this"})
+        assert "python" not in pool.security_config.allowed_commands
+
+    def test_strict_mode_off(self):
+        """Test creating pool with strict mode disabled."""
+        pool = create_mcp_pool(strict_mode=False)
+        assert pool.security_config.strict_mode is False
+
+    def test_with_configs(self):
+        """Test creating pool with pre-loaded configs."""
+        configs = {"my-server": {"command": "python"}}
+        pool = create_mcp_pool(configs=configs)
+        assert "my-server" in pool._configs
+
+
+class TestSessionIsolation:
+    """Test that session-scoped pools provide isolation."""
+
+    def test_security_changes_dont_affect_other_pools(self):
+        """Test that security configs are isolated per pool."""
+        pool1 = create_mcp_pool(allowed_commands={"runner1"})
+        pool2 = create_mcp_pool(allowed_commands={"runner2"})
+
+        assert "runner1" in pool1.security_config.allowed_commands
+        assert "runner1" not in pool2.security_config.allowed_commands
+        assert "runner2" in pool2.security_config.allowed_commands
+        assert "runner2" not in pool1.security_config.allowed_commands
+
+    def test_client_caches_are_isolated(self):
+        """Test that client caches are isolated per pool."""
+        pool1 = MCPConnectionPoolInstance()
+        pool2 = MCPConnectionPoolInstance()
+
+        pool1._clients["test"] = "client1"
+        pool2._clients["test"] = "client2"
+
+        assert pool1._clients["test"] == "client1"
+        assert pool2._clients["test"] == "client2"
+
+    def test_config_changes_are_isolated(self):
+        """Test that config changes don't leak between pools."""
+        pool1 = MCPConnectionPoolInstance()
+        pool2 = MCPConnectionPoolInstance()
+
+        pool1._configs["server1"] = {"command": "python"}
+
+        assert "server1" in pool1._configs
+        assert "server1" not in pool2._configs
