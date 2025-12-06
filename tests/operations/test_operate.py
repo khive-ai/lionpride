@@ -615,3 +615,299 @@ class TestFactoryUncoveredLines:
         assert hasattr(model_result, "action_responses")
         assert model_result.action_responses[0].output == 28  # 4 * 7
         assert assistant_msg is not None
+
+
+# =============================================================================
+# Coverage Tests for Factory and Act Edge Cases (Issue #85)
+# =============================================================================
+
+
+class TestOperateFactoryCoverage:
+    """Test edge cases in factory.py for full coverage."""
+
+    @pytest.mark.asyncio
+    async def test_capabilities_not_in_operable_error(self, session_with_model):
+        """Test validation error when capabilities not in operable (lines 131-132)."""
+        session, mock_model = session_with_model
+        branch = session.create_branch(
+            capabilities={"simplemodel", "nonexistent"},
+            resources={mock_model.name},
+        )
+
+        params = OperateParams(
+            generate=GenerateParams(
+                imodel=mock_model,
+                instruction="Test",
+                request_model=SimpleModel,
+                imodel_kwargs={"model_name": "gpt-4"},
+            ),
+            parse=ParseParams(),
+            capabilities={"simplemodel", "nonexistent"},  # nonexistent not in operable
+            strict_validation=False,
+        )
+
+        with pytest.raises(ValidationError, match="Requested capabilities not in operable"):
+            await operate(session, branch, params)
+
+    def test_missing_capabilities_error_at_model_level(self):
+        """Test validation error when capabilities is None (line 100 covered via __post_init__)."""
+        # This validation happens at OperateParams.__post_init__, not in factory
+        # So we test that the model raises appropriately
+        with pytest.raises(ValueError, match="capabilities must be explicitly declared"):
+            OperateParams(
+                generate=GenerateParams(
+                    instruction="Test",
+                    request_model=SimpleModel,
+                    imodel_kwargs={"model_name": "gpt-4"},
+                ),
+                parse=ParseParams(),
+                capabilities=None,  # Must be explicit
+                strict_validation=False,
+            )
+
+    @pytest.mark.asyncio
+    async def test_reason_capability_added_when_reason_true(self, session_with_model):
+        """Test that reason capability is added when params.reason=True (line 112)."""
+        session, mock_model = session_with_model
+        # Branch must have reason capability
+        branch = session.create_branch(
+            capabilities={"simplemodel", "reason"},
+            resources={mock_model.name},
+        )
+
+        async def mock_json_invoke(**kwargs):
+            class MockCalling(Event):
+                def __init__(self):
+                    super().__init__()
+                    self.status = EventStatus.COMPLETED
+                    self.execution.response = MockNormalizedResponse(
+                        data='{"simplemodel": {"title": "Test", "value": 42}, "reason": "Because testing"}'
+                    )
+
+            return MockCalling()
+
+        object.__setattr__(mock_model, "invoke", AsyncMock(side_effect=mock_json_invoke))
+
+        params = OperateParams(
+            generate=GenerateParams(
+                imodel=mock_model,
+                instruction="Test with reason",
+                request_model=SimpleModel,
+                imodel_kwargs={"model_name": "gpt-4"},
+            ),
+            parse=ParseParams(),
+            capabilities={"simplemodel", "reason"},
+            strict_validation=False,
+            reason=True,  # This triggers line 112
+        )
+
+        result = await operate(session, branch, params)
+        assert result is not None
+
+
+class TestActCoverage:
+    """Test edge cases in act.py for full coverage."""
+
+    @pytest.fixture
+    def mock_model_local(self):
+        """Create a mock iModel for local testing."""
+        from lionpride.services.providers.oai_chat import OAIChatEndpoint
+        from lionpride.services.types.imodel import iModel
+
+        endpoint = OAIChatEndpoint(config=None, name="mock_model", api_key="mock-key")
+        model = iModel(backend=endpoint)
+
+        async def mock_invoke(**kwargs):
+            class MockCalling(Event):
+                def __init__(self):
+                    super().__init__()
+                    self.status = EventStatus.COMPLETED
+                    self.execution.response = MockNormalizedResponse()
+
+            return MockCalling()
+
+        object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_invoke))
+        return model
+
+    @pytest.fixture
+    def session_with_model_local(self, mock_model_local):
+        """Create session with registered mock model."""
+        session = Session()
+        session.services.register(mock_model_local, update=True)
+        return session, mock_model_local
+
+    @pytest.mark.asyncio
+    async def test_action_with_response_data_attribute(self, session_with_model_local):
+        """Test result extraction when result.response.data exists (lines 87-92)."""
+        from lionpride.operations.operate.factory import operate
+        from lionpride.services import iModel
+        from lionpride.services.types.tool import Tool, ToolConfig
+
+        session, model = session_with_model_local
+        branch = session.create_branch(
+            name="test",
+            capabilities={"responsemodel", "action_requests", "action_responses"},
+            resources={model.name, "custom_tool"},
+        )
+
+        # Create tool that returns object with response.data
+        class ResponseWithData:
+            def __init__(self):
+                self.data = "extracted from response.data"
+
+        class ToolResult:
+            def __init__(self):
+                self.response = ResponseWithData()
+
+        async def custom_tool() -> dict:
+            return ToolResult()
+
+        tool = Tool(
+            func_callable=custom_tool, config=ToolConfig(name="custom_tool", provider="tool")
+        )
+        session.services.register(iModel(backend=tool))
+
+        class ResponseModel(BaseModel):
+            answer: str
+
+        async def mock_json_invoke(**kwargs):
+            class MockCalling(Event):
+                def __init__(self):
+                    super().__init__()
+                    self.status = EventStatus.COMPLETED
+                    self.execution.response = MockNormalizedResponse(
+                        data='{"responsemodel": {"answer": "test"}, "action_requests": [{"function": "custom_tool", "arguments": {}}]}'
+                    )
+
+            return MockCalling()
+
+        object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_json_invoke))
+
+        params = OperateParams(
+            generate=GenerateParams(
+                imodel=model,
+                instruction="Test",
+                request_model=ResponseModel,
+                imodel_kwargs={"model_name": "gpt-4"},
+            ),
+            parse=ParseParams(),
+            capabilities={"responsemodel", "action_requests", "action_responses"},
+            strict_validation=False,
+            actions=True,
+        )
+
+        result = await operate(session, branch, params)
+        assert result.action_responses is not None
+
+    @pytest.mark.asyncio
+    async def test_action_with_data_attribute(self, session_with_model_local):
+        """Test result extraction when result.data exists (lines 93-94)."""
+        from lionpride.operations.operate.factory import operate
+        from lionpride.services import iModel
+        from lionpride.services.types.tool import Tool, ToolConfig
+
+        session, model = session_with_model_local
+        branch = session.create_branch(
+            name="test",
+            capabilities={"responsemodel", "action_requests", "action_responses"},
+            resources={model.name, "data_tool"},
+        )
+
+        # Create tool that returns object with .data
+        class ResultWithData:
+            def __init__(self):
+                self.data = "extracted from data"
+
+        async def data_tool() -> dict:
+            return ResultWithData()
+
+        tool = Tool(func_callable=data_tool, config=ToolConfig(name="data_tool", provider="tool"))
+        session.services.register(iModel(backend=tool))
+
+        class ResponseModel(BaseModel):
+            answer: str
+
+        async def mock_json_invoke(**kwargs):
+            class MockCalling(Event):
+                def __init__(self):
+                    super().__init__()
+                    self.status = EventStatus.COMPLETED
+                    self.execution.response = MockNormalizedResponse(
+                        data='{"responsemodel": {"answer": "test"}, "action_requests": [{"function": "data_tool", "arguments": {}}]}'
+                    )
+
+            return MockCalling()
+
+        object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_json_invoke))
+
+        params = OperateParams(
+            generate=GenerateParams(
+                imodel=model,
+                instruction="Test",
+                request_model=ResponseModel,
+                imodel_kwargs={"model_name": "gpt-4"},
+            ),
+            parse=ParseParams(),
+            capabilities={"responsemodel", "action_requests", "action_responses"},
+            strict_validation=False,
+            actions=True,
+        )
+
+        result = await operate(session, branch, params)
+        assert result.action_responses is not None
+
+    @pytest.mark.asyncio
+    async def test_action_exception_handling(self, session_with_model_local):
+        """Test action exception is caught and returned as error (line 103)."""
+        from lionpride.operations.operate.factory import operate
+        from lionpride.services import iModel
+        from lionpride.services.types.tool import Tool, ToolConfig
+
+        session, model = session_with_model_local
+        branch = session.create_branch(
+            name="test",
+            capabilities={"responsemodel", "action_requests", "action_responses"},
+            resources={model.name, "error_tool"},
+        )
+
+        # Create tool that raises exception
+        async def error_tool() -> dict:
+            raise RuntimeError("Tool execution failed")
+
+        tool = Tool(func_callable=error_tool, config=ToolConfig(name="error_tool", provider="tool"))
+        session.services.register(iModel(backend=tool))
+
+        class ResponseModel(BaseModel):
+            answer: str
+
+        async def mock_json_invoke(**kwargs):
+            class MockCalling(Event):
+                def __init__(self):
+                    super().__init__()
+                    self.status = EventStatus.COMPLETED
+                    self.execution.response = MockNormalizedResponse(
+                        data='{"responsemodel": {"answer": "test"}, "action_requests": [{"function": "error_tool", "arguments": {}}]}'
+                    )
+
+            return MockCalling()
+
+        object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_json_invoke))
+
+        params = OperateParams(
+            generate=GenerateParams(
+                imodel=model,
+                instruction="Test",
+                request_model=ResponseModel,
+                imodel_kwargs={"model_name": "gpt-4"},
+            ),
+            parse=ParseParams(),
+            capabilities={"responsemodel", "action_requests", "action_responses"},
+            strict_validation=False,
+            actions=True,
+        )
+
+        result = await operate(session, branch, params)
+        # Exception should be caught and returned as error string
+        assert result.action_responses is not None
+        assert "RuntimeError" in result.action_responses[0].output
+        assert "Tool execution failed" in result.action_responses[0].output
