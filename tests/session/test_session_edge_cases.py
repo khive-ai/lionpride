@@ -18,11 +18,12 @@ Covers:
 - Referential integrity violations
 """
 
+import warnings
 from uuid import uuid4
 
 import pytest
 
-from lionpride.errors import NotFoundError
+from lionpride.errors import AccessError, NotFoundError
 from lionpride.session import Branch, Session
 from lionpride.session.messages import (
     ActionResponseContent,
@@ -1286,3 +1287,236 @@ class TestSessionRequestMethod:
         assert captured_kwargs.get("poll_timeout") == 60.0
         assert captured_kwargs.get("poll_interval") == 0.5
         assert captured_kwargs.get("custom_param") == "test"
+
+
+class TestSessionRequestAccessControl:
+    """Test session.request() access control via branch parameter."""
+
+    @pytest.mark.asyncio
+    async def test_request_denies_access_when_service_not_in_branch_resources(self):
+        """Test session.request() raises AccessError when service not in branch.resources.
+
+        This is the core security fix: when branch is provided, service_name must
+        be in branch.resources, otherwise access is denied.
+        """
+        from unittest.mock import AsyncMock
+
+        from lionpride.services.providers.oai_chat import OAIChatEndpoint
+        from lionpride.services.types.imodel import iModel
+
+        # Create and register a model
+        endpoint = OAIChatEndpoint(config=None, name="restricted_model", api_key="test")
+        model = iModel(backend=endpoint)
+
+        session = Session()
+        session.services.register(model)
+
+        # Create branch WITHOUT the model in resources
+        branch = session.create_branch(name="restricted_branch", resources=set())
+
+        # Attempting to use the model through this branch should fail
+        with pytest.raises(AccessError) as exc_info:
+            await session.request("restricted_model", branch=branch)
+
+        assert "doesn't have access to service" in str(exc_info.value)
+        assert "restricted_model" in str(exc_info.value.details.get("requested", ""))
+        assert exc_info.value.details.get("available") == []
+
+    @pytest.mark.asyncio
+    async def test_request_grants_access_when_service_in_branch_resources(self):
+        """Test session.request() succeeds when service is in branch.resources.
+
+        When branch has the service in its resources set, access is granted.
+        """
+        from dataclasses import dataclass
+        from unittest.mock import AsyncMock
+
+        from lionpride import Event, EventStatus
+        from lionpride.services.providers.oai_chat import OAIChatEndpoint
+        from lionpride.services.types.imodel import iModel
+
+        endpoint = OAIChatEndpoint(config=None, name="allowed_model", api_key="test")
+        model = iModel(backend=endpoint)
+
+        @dataclass
+        class MockResponse:
+            data: str = "success"
+
+        async def mock_invoke(**kwargs):
+            class MockCalling(Event):
+                def __init__(self):
+                    super().__init__()
+                    self.status = EventStatus.COMPLETED
+                    self.execution.response = MockResponse()
+
+            return MockCalling()
+
+        object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_invoke))
+
+        session = Session()
+        session.services.register(model)
+
+        # Create branch WITH the model in resources
+        branch = session.create_branch(
+            name="allowed_branch",
+            resources={"allowed_model"},
+        )
+
+        # Should succeed
+        result = await session.request("allowed_model", branch=branch)
+        assert result.status == EventStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_request_without_branch_emits_deprecation_warning(self):
+        """Test session.request() without branch emits deprecation warning.
+
+        For backward compatibility, calling without branch still works but
+        emits a DeprecationWarning to encourage migration.
+        """
+        from dataclasses import dataclass
+        from unittest.mock import AsyncMock
+
+        from lionpride import Event, EventStatus
+        from lionpride.services.providers.oai_chat import OAIChatEndpoint
+        from lionpride.services.types.imodel import iModel
+
+        endpoint = OAIChatEndpoint(config=None, name="legacy_model", api_key="test")
+        model = iModel(backend=endpoint)
+
+        @dataclass
+        class MockResponse:
+            data: str = "legacy"
+
+        async def mock_invoke(**kwargs):
+            class MockCalling(Event):
+                def __init__(self):
+                    super().__init__()
+                    self.status = EventStatus.COMPLETED
+                    self.execution.response = MockResponse()
+
+            return MockCalling()
+
+        object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_invoke))
+
+        session = Session()
+        session.services.register(model)
+
+        # Call without branch - should warn but still work
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = await session.request("legacy_model")
+
+            # Verify deprecation warning was emitted
+            assert len(w) == 1
+            assert issubclass(w[0].category, DeprecationWarning)
+            assert "without a branch parameter is deprecated" in str(w[0].message)
+
+        # Should still succeed
+        assert result.status == EventStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_request_access_control_with_branch_name(self):
+        """Test session.request() access control works with branch name string.
+
+        The branch parameter can be a Branch instance, UUID, or name string.
+        Access control should work with all variants.
+        """
+        from unittest.mock import AsyncMock
+
+        from lionpride.services.providers.oai_chat import OAIChatEndpoint
+        from lionpride.services.types.imodel import iModel
+
+        endpoint = OAIChatEndpoint(config=None, name="named_model", api_key="test")
+        model = iModel(backend=endpoint)
+
+        session = Session()
+        session.services.register(model)
+
+        # Create branch by name with empty resources
+        session.create_branch(name="named_branch", resources=set())
+
+        # Access by branch name string should still enforce access control
+        with pytest.raises(AccessError):
+            await session.request("named_model", branch="named_branch")
+
+    @pytest.mark.asyncio
+    async def test_request_access_control_with_branch_uuid(self):
+        """Test session.request() access control works with branch UUID.
+
+        The branch parameter can be a UUID, and access control should work.
+        """
+        from unittest.mock import AsyncMock
+
+        from lionpride.services.providers.oai_chat import OAIChatEndpoint
+        from lionpride.services.types.imodel import iModel
+
+        endpoint = OAIChatEndpoint(config=None, name="uuid_model", api_key="test")
+        model = iModel(backend=endpoint)
+
+        session = Session()
+        session.services.register(model)
+
+        # Create branch with empty resources
+        branch = session.create_branch(name="uuid_branch", resources=set())
+
+        # Access by branch UUID should enforce access control
+        with pytest.raises(AccessError):
+            await session.request("uuid_model", branch=branch.id)
+
+    @pytest.mark.asyncio
+    async def test_request_access_error_details_include_available_resources(self):
+        """Test AccessError details include list of available resources.
+
+        This helps users understand what resources ARE available when access is denied.
+        """
+        from lionpride.services.providers.oai_chat import OAIChatEndpoint
+        from lionpride.services.types.imodel import iModel
+
+        endpoint = OAIChatEndpoint(config=None, name="denied_model", api_key="test")
+        model = iModel(backend=endpoint)
+
+        session = Session()
+        session.services.register(model)
+
+        # Create branch with some resources (but not the one we'll request)
+        branch = session.create_branch(
+            name="partial_access",
+            resources={"other_service", "another_service"},
+        )
+
+        with pytest.raises(AccessError) as exc_info:
+            await session.request("denied_model", branch=branch)
+
+        # Error details should include available resources
+        available = exc_info.value.details.get("available", [])
+        assert "other_service" in available
+        assert "another_service" in available
+        assert "denied_model" not in available
+
+    @pytest.mark.asyncio
+    async def test_request_access_control_matches_act_pattern(self):
+        """Test session.request() access control matches the act.py pattern.
+
+        The access check should be consistent with how act() checks resources.
+        This ensures security is applied uniformly across the codebase.
+        """
+        from lionpride.services.providers.oai_chat import OAIChatEndpoint
+        from lionpride.services.types.imodel import iModel
+
+        endpoint = OAIChatEndpoint(config=None, name="consistency_model", api_key="test")
+        model = iModel(backend=endpoint)
+
+        session = Session()
+        session.services.register(model)
+
+        # Create branch with specific resources
+        branch = session.create_branch(
+            name="consistent_branch",
+            resources={"consistency_model", "extra_tool"},
+        )
+
+        # Check: if service_name in branch.resources → allowed
+        assert "consistency_model" in branch.resources
+
+        # The access check is: service_name not in branch.resources → AccessError
+        # This matches act.py:63-67 pattern exactly

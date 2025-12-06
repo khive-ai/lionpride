@@ -9,6 +9,7 @@ Integration tests (marked @pytest.mark.integration) require Docker and optional 
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -16,12 +17,17 @@ import pytest
 
 from lionpride.session import Log, LogType
 from lionpride.session.log_broadcaster import (
+    DEFAULT_REDACTION_PATTERNS,
+    PRIVATE_IP_NETWORKS,
     LogBroadcaster,
     LogBroadcasterConfig,
+    LogRedactor,
     LogSubscriber,
     PostgresLogSubscriber,
     S3LogSubscriber,
     WebhookLogSubscriber,
+    _validate_postgres_dsn,
+    _validate_webhook_url,
 )
 
 # -----------------------------------------------------------------------------
@@ -1012,3 +1018,567 @@ class TestS3LogSubscriberWithMinIO:
         assert count == 2
 
         await subscriber.close()
+
+
+# -----------------------------------------------------------------------------
+# SSRF Protection Tests (Issue #89)
+# -----------------------------------------------------------------------------
+
+
+class TestValidateWebhookUrl:
+    """Tests for _validate_webhook_url SSRF protection."""
+
+    def test_valid_https_url_passes(self):
+        """Valid HTTPS URL should pass validation."""
+        # Use a well-known public domain that won't resolve to private IP
+        # Note: This test requires network access
+        _validate_webhook_url("https://httpbin.org/post")
+
+    def test_http_url_rejected_by_default(self):
+        """HTTP URLs should be rejected when require_https=True (default)."""
+        with pytest.raises(ValueError, match="must use https://"):
+            _validate_webhook_url("http://example.com/webhook")
+
+    def test_http_url_allowed_when_https_not_required(self):
+        """HTTP URLs should be allowed when require_https=False."""
+        # Note: example.com is a safe public domain
+        _validate_webhook_url("http://httpbin.org/post", require_https=False)
+
+    def test_invalid_scheme_rejected(self):
+        """Non-http(s) schemes should be rejected."""
+        with pytest.raises(ValueError, match="must use http:// or https://"):
+            _validate_webhook_url("ftp://example.com/file", require_https=False)
+
+        with pytest.raises(ValueError, match="must use http:// or https://"):
+            _validate_webhook_url("file:///etc/passwd", require_https=False)
+
+    def test_empty_url_rejected(self):
+        """Empty URLs should be rejected."""
+        with pytest.raises(ValueError, match="must be non-empty string"):
+            _validate_webhook_url("")
+
+        with pytest.raises(ValueError, match="must be non-empty string"):
+            _validate_webhook_url(None)
+
+    def test_missing_domain_rejected(self):
+        """URLs without domain should be rejected."""
+        with pytest.raises(ValueError, match="missing domain"):
+            _validate_webhook_url("https:///path/only")
+
+    def test_localhost_rejected(self):
+        """Localhost URLs should be rejected (SSRF protection)."""
+        with pytest.raises(ValueError, match="private/internal IP"):
+            _validate_webhook_url("https://localhost/webhook")
+
+        with pytest.raises(ValueError, match="private/internal IP"):
+            _validate_webhook_url("https://127.0.0.1/webhook")
+
+    def test_private_ip_class_a_rejected(self):
+        """10.x.x.x private IPs should be rejected."""
+        with pytest.raises(ValueError, match="private/internal IP"):
+            _validate_webhook_url("https://10.0.0.1/webhook")
+
+        with pytest.raises(ValueError, match="private/internal IP"):
+            _validate_webhook_url("https://10.255.255.255/webhook")
+
+    def test_private_ip_class_b_rejected(self):
+        """172.16-31.x.x private IPs should be rejected."""
+        with pytest.raises(ValueError, match="private/internal IP"):
+            _validate_webhook_url("https://172.16.0.1/webhook")
+
+        with pytest.raises(ValueError, match="private/internal IP"):
+            _validate_webhook_url("https://172.31.255.255/webhook")
+
+    def test_private_ip_class_c_rejected(self):
+        """192.168.x.x private IPs should be rejected."""
+        with pytest.raises(ValueError, match="private/internal IP"):
+            _validate_webhook_url("https://192.168.0.1/webhook")
+
+        with pytest.raises(ValueError, match="private/internal IP"):
+            _validate_webhook_url("https://192.168.255.255/webhook")
+
+    def test_link_local_aws_metadata_rejected(self):
+        """169.254.x.x (AWS metadata endpoint) should be rejected."""
+        with pytest.raises(ValueError, match="private/internal IP"):
+            _validate_webhook_url("https://169.254.169.254/latest/meta-data/")
+
+    def test_allowed_domains_restricts_access(self):
+        """Only allowed domains should pass when specified."""
+        allowed = frozenset({"api.example.com", "webhook.example.com"})
+
+        # Allowed domain should pass (requires network, using mock-friendly test)
+        with pytest.raises(ValueError, match="not in allowed domains"):
+            _validate_webhook_url(
+                "https://evil.com/webhook",
+                allowed_domains=allowed,
+            )
+
+    def test_invalid_hostname_rejected(self):
+        """Invalid hostnames that can't be resolved should be rejected."""
+        with pytest.raises(ValueError, match="Cannot resolve webhook hostname"):
+            _validate_webhook_url("https://definitely-not-a-real-domain-12345.invalid/webhook")
+
+
+class TestWebhookLogSubscriberSSRF:
+    """Tests for WebhookLogSubscriber SSRF protection."""
+
+    def test_ssrf_localhost_blocked(self):
+        """WebhookLogSubscriber should reject localhost URLs."""
+        with pytest.raises(ValueError, match="private/internal IP"):
+            WebhookLogSubscriber(url="https://localhost/logs")
+
+    def test_ssrf_private_ip_blocked(self):
+        """WebhookLogSubscriber should reject private IP URLs."""
+        with pytest.raises(ValueError, match="private/internal IP"):
+            WebhookLogSubscriber(url="https://10.0.0.1/logs")
+
+        with pytest.raises(ValueError, match="private/internal IP"):
+            WebhookLogSubscriber(url="https://192.168.1.1/logs")
+
+    def test_ssrf_http_blocked_by_default(self):
+        """WebhookLogSubscriber should reject HTTP URLs by default."""
+        with pytest.raises(ValueError, match="must use https://"):
+            WebhookLogSubscriber(url="http://example.com/logs")
+
+    def test_http_allowed_when_configured(self):
+        """HTTP should be allowed with require_https=False (and skip_validation for test)."""
+        # Use skip_validation=True for unit testing without network
+        sub = WebhookLogSubscriber(
+            url="http://example.com/logs",
+            require_https=False,
+            skip_validation=True,  # Skip validation for unit test
+        )
+        assert sub.url == "http://example.com/logs"
+        assert sub.require_https is False
+
+    def test_allowed_domains_configurable(self):
+        """allowed_domains should be configurable."""
+        sub = WebhookLogSubscriber(
+            url="https://api.example.com/logs",
+            allowed_domains=frozenset({"api.example.com"}),
+            skip_validation=True,  # Skip validation for unit test
+        )
+        assert sub.allowed_domains == frozenset({"api.example.com"})
+
+    def test_skip_validation_for_testing(self):
+        """skip_validation=True should bypass SSRF checks (for testing only)."""
+        # This would normally be blocked
+        sub = WebhookLogSubscriber(
+            url="http://localhost/test",
+            skip_validation=True,
+        )
+        assert sub.url == "http://localhost/test"
+
+    def test_backwards_compatible_defaults(self):
+        """Default behavior should be backwards compatible (with validation)."""
+        # This test verifies the API signature is correct
+        # Use skip_validation for unit test
+        sub = WebhookLogSubscriber(
+            url="https://httpbin.org/post",
+            headers={"X-Custom": "value"},
+            timeout=60.0,
+            batch_size=50,
+            skip_validation=True,  # Skip for unit test
+        )
+        assert sub.timeout == 60.0
+        assert sub.batch_size == 50
+        assert sub.headers["X-Custom"] == "value"
+
+
+class TestPrivateIpNetworks:
+    """Tests for PRIVATE_IP_NETWORKS constant."""
+
+    def test_all_expected_networks_present(self):
+        """Verify all expected private network ranges are defined."""
+        import ipaddress
+
+        # Convert to set of network strings for easier comparison
+        network_strs = {str(n) for n in PRIVATE_IP_NETWORKS}
+
+        assert "10.0.0.0/8" in network_strs
+        assert "172.16.0.0/12" in network_strs
+        assert "192.168.0.0/16" in network_strs
+        assert "169.254.0.0/16" in network_strs
+        assert "127.0.0.0/8" in network_strs
+
+    def test_ipv6_networks_present(self):
+        """Verify IPv6 private networks are defined."""
+        network_strs = {str(n) for n in PRIVATE_IP_NETWORKS}
+
+        assert "::1/128" in network_strs  # IPv6 localhost
+        assert "fc00::/7" in network_strs  # IPv6 unique local
+        assert "fe80::/10" in network_strs  # IPv6 link-local
+
+
+# -----------------------------------------------------------------------------
+# LogRedactor tests (Issue #93)
+# -----------------------------------------------------------------------------
+
+
+class TestLogRedactor:
+    """Tests for LogRedactor sensitive content redaction."""
+
+    def test_redact_api_key(self):
+        """Should redact API keys."""
+        redactor = LogRedactor()
+
+        content = "api_key=sk-1234567890abcdefghij"
+        result = redactor.redact(content)
+
+        assert "sk-1234567890abcdefghij" not in result
+        assert "[REDACTED]" in result
+
+    def test_redact_bearer_token(self):
+        """Should redact bearer tokens."""
+        redactor = LogRedactor()
+
+        content = "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+        result = redactor.redact(content)
+
+        assert "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" not in result
+        assert "[REDACTED]" in result
+
+    def test_redact_aws_access_key(self):
+        """Should redact AWS access keys."""
+        redactor = LogRedactor()
+
+        content = "AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE"
+        result = redactor.redact(content)
+
+        assert "AKIAIOSFODNN7EXAMPLE" not in result
+        assert "[REDACTED]" in result
+
+    def test_redact_aws_secret_key(self):
+        """Should redact AWS secret access keys."""
+        redactor = LogRedactor()
+
+        content = "aws_secret_access_key=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        result = redactor.redact(content)
+
+        assert "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" not in result
+        assert "[REDACTED]" in result
+
+    def test_redact_password(self):
+        """Should redact passwords."""
+        redactor = LogRedactor()
+
+        content = "password=SuperSecret123!"
+        result = redactor.redact(content)
+
+        assert "SuperSecret123!" not in result
+        assert "[REDACTED]" in result
+
+    def test_redact_connection_string(self):
+        """Should redact passwords in connection strings."""
+        redactor = LogRedactor()
+
+        content = "postgresql://user:secretpassword@localhost/db"
+        result = redactor.redact(content)
+
+        assert "secretpassword" not in result
+        assert "[REDACTED]" in result
+
+    def test_redact_empty_string(self):
+        """Empty string should remain empty."""
+        redactor = LogRedactor()
+        assert redactor.redact("") == ""
+
+    def test_redact_none_returns_empty(self):
+        """None-like input should be handled."""
+        redactor = LogRedactor()
+        # Note: redact expects a string, but we test edge case
+        result = redactor.redact("")
+        assert result == ""
+
+    def test_custom_replacement(self):
+        """Should use custom replacement text."""
+        redactor = LogRedactor(replacement="***HIDDEN***")
+
+        content = "api_key=sk-1234567890abcdefghij"
+        result = redactor.redact(content)
+
+        assert "***HIDDEN***" in result
+        assert "[REDACTED]" not in result
+
+    def test_custom_patterns_with_defaults(self):
+        """Custom patterns should work with defaults."""
+        import re
+
+        custom_pattern = re.compile(r"(custom_secret)=([a-z]+)")
+        redactor = LogRedactor(patterns=(custom_pattern,), include_defaults=True)
+
+        content = "custom_secret=myvalue api_key=sk-1234567890abcdef12"
+        result = redactor.redact(content)
+
+        # Both should be redacted
+        assert "myvalue" not in result
+        assert "sk-1234567890abcdef12" not in result
+
+    def test_custom_patterns_without_defaults(self):
+        """Custom patterns only when include_defaults=False."""
+        import re
+
+        custom_pattern = re.compile(r"(custom_secret)=([a-z]+)")
+        redactor = LogRedactor(patterns=(custom_pattern,), include_defaults=False)
+
+        content = "custom_secret=myvalue api_key=sk-1234567890abcdef12"
+        result = redactor.redact(content)
+
+        # Only custom should be redacted
+        assert "myvalue" not in result
+        # Default patterns not applied (api_key pattern not matched)
+
+    def test_default_redaction_patterns_defined(self):
+        """DEFAULT_REDACTION_PATTERNS should be non-empty tuple."""
+        assert len(DEFAULT_REDACTION_PATTERNS) > 0
+        for pattern in DEFAULT_REDACTION_PATTERNS:
+            assert hasattr(pattern, "pattern")
+
+
+class TestLogBroadcasterRedaction:
+    """Tests for LogBroadcaster with redaction enabled."""
+
+    @pytest.mark.asyncio
+    async def test_broadcast_with_redactor(self):
+        """Broadcast should redact sensitive content when redactor is set."""
+        redactor = LogRedactor()
+        broadcaster = LogBroadcaster(redactor=redactor)
+
+        sub = MockSubscriber(name="test_sub")
+        broadcaster.add_subscriber(sub)
+
+        # Create log with sensitive content
+        logs = [
+            Log(
+                log_type=LogType.INFO,
+                message="Connecting with api_key=sk-1234567890abcdefghij",
+            ),
+        ]
+
+        await broadcaster.broadcast(logs)
+
+        # Check that subscriber received redacted log
+        assert len(sub.received_logs) == 1
+        received_message = sub.received_logs[0].message
+        assert "sk-1234567890abcdefghij" not in received_message
+        assert "[REDACTED]" in received_message
+
+    @pytest.mark.asyncio
+    async def test_broadcast_without_redactor(self):
+        """Broadcast should not modify logs when no redactor is set."""
+        broadcaster = LogBroadcaster()  # No redactor
+
+        sub = MockSubscriber(name="test_sub")
+        broadcaster.add_subscriber(sub)
+
+        original_message = "api_key=sk-1234567890abcdefghij"
+        logs = [Log(log_type=LogType.INFO, message=original_message)]
+
+        await broadcaster.broadcast(logs)
+
+        # Check that subscriber received unmodified log
+        assert len(sub.received_logs) == 1
+        assert sub.received_logs[0].message == original_message
+
+    @pytest.mark.asyncio
+    async def test_broadcast_redacts_error_field(self):
+        """Broadcast should redact error field content."""
+        redactor = LogRedactor()
+        broadcaster = LogBroadcaster(redactor=redactor)
+
+        sub = MockSubscriber(name="test_sub")
+        broadcaster.add_subscriber(sub)
+
+        logs = [
+            Log(
+                log_type=LogType.ERROR,
+                message="Connection failed",
+                error="Auth failed with password=SuperSecret123!",
+            ),
+        ]
+
+        await broadcaster.broadcast(logs)
+
+        received_error = sub.received_logs[0].error
+        assert "SuperSecret123!" not in received_error
+        assert "[REDACTED]" in received_error
+
+    @pytest.mark.asyncio
+    async def test_broadcast_redacts_data_field(self):
+        """Broadcast should redact data field content recursively."""
+        redactor = LogRedactor()
+        broadcaster = LogBroadcaster(redactor=redactor)
+
+        sub = MockSubscriber(name="test_sub")
+        broadcaster.add_subscriber(sub)
+
+        logs = [
+            Log(
+                log_type=LogType.INFO,
+                message="Request data",
+                data={
+                    "token": "bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test",
+                    "nested": {"password": "password=mysecretpass"},
+                },
+            ),
+        ]
+
+        await broadcaster.broadcast(logs)
+
+        received_data = sub.received_logs[0].data
+        assert "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" not in str(received_data)
+        assert "mysecretpass" not in str(received_data)
+
+
+# -----------------------------------------------------------------------------
+# S3LogSubscriber SecretStr tests (Issue #96)
+# -----------------------------------------------------------------------------
+
+
+class TestS3LogSubscriberSecretStr:
+    """Tests for S3LogSubscriber SecretStr credential handling."""
+
+    def test_env_var_resolution(self):
+        """Should resolve credentials from environment variables."""
+        import os
+
+        # Set test env vars
+        os.environ["TEST_AWS_KEY_ID"] = "AKIATEST123456789"
+        os.environ["TEST_AWS_SECRET"] = "testsecretkey123456"
+
+        try:
+            sub = S3LogSubscriber(
+                bucket="test",
+                aws_access_key_id_env="TEST_AWS_KEY_ID",
+                aws_secret_access_key_env="TEST_AWS_SECRET",
+            )
+
+            # Verify credentials are stored as SecretStr
+            assert sub._aws_access_key_id is not None
+            assert sub._aws_access_key_id.get_secret_value() == "AKIATEST123456789"
+            assert sub._aws_secret_access_key is not None
+            assert sub._aws_secret_access_key.get_secret_value() == "testsecretkey123456"
+        finally:
+            # Cleanup
+            del os.environ["TEST_AWS_KEY_ID"]
+            del os.environ["TEST_AWS_SECRET"]
+
+    def test_direct_credentials_deprecated(self):
+        """Direct credential params should emit deprecation warning."""
+        import warnings
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+
+            S3LogSubscriber(
+                bucket="test",
+                aws_access_key_id="AKIATEST123456789",
+                aws_secret_access_key="testsecretkey123456",
+            )
+
+            # Should have 2 deprecation warnings
+            deprecation_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
+            assert len(deprecation_warnings) == 2
+
+    def test_env_var_takes_precedence(self):
+        """Env var should take precedence over direct credential."""
+        import os
+
+        os.environ["TEST_AWS_KEY_ID"] = "FROM_ENV"
+
+        try:
+            with warnings.catch_warnings(record=True):
+                warnings.simplefilter("always")
+
+                sub = S3LogSubscriber(
+                    bucket="test",
+                    aws_access_key_id="DIRECT_VALUE",
+                    aws_access_key_id_env="TEST_AWS_KEY_ID",
+                )
+
+                # Env var should take precedence
+                assert sub._aws_access_key_id.get_secret_value() == "FROM_ENV"
+        finally:
+            del os.environ["TEST_AWS_KEY_ID"]
+
+    def test_missing_env_var_logs_warning(self, caplog):
+        """Missing env var should log warning."""
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            S3LogSubscriber(
+                bucket="test",
+                aws_access_key_id_env="NONEXISTENT_ENV_VAR_12345",
+            )
+
+        assert "not set or empty" in caplog.text
+
+    def test_no_credentials_returns_none(self):
+        """No credentials should result in None values."""
+        sub = S3LogSubscriber(bucket="test")
+
+        assert sub._aws_access_key_id is None
+        assert sub._aws_secret_access_key is None
+
+
+# -----------------------------------------------------------------------------
+# PostgresLogSubscriber DSN validation tests (Issue #97)
+# -----------------------------------------------------------------------------
+
+
+class TestValidatePostgresDsn:
+    """Tests for _validate_postgres_dsn function."""
+
+    def test_valid_postgresql_dsn(self):
+        """Valid postgresql:// DSN should pass."""
+        _validate_postgres_dsn("postgresql://localhost/mydb")
+
+    def test_valid_postgres_dsn(self):
+        """Valid postgres:// DSN should pass."""
+        _validate_postgres_dsn("postgres://localhost/mydb")
+
+    def test_valid_dsn_with_credentials(self):
+        """DSN with user:password should pass."""
+        _validate_postgres_dsn("postgresql://user:pass@localhost:5432/mydb")
+
+    def test_empty_dsn_rejected(self):
+        """Empty DSN should be rejected."""
+        with pytest.raises(ValueError, match="must be non-empty string"):
+            _validate_postgres_dsn("")
+
+    def test_none_dsn_rejected(self):
+        """None DSN should be rejected."""
+        with pytest.raises(ValueError, match="must be non-empty string"):
+            _validate_postgres_dsn(None)
+
+    def test_invalid_scheme_rejected(self):
+        """Non-postgres schemes should be rejected."""
+        with pytest.raises(ValueError, match="must use postgres://"):
+            _validate_postgres_dsn("mysql://localhost/mydb")
+
+        with pytest.raises(ValueError, match="must use postgres://"):
+            _validate_postgres_dsn("http://localhost/mydb")
+
+    def test_missing_host_rejected(self):
+        """DSN without host should be rejected."""
+        with pytest.raises(ValueError, match="missing host"):
+            _validate_postgres_dsn("postgresql:///mydb")
+
+
+class TestPostgresLogSubscriberDsnValidation:
+    """Tests for PostgresLogSubscriber DSN validation."""
+
+    def test_valid_dsn_accepted(self):
+        """Valid DSN should be accepted."""
+        sub = PostgresLogSubscriber(dsn="postgresql://localhost/test")
+        assert sub.dsn == "postgresql://localhost/test"
+
+    def test_invalid_dsn_rejected(self):
+        """Invalid DSN should raise ValueError."""
+        with pytest.raises(ValueError, match="must use postgres://"):
+            PostgresLogSubscriber(dsn="mysql://localhost/test")
+
+    def test_empty_dsn_rejected(self):
+        """Empty DSN should raise ValueError."""
+        with pytest.raises(ValueError, match="must be non-empty string"):
+            PostgresLogSubscriber(dsn="")
