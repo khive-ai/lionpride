@@ -230,8 +230,9 @@ class TestFlowReportUnit:
         mock_session.get_branch.assert_called_with("worker")
 
     @pytest.mark.asyncio
-    async def test_flow_report_verbose_output(self, capsys):
-        """Test that verbose mode prints progress."""
+    async def test_flow_report_verbose_output(self, caplog):
+        """Test that verbose mode logs progress."""
+        import logging
 
         class TestReport(Report):
             output: SimpleOutput | None = None
@@ -247,7 +248,10 @@ class TestFlowReportUnit:
         mock_session.default_branch.resources = {"default_model"}
         mock_session.get_branch = MagicMock(return_value=mock_session.default_branch)
 
-        with patch("lionpride.work.executor.operate") as mock_operate:
+        with (
+            caplog.at_level(logging.DEBUG, logger="lionpride.work.executor"),
+            patch("lionpride.work.executor.operate") as mock_operate,
+        ):
             mock_operate.return_value = SimpleOutput(result="done")
             await flow_report(
                 session=mock_session,
@@ -255,10 +259,9 @@ class TestFlowReportUnit:
                 verbose=True,
             )
 
-        captured = capsys.readouterr()
-        assert "Executing report" in captured.out
-        assert "Forms: 1" in captured.out
-        assert "Executing form: output" in captured.out
+        assert "Executing report" in caplog.text
+        assert "Forms: 1" in caplog.text
+        assert "Executing form: output" in caplog.text
 
     @pytest.mark.asyncio
     async def test_flow_report_context_from_available_data(self):

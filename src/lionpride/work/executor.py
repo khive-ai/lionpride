@@ -12,10 +12,13 @@ with Report-specific features:
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
+
+logger = logging.getLogger(__name__)
 
 from lionpride.libs import concurrency
 from lionpride.libs.concurrency import CapacityLimiter, CompletionStream
@@ -201,9 +204,8 @@ class ReportExecutor:
         except Exception as e:
             self.errors[form.id] = e
             if self.verbose:
-                print(
-                    f"Form {form.output_fields[0] if form.output_fields else form.id} failed: {e}"
-                )
+                form_name = form.output_fields[0] if form.output_fields else form.id
+                logger.exception("Form %s failed: %s", form_name, e)
             raise
 
         finally:
@@ -216,9 +218,9 @@ class ReportExecutor:
         primary_output = form.output_fields[0] if form.output_fields else str(form.id)[:8]
 
         if self.verbose:
-            print(f"\n{'=' * 60}")
-            print(f"Executing form: {primary_output}")
-            print(f"{'=' * 60}")
+            logger.debug("=" * 60)
+            logger.debug("Executing form: %s", primary_output)
+            logger.debug("=" * 60)
 
         # Get request model from report's class annotations
         request_model = self.report.get_request_model(primary_output)
@@ -280,16 +282,16 @@ class ReportExecutor:
         )
 
         if self.verbose:
-            print(f"INSTRUCTION: {instruction}")
-            print(f"CONTEXT KEYS: {list(context.keys()) if context else 'None'}")
-            print(f"REQUEST_MODEL: {request_model.__name__ if request_model else 'None'}")
+            logger.debug("INSTRUCTION: %s", instruction)
+            logger.debug("CONTEXT KEYS: %s", list(context.keys()) if context else "None")
+            logger.debug("REQUEST_MODEL: %s", request_model.__name__ if request_model else "None")
 
         # Execute
         result = await operate(self.session, branch, params)
 
         if self.verbose:
-            print(f"Completed form: {primary_output}")
-            print(f"{'=' * 60}\n")
+            logger.debug("Completed form: %s", primary_output)
+            logger.debug("=" * 60)
 
         return result
 
@@ -304,8 +306,8 @@ class ReportExecutor:
         self._check_for_cycles()
 
         if self.verbose:
-            print(f"Executing report: {self.report}")
-            print(f"Forms: {len(self.report.forms)}")
+            logger.debug("Executing report: %s", self.report)
+            logger.debug("Forms: %d", len(self.report.forms))
 
         total = len(self.report.forms)
         forms = list(self.report.forms)

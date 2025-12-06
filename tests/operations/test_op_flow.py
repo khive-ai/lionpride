@@ -170,8 +170,10 @@ class TestFlowErrorHandling:
         for _op_id, allocated_branch in executor.operation_branches.items():
             assert allocated_branch is None
 
-    async def test_verbose_branch_preallocation(self, session_with_model, capsys):
+    async def test_verbose_branch_preallocation(self, session_with_model, caplog):
         """Test line 142: Verbose logging for branch pre-allocation."""
+        import logging
+
         session, model = session_with_model
         branch = session.create_branch(name="test", resources={"mock"})
 
@@ -196,10 +198,10 @@ class TestFlowErrorHandling:
         )
         graph = builder.build()
 
-        await flow(session, graph, branch=branch, verbose=True)
+        with caplog.at_level(logging.DEBUG, logger="lionpride.operations.flow"):
+            await flow(session, graph, branch=branch, verbose=True)
 
-        captured = capsys.readouterr()
-        assert "Pre-allocated branches for 2 operations" in captured.out
+        assert "Pre-allocated branches for 2 operations" in caplog.text
 
 
 # -------------------------------------------------------------------------
@@ -233,8 +235,10 @@ class TestFlowStopConditions:
         # Verify task failed (no result)
         assert "task1" not in results
 
-    async def test_error_verbose_logging(self, session_with_model, capsys):
+    async def test_error_verbose_logging(self, session_with_model, caplog):
         """Test lines 169-182: Verbose error logging with stop_on_error=True."""
+        import logging
+
         session, _model = session_with_model
         branch = session.create_branch(name="test", resources={"mock"})
 
@@ -252,14 +256,16 @@ class TestFlowStopConditions:
         # Test with stop_on_error=True to hit lines 179-182
         # The exception will be caught by gather(return_exceptions=True)
         # But the error path will execute
-        await flow(session, graph, branch=branch, verbose=True, stop_on_error=True)
+        with caplog.at_level(logging.DEBUG, logger="lionpride.operations.flow"):
+            await flow(session, graph, branch=branch, verbose=True, stop_on_error=True)
 
-        captured = capsys.readouterr()
-        # The error message appears in verbose output (lines 172-176)
-        assert "Test error for logging" in captured.out or "failed:" in captured.out
+        # The error message appears in verbose log output
+        assert "Test error for logging" in caplog.text or "failed" in caplog.text
 
-    async def test_dependencies_verbose_logging(self, session_with_model, capsys):
+    async def test_dependencies_verbose_logging(self, session_with_model, caplog):
         """Test verbose logging for dependencies."""
+        import logging
+
         session, model = session_with_model
         branch = session.create_branch(name="test", resources={model.name})
 
@@ -281,11 +287,11 @@ class TestFlowStopConditions:
         builder.add("task2", "generate", params2, depends_on=["task1"])
 
         graph = builder.build()
-        await flow(session, graph, branch=branch, verbose=True)
+        with caplog.at_level(logging.DEBUG, logger="lionpride.operations.flow"):
+            await flow(session, graph, branch=branch, verbose=True)
 
-        captured = capsys.readouterr()
-        assert "waiting for" in captured.out
-        assert "dependencies" in captured.out
+        assert "waiting for" in caplog.text
+        assert "dependencies" in caplog.text
 
 
 # -------------------------------------------------------------------------
@@ -358,8 +364,10 @@ class TestFlowExecutionEvents:
 class TestFlowResultProcessing:
     """Test result processing and verbose logging."""
 
-    async def test_verbose_operation_execution(self, session_with_model, capsys):
+    async def test_verbose_operation_execution(self, session_with_model, caplog):
         """Test verbose logging for operation execution."""
+        import logging
+
         session, model = session_with_model
         branch = session.create_branch(name="test", resources={model.name})
 
@@ -374,10 +382,10 @@ class TestFlowResultProcessing:
         builder.add("task1", "generate", params)
         graph = builder.build()
 
-        await flow(session, graph, branch=branch, verbose=True)
+        with caplog.at_level(logging.DEBUG, logger="lionpride.operations.flow"):
+            await flow(session, graph, branch=branch, verbose=True)
 
-        captured = capsys.readouterr()
-        assert "Executing operation:" in captured.out
+        assert "Executing operation:" in caplog.text
 
     async def test_missing_branch_allocation_raises_error(self, session_with_model):
         """Test missing branch allocation raises ValueError."""
@@ -400,8 +408,10 @@ class TestFlowResultProcessing:
         with pytest.raises(ValueError, match="No branch allocated"):
             await executor._invoke_operation(op)
 
-    async def test_verbose_operation_failure(self, session_with_model, capsys):
+    async def test_verbose_operation_failure(self, session_with_model, caplog):
         """Test verbose logging for operation failure."""
+        import logging
+
         session, _model = session_with_model
         branch = session.create_branch(name="test", resources={"mock"})
 
@@ -414,13 +424,15 @@ class TestFlowResultProcessing:
         builder.add("task1", "status_fail", {})
         graph = builder.build()
 
-        await flow(session, graph, branch=branch, verbose=True, stop_on_error=False)
+        with caplog.at_level(logging.DEBUG, logger="lionpride.operations.flow"):
+            await flow(session, graph, branch=branch, verbose=True, stop_on_error=False)
 
-        captured = capsys.readouterr()
-        assert "failed:" in captured.out
+        assert "failed" in caplog.text
 
-    async def test_verbose_operation_completion(self, session_with_model, capsys):
+    async def test_verbose_operation_completion(self, session_with_model, caplog):
         """Test verbose logging for operation completion."""
+        import logging
+
         session, model = session_with_model
         branch = session.create_branch(name="test", resources={model.name})
 
@@ -435,10 +447,10 @@ class TestFlowResultProcessing:
         builder.add("task1", "generate", params)
         graph = builder.build()
 
-        await flow(session, graph, branch=branch, verbose=True)
+        with caplog.at_level(logging.DEBUG, logger="lionpride.operations.flow"):
+            await flow(session, graph, branch=branch, verbose=True)
 
-        captured = capsys.readouterr()
-        assert "Completed operation:" in captured.out
+        assert "Completed operation:" in caplog.text
 
 
 # -------------------------------------------------------------------------
@@ -573,8 +585,9 @@ class TestFlowExceptionPaths:
         assert "task1" not in results
         assert "task2" in results
 
-    async def test_exception_with_verbose_no_stop(self, session_with_model, capsys):
+    async def test_exception_with_verbose_no_stop(self, session_with_model, caplog):
         """Test lines 169, 171, 172, 173, 175, 176: Verbose error logging."""
+        import logging
         from unittest.mock import patch
 
         session, model = session_with_model
@@ -625,14 +638,15 @@ class TestFlowExceptionPaths:
                 raise RuntimeError("Mock exception for verbose logging")
             return await original_invoke(operation)
 
-        with patch.object(executor, "_invoke_operation", side_effect=mock_invoke_raise):
+        with (
+            caplog.at_level(logging.DEBUG, logger="lionpride.operations.flow"),
+            patch.object(executor, "_invoke_operation", side_effect=mock_invoke_raise),
+        ):
             await executor.execute()
 
-        captured = capsys.readouterr()
-        # Verify verbose error logging (lines 172-176)
-        assert "failed:" in captured.out
-        assert "Mock exception for verbose logging" in captured.out
-        assert "Traceback:" in captured.out
+        # Verify verbose error logging via logger.exception()
+        assert "failed" in caplog.text
+        assert "Mock exception for verbose logging" in caplog.text
 
         # task1 failed, task2 succeeded
         assert op1.id in executor.errors
@@ -660,8 +674,10 @@ class TestFlowExceptionPaths:
         # Task failed, no result
         assert "task1" not in results
 
-    async def test_exception_with_verbose_and_stop(self, session_with_model, capsys):
+    async def test_exception_with_verbose_and_stop(self, session_with_model, caplog):
         """Test lines 169-182: All exception paths with verbose + stop_on_error."""
+        import logging
+
         session, _model = session_with_model
         branch = session.create_branch(name="test", resources={"mock"})
 
@@ -676,18 +692,19 @@ class TestFlowExceptionPaths:
         graph = builder.build()
 
         # Execute with both verbose=True and stop_on_error=True
-        results = await flow(session, graph, branch=branch, verbose=True, stop_on_error=True)
+        with caplog.at_level(logging.DEBUG, logger="lionpride.operations.flow"):
+            results = await flow(session, graph, branch=branch, verbose=True, stop_on_error=True)
 
-        captured = capsys.readouterr()
         # Verify verbose logging executed
-        assert "failed:" in captured.out
-        assert "Full exception path test" in captured.out
+        assert "failed" in caplog.text
+        assert "Full exception path test" in caplog.text
 
         # Task failed
         assert "task1" not in results
 
-    async def test_direct_executor_exception_verbose_stop(self, session_with_model, capsys):
+    async def test_direct_executor_exception_verbose_stop(self, session_with_model, caplog):
         """Test exception path directly via executor to ensure coverage."""
+        import logging
         from unittest.mock import patch
 
         session, model = session_with_model
@@ -725,7 +742,10 @@ class TestFlowExceptionPaths:
         async def mock_invoke_raise(operation):
             raise ValueError("Direct executor exception test")
 
-        with patch.object(executor, "_invoke_operation", side_effect=mock_invoke_raise):
+        with (
+            caplog.at_level(logging.DEBUG, logger="lionpride.operations.flow"),
+            patch.object(executor, "_invoke_operation", side_effect=mock_invoke_raise),
+        ):
             # Execute - exception propagates through CompletionStream's TaskGroup
             with pytest.raises(ExceptionGroup) as exc_info:
                 await executor.execute()
@@ -735,17 +755,17 @@ class TestFlowExceptionPaths:
             assert isinstance(exc_info.value.exceptions[0], ValueError)
             assert "Direct executor exception test" in str(exc_info.value.exceptions[0])
 
-        captured = capsys.readouterr()
         # Verify error was logged
-        assert "failed:" in captured.out
-        assert "Direct executor exception test" in captured.out
+        assert "failed" in caplog.text
+        assert "Direct executor exception test" in caplog.text
 
         # Verify error was stored
         assert op.id in executor.errors
         assert isinstance(executor.errors[op.id], ValueError)
 
-    async def test_exception_during_wait_for_dependencies(self, session_with_model, capsys):
+    async def test_exception_during_wait_for_dependencies(self, session_with_model, caplog):
         """Test exception raised during _wait_for_dependencies."""
+        import logging
         from unittest.mock import patch
 
         session, _model = session_with_model
@@ -769,13 +789,15 @@ class TestFlowExceptionPaths:
         async def mock_wait_deps(operation):
             raise RuntimeError("Dependency wait failed")
 
-        with patch.object(executor, "_wait_for_dependencies", side_effect=mock_wait_deps):
+        with (
+            caplog.at_level(logging.DEBUG, logger="lionpride.operations.flow"),
+            patch.object(executor, "_wait_for_dependencies", side_effect=mock_wait_deps),
+        ):
             await executor.execute()
 
-        captured = capsys.readouterr()
         # Exception should be caught and logged
-        assert "failed:" in captured.out
-        assert "Dependency wait failed" in captured.out
+        assert "failed" in caplog.text
+        assert "Dependency wait failed" in caplog.text
 
         # Error should be stored
         assert op.id in executor.errors
