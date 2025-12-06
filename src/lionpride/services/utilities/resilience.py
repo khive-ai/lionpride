@@ -8,10 +8,20 @@ import random
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, TypeVar
+from typing import Any, TypedDict, TypeVar
 
 from lionpride.errors import LionConnectionError
 from lionpride.libs.concurrency import Lock, current_time, sleep
+
+
+class _MetricsDict(TypedDict):
+    """Type for circuit breaker metrics."""
+
+    success_count: int
+    failure_count: int
+    rejected_count: int
+    state_changes: list[dict[str, Any]]
+
 
 __all__ = (
     "CircuitBreaker",
@@ -105,7 +115,7 @@ class CircuitBreaker:
         self._lock = Lock()  # libs.concurrency.Lock
 
         # Metrics
-        self._metrics = {
+        self._metrics: _MetricsDict = {
             "success_count": 0,
             "failure_count": 0,
             "rejected_count": 0,

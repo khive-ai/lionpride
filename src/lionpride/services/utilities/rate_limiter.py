@@ -42,6 +42,8 @@ class TokenBucket:
     def __init__(self, config: RateLimitConfig):
         self.capacity = config.capacity
         self.refill_rate = config.refill_rate
+        # After __post_init__, initial_tokens is guaranteed to be set
+        assert config.initial_tokens is not None
         self.tokens = float(config.initial_tokens)
         self.last_refill = current_time()
         self._lock = Lock()
