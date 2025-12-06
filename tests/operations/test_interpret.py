@@ -1,9 +1,11 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for interpret operation (lines 43-83 coverage)."""
+"""Tests for interpret operation (lines 43-83 coverage).
 
-from dataclasses import dataclass
+Note: Uses MockNormalizedResponse and session_with_model fixtures from conftest.py.
+"""
+
 from unittest.mock import AsyncMock
 
 import pytest
@@ -11,21 +13,7 @@ import pytest
 from lionpride import Event, EventStatus
 from lionpride.operations.operate.interpret import interpret
 from lionpride.operations.operate.types import InterpretParams
-
-
-@dataclass
-class MockNormalizedResponse:
-    """Mock NormalizedResponse for testing."""
-
-    data: str = "refined instruction text"
-    raw_response: dict = None
-    metadata: dict = None
-
-    def __post_init__(self):
-        if self.raw_response is None:
-            self.raw_response = {"id": "mock-id"}
-        if self.metadata is None:
-            self.metadata = {}
+from tests.operations.conftest import MockNormalizedResponse
 
 
 class TestInterpretValidation:
