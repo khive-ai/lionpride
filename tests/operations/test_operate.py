@@ -1,9 +1,11 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Test refactored operate factory with explicit capability-based security."""
+"""Test refactored operate factory with explicit capability-based security.
 
-from dataclasses import dataclass
+Note: Uses MockNormalizedResponse and session_with_model fixtures from conftest.py.
+"""
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -19,21 +21,7 @@ from lionpride.operations.operate.types import (
 )
 from lionpride.rules import ActionRequest, ActionResponse
 from lionpride.session import Session
-
-
-@dataclass
-class MockNormalizedResponse:
-    """Mock NormalizedResponse for testing."""
-
-    data: str = "mock response text"
-    raw_response: dict = None
-    metadata: dict = None
-
-    def __post_init__(self):
-        if self.raw_response is None:
-            self.raw_response = {"id": "mock-id", "choices": [{"message": {"content": self.data}}]}
-        if self.metadata is None:
-            self.metadata = {"usage": {"prompt_tokens": 10, "completion_tokens": 20}}
+from tests.operations.conftest import MockNormalizedResponse
 
 
 class SimpleModel(BaseModel):

@@ -8,9 +8,10 @@ Tests:
 - IPU path (with operable): Generate → parse → validate → persist → return model
 - Capability enforcement
 - Message persistence
+
+Note: Uses MockNormalizedResponse, mock_model, and session_with_model fixtures from conftest.py.
 """
 
-from dataclasses import dataclass
 from unittest.mock import AsyncMock
 
 import pytest
@@ -21,51 +22,7 @@ from lionpride.operations.operate.communicate import communicate
 from lionpride.operations.operate.types import CommunicateParams, GenerateParams, ParseParams
 from lionpride.session import Session
 from lionpride.types import Operable, Spec
-
-
-@dataclass
-class MockNormalizedResponse:
-    """Mock NormalizedResponse for testing."""
-
-    data: str = "mock response text"
-    raw_response: dict = None
-    metadata: dict = None
-
-    def __post_init__(self):
-        if self.raw_response is None:
-            self.raw_response = {"id": "mock-id", "choices": [{"message": {"content": self.data}}]}
-        if self.metadata is None:
-            self.metadata = {"usage": {"prompt_tokens": 10, "completion_tokens": 20}}
-
-
-@pytest.fixture
-def mock_model():
-    """Create a mock iModel for testing without API calls."""
-    from lionpride.services.providers.oai_chat import OAIChatEndpoint
-    from lionpride.services.types.imodel import iModel
-
-    endpoint = OAIChatEndpoint(config=None, name="mock_model", api_key="mock-key")
-    model = iModel(backend=endpoint)
-
-    async def mock_invoke(**kwargs):
-        class MockCalling(Event):
-            def __init__(self):
-                super().__init__()
-                self.status = EventStatus.COMPLETED
-                self.execution.response = MockNormalizedResponse()
-
-        return MockCalling()
-
-    object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_invoke))
-    return model
-
-
-@pytest.fixture
-def session_with_model(mock_model):
-    """Create session with registered mock model."""
-    session = Session()
-    session.services.register(mock_model, update=True)
-    return session, mock_model
+from tests.operations.conftest import MockNormalizedResponse
 
 
 class TestCommunicateValidation:
