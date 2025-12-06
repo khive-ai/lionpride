@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from conftest import TestElement
 
-from lionpride.core import Flow, Progression
+from lionpride.core import Flow, Node, Progression
 from lionpride.errors import ExistsError
 
 # =============================================================================
@@ -123,8 +123,9 @@ class TestSerializationOrderPreservation:
 
     def test_roundtrip_preserves_non_sequential_order(self):
         """Serialization preserves exact order, not just membership."""
-        flow = Flow[TestElement, Progression](name="order_test")
-        items = [TestElement(value=i, name=f"item{i}") for i in range(10)]
+        # Use Node (production class) for serialization roundtrip tests
+        flow = Flow[Node, Progression](name="order_test")
+        items = [Node(content={"value": i, "name": f"item{i}"}) for i in range(10)]
         for item in items:
             flow.items.add(item)
 
@@ -141,8 +142,9 @@ class TestSerializationOrderPreservation:
 
     def test_roundtrip_items_in_multiple_progressions(self):
         """Same item can be in multiple progressions after roundtrip."""
-        flow = Flow[TestElement, Progression](name="multi_prog")
-        items = [TestElement(value=i, name=f"item{i}") for i in range(5)]
+        # Use Node (production class) for serialization roundtrip tests
+        flow = Flow[Node, Progression](name="multi_prog")
+        items = [Node(content={"value": i, "name": f"item{i}"}) for i in range(5)]
         for item in items:
             flow.items.add(item)
 

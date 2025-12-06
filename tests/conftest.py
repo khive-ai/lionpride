@@ -34,16 +34,84 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
-# Import test classes from _testing module for proper lion_class serialization paths
-from lionpride._testing import (
-    FailingTestEvent,
-    SimpleTestEvent,
-    SlowTestEvent,
-    StreamingTestEvent,
-    TestElement,
-    TestProcessor,
-)
-from lionpride.core import Edge, Element, Event, Flow, Graph, Node, Pile, Progression
+from lionpride.core import Edge, Element, Event, Flow, Graph, Node, Pile, Processor, Progression
+from lionpride.core.event import EventStatus
+
+# =============================================================================
+# Test Classes (moved from lionpride._testing)
+# =============================================================================
+# Note: These classes are for test fixtures only. For polymorphic serialization
+# tests that need lion_class resolution, use production classes like Node/Element.
+
+
+class TestElement(Element):
+    """Simple Element subclass for testing."""
+
+    __test__ = False  # Tell pytest not to collect this as a test class
+
+    value: int = 0
+    name: str = "test"
+
+
+class SimpleTestEvent(Event):
+    """Simple Event that returns a configurable value."""
+
+    return_value: Any = None
+    streaming: bool = False
+
+    async def _invoke(self) -> Any:
+        return self.return_value
+
+
+class FailingTestEvent(Event):
+    """Event that raises a configurable exception."""
+
+    error_message: str = "Test error"
+    error_type: type[Exception] = ValueError
+    streaming: bool = False
+
+    async def _invoke(self) -> Any:
+        raise self.error_type(self.error_message)
+
+
+class SlowTestEvent(Event):
+    """Event that takes time to complete."""
+
+    delay: float = 0.1
+    return_value: Any = "completed"
+    streaming: bool = False
+
+    async def _invoke(self) -> Any:
+        import anyio
+
+        await anyio.sleep(self.delay)
+        return self.return_value
+
+
+class StreamingTestEvent(Event):
+    """Event that yields values via async generator."""
+
+    stream_count: int = 3
+    streaming: bool = True
+
+    async def _invoke(self) -> Any:
+        raise NotImplementedError("Use stream() instead")
+
+    async def stream(self):
+        import anyio
+
+        for i in range(self.stream_count):
+            await anyio.sleep(0.01)
+            yield i
+        self.execution.status = EventStatus.COMPLETED
+        self.execution.response = f"streamed {self.stream_count} items"
+
+
+class TestProcessor(Processor):
+    """Basic Processor for SimpleTestEvent."""
+
+    event_type = SimpleTestEvent
+
 
 __all__ = (
     "FailingTestEvent",

@@ -35,7 +35,7 @@ from uuid import UUID
 import pytest
 from conftest import TestElement, create_test_elements
 
-from lionpride.core import Element, Pile, Progression
+from lionpride.core import Element, Node, Pile, Progression
 from lionpride.errors import ExistsError, NotFoundError
 
 # =============================================================================
@@ -1242,11 +1242,11 @@ class TestPileTypeConstraintsEdgeCases:
         Scenario:
             1. Create pile with ChildElement (subclass of TypedElement)
             2. Serialize to dict
-            3. Change item_type to unrelated type (TestElement)
+            3. Change item_type to unrelated type (Node)
             4. Attempt deserialization in permissive mode
 
         Expected:
-            TypeError: ChildElement is not a subclass of TestElement
+            TypeError: ChildElement is not a subclass of Node
 
         Design Trade-off:
             Permissive mode allows subclasses for flexibility, but still
@@ -1259,16 +1259,16 @@ class TestPileTypeConstraintsEdgeCases:
         Complexity:
             Type check: O(1) set membership + O(len(mro)) isinstance
         """
-        # Create pile with TypeC (child of TypeB)
+        # Create pile with ChildElement (subclass of TypedElement)
         child_item = ChildElement(name="child", extra="extra")
         pile = Pile(items=[child_item])
         data = pile.to_dict()
 
-        # Change item_type to unrelated type (TestElement)
-        data["item_type"] = [f"{TestElement.__module__}.{TestElement.__name__}"]
+        # Change item_type to unrelated type (Node - not an ancestor of ChildElement)
+        data["item_type"] = [f"{Node.__module__}.{Node.__name__}"]
         data["strict_type"] = False
 
-        # Should fail because ChildElement is not a subclass of TestElement
+        # Should fail because ChildElement is not a subclass of Node
         # (permissive mode allows subclasses, but not unrelated types)
         with pytest.raises(TypeError, match="is not a subclass of any allowed type"):
             Pile.from_dict(data)
@@ -1503,7 +1503,7 @@ def test_to_dict_adds_metadata_for_progression_name():
 
 def test_serialize_item_type():
     """Test item_type serialization."""
-    pile = Pile(item_type={TestElement, TypedElement})
+    pile = Pile(item_type={Node, TypedElement})
     data = pile.to_dict()
 
     assert "item_type" in data
@@ -1513,24 +1513,26 @@ def test_serialize_item_type():
     assert all("." in type_str for type_str in data["item_type"])
 
 
-def test_from_dict_basic(simple_items):
+def test_from_dict_basic():
     """Test from_dict basic deserialization."""
-    pile = Pile(items=simple_items)
+    # Use Node (production class) for serialization roundtrip tests
+    items = [Node(content={"value": i}) for i in range(5)]
+    pile = Pile(items=items)
     data = pile.to_dict()
 
     restored = Pile.from_dict(data)
     assert len(restored) == len(pile)
-    for item in simple_items:
+    for item in items:
         assert item.id in restored
 
 
 def test_from_dict_preserves_item_type():
     """Test from_dict preserves item_type."""
-    pile = Pile(item_type=TestElement)
+    pile = Pile(item_type=Node)
     data = pile.to_dict()
 
     restored = Pile.from_dict(data)
-    assert restored.item_type == {TestElement}
+    assert restored.item_type == {Node}
 
 
 def test_from_dict_preserves_strict_type():
@@ -1542,9 +1544,11 @@ def test_from_dict_preserves_strict_type():
     assert restored.strict_type is True
 
 
-def test_from_dict_preserves_progression_name(simple_items):
+def test_from_dict_preserves_progression_name():
     """Test from_dict preserves progression name."""
-    pile = Pile(items=simple_items)
+    # Use Node (production class) for serialization roundtrip tests
+    items = [Node(content={"value": i}) for i in range(5)]
+    pile = Pile(items=items)
     # Manually set progression name
     pile._progression.name = "test_order"
     data = pile.to_dict()
@@ -1672,9 +1676,9 @@ class TestPileSerializationEdgeCases:
         """
         from typing import Union
 
-        # Create pile with Union type
-        pile = Pile(item_type=Union[TestElement, TypedElement])
-        pile.add(TestElement(value=1))
+        # Create pile with Union type - use production classes for serialization
+        pile = Pile(item_type=Union[Node, TypedElement])
+        pile.add(Node(content={"value": 1}))
         pile.add(TypedElement(name="test"))
 
         # Serialize
@@ -1684,7 +1688,7 @@ class TestPileSerializationEdgeCases:
         restored = Pile.from_dict(data)
 
         assert len(restored) == 2
-        assert restored.item_type == {TestElement, TypedElement}
+        assert restored.item_type == {Node, TypedElement}
 
     def test_from_dict_with_set_item_type(self):
         """
@@ -1722,9 +1726,9 @@ class TestPileSerializationEdgeCases:
             - Serialization: O(k) where k = |item_type|
             - Deserialization: O(k) list → set conversion
         """
-        # Create pile with set of types
-        pile = Pile(item_type={TestElement, TypedElement})
-        pile.add(TestElement(value=1))
+        # Create pile with set of types - use production classes for serialization
+        pile = Pile(item_type={Node, TypedElement})
+        pile.add(Node(content={"value": 1}))
 
         data = pile.to_dict()
 
@@ -1733,7 +1737,7 @@ class TestPileSerializationEdgeCases:
 
         # Deserialize - should handle list correctly
         restored = Pile.from_dict(data)
-        assert restored.item_type == {TestElement, TypedElement}
+        assert restored.item_type == {Node, TypedElement}
 
     def test_from_dict_strict_mode_exact_match_in_list(self):
         """
@@ -2287,10 +2291,11 @@ def test_pile_getitem_progression_with_missing_uuid(simple_items):
     assert "not found in pile" in str(exc_info.value)
 
 
-def test_pile_from_dict_runtime_extract_types(simple_items):
+def test_pile_from_dict_runtime_extract_types():
     """Test Pile.from_dict with item_type at runtime (line 667)."""
-    # Create a Pile and serialize it
-    pile = Pile[Element](items=simple_items[:2])
+    # Use Node (production class) for serialization roundtrip tests
+    items = [Node(content={"value": i}) for i in range(2)]
+    pile = Pile[Element](items=items)
     pile_dict = pile.to_dict()
 
     # Add item_type as a type object (not string) - forces runtime extract_types path

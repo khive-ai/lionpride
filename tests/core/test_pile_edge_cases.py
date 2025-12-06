@@ -12,7 +12,7 @@ import threading
 
 from conftest import TestElement, create_test_elements
 
-from lionpride.core import Pile
+from lionpride.core import Node, Pile
 
 # =============================================================================
 # Single-Item Edge Cases (unique - tests boundary of 1 item)
@@ -175,8 +175,9 @@ class TestSerializationEdgeCases:
 
     def test_pile_with_progression_name_roundtrip(self):
         """Pile with custom progression name should preserve it."""
-        items = create_test_elements(3)
-        pile: Pile[TestElement] = Pile(items=items)
+        # Use Node (production class) for serialization roundtrip tests
+        items = [Node(content={"value": i}) for i in range(3)]
+        pile: Pile[Node] = Pile(items=items)
         pile._progression.name = "custom_order"
 
         data = pile.to_dict(mode="json")
