@@ -326,30 +326,27 @@ class TestRegistryMCPIntegration:
         """Test register_mcp_server with specific tool_names."""
         registry = ServiceRegistry()
 
-        # Mock MCP components
-        mock_client = Mock()
-        mock_client.call_tool = AsyncMock(return_value=Mock(content=[Mock(text="result")]))
-
         server_config = {"server": "test_server"}
         tool_names = ["tool1", "tool2"]
 
-        # Mock create_mcp_callable from loader
-        with patch("lionpride.services.mcps.loader.create_mcp_callable") as mock_create:
-            mock_callable = AsyncMock(return_value="mock_result")
-            mock_create.return_value = mock_callable
+        with (
+            patch("lionpride.services.mcps.loader.create_mcp_callable") as mock_create,
+            patch("lionpride.services.Tool") as MockTool,
+            patch("lionpride.services.iModel") as MockiModel,
+            patch.object(registry, "register") as mock_register,
+        ):
+            mock_create.return_value = AsyncMock(return_value="mock_result")
+            MockTool.return_value = Mock()
+            MockiModel.return_value = Mock()
 
-            # Mock Tool class
-            with patch("lionpride.services.types.tool.Tool") as MockTool:
-                mock_tool_instance = Mock()
-                MockTool.return_value = mock_tool_instance
+            registered = await registry.register_mcp_server(
+                server_config=server_config, tool_names=tool_names
+            )
 
-                registered = await registry.register_mcp_server(
-                    server_config=server_config, tool_names=tool_names
-                )
-
-                assert len(registered) == 2
-                assert "test_server_tool1" in registered
-                assert "test_server_tool2" in registered
+            assert len(registered) == 2
+            assert "test_server_tool1" in registered
+            assert "test_server_tool2" in registered
+            assert mock_register.call_count == 2
 
     async def test_register_mcp_server_duplicate_without_update_raises(self):
         """Test register_mcp_server raises when tool exists and update=False."""
@@ -378,20 +375,22 @@ class TestRegistryMCPIntegration:
         server_config = {"server": "server"}
         tool_names = ["tool1"]
 
-        # Mock _create_mcp_callable and Tool
-        with patch("lionpride.services.mcps.loader.create_mcp_callable") as mock_create:
-            mock_callable = AsyncMock(return_value="mock_result")
-            mock_create.return_value = mock_callable
+        with (
+            patch("lionpride.services.mcps.loader.create_mcp_callable") as mock_create,
+            patch("lionpride.services.Tool") as MockTool,
+            patch("lionpride.services.iModel") as MockiModel,
+            patch.object(registry, "register") as mock_register,
+        ):
+            mock_create.return_value = AsyncMock(return_value="mock_result")
+            MockTool.return_value = Mock()
+            MockiModel.return_value = Mock()
 
-            with patch("lionpride.services.types.tool.Tool") as MockTool:
-                mock_tool_instance = Mock()
-                MockTool.return_value = mock_tool_instance
+            registered = await registry.register_mcp_server(
+                server_config=server_config, tool_names=tool_names, update=True
+            )
 
-                registered = await registry.register_mcp_server(
-                    server_config=server_config, tool_names=tool_names, update=True
-                )
-
-                assert "server_tool1" in registered
+            assert "server_tool1" in registered
+            assert mock_register.call_count == 1
 
     async def test_register_mcp_server_with_request_options(self):
         """Test register_mcp_server with request_options."""
@@ -467,14 +466,13 @@ class TestRegistryMCPIntegration:
         with (
             patch("lionpride.services.mcps.MCPConnectionPool.get_client", return_value=mock_client),
             patch("lionpride.services.mcps.loader.create_mcp_callable") as mock_create,
-            patch("lionpride.services.types.tool.Tool") as MockTool,
-            patch("lionpride.schema_handlers.typescript_schema"),
+            patch("lionpride.services.Tool") as MockTool,
+            patch("lionpride.services.iModel") as MockiModel,
+            patch.object(registry, "register") as mock_register,
         ):
-            mock_callable = AsyncMock(return_value="mock_result")
-            mock_create.return_value = mock_callable
-
-            mock_tool_instance = Mock()
-            MockTool.return_value = mock_tool_instance
+            mock_create.return_value = AsyncMock(return_value="mock_result")
+            MockTool.return_value = Mock()
+            MockiModel.return_value = Mock()
 
             registered = await registry.register_mcp_server(
                 server_config=server_config, tool_names=None
@@ -482,6 +480,7 @@ class TestRegistryMCPIntegration:
 
             # Should have discovered and registered both tools
             assert len(registered) == 2
+            assert mock_register.call_count == 2
 
     async def test_register_mcp_server_auto_discover_duplicate_skips(self):
         """Test auto-discover skips duplicates when update=False."""
@@ -528,17 +527,17 @@ class TestRegistryMCPIntegration:
         with (
             patch("lionpride.services.mcps.MCPConnectionPool.get_client", return_value=mock_client),
             patch("lionpride.services.mcps.loader.create_mcp_callable") as mock_create,
-            patch("lionpride.services.types.tool.Tool") as MockTool,
+            patch("lionpride.services.Tool") as MockTool,
+            patch("lionpride.services.iModel") as MockiModel,
+            patch.object(registry, "register") as mock_register,
             patch(
                 "lionpride.schema_handlers.typescript_schema",
                 side_effect=Exception("Schema error"),
             ),
         ):
-            mock_callable = AsyncMock()
-            mock_create.return_value = mock_callable
-
-            mock_tool_instance = Mock()
-            MockTool.return_value = mock_tool_instance
+            mock_create.return_value = AsyncMock()
+            MockTool.return_value = Mock()
+            MockiModel.return_value = Mock()
 
             registered = await registry.register_mcp_server(
                 server_config=server_config, tool_names=None
@@ -546,6 +545,7 @@ class TestRegistryMCPIntegration:
 
             # Should still register despite schema error
             assert len(registered) == 1
+            assert mock_register.call_count == 1
 
     async def test_create_mcp_callable_wrapper(self):
         """Test create_mcp_callable creates functional wrapper."""
