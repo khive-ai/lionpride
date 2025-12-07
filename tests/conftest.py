@@ -38,6 +38,27 @@ from lionpride.core import Edge, Element, Event, Flow, Graph, Node, Pile, Proces
 from lionpride.core.event import EventStatus
 
 # =============================================================================
+# Security: Register test module prefixes for dynamic type loading
+# =============================================================================
+# The deserialization security allowlist blocks non-lionpride modules by default.
+# Test modules need to be registered to allow polymorphic deserialization of
+# test-defined Element subclasses.
+
+
+@pytest.fixture(autouse=True, scope="session")
+def register_test_type_prefixes():
+    """Register test module prefixes for dynamic type loading (session-scoped)."""
+    from lionpride.core._utils import _ALLOWED_MODULE_PREFIXES
+
+    test_prefixes = {"test_", "tests.", "conftest."}
+    for prefix in test_prefixes:
+        _ALLOWED_MODULE_PREFIXES.add(prefix)
+    yield
+    for prefix in test_prefixes:
+        _ALLOWED_MODULE_PREFIXES.discard(prefix)
+
+
+# =============================================================================
 # Test Classes (moved from lionpride._testing)
 # =============================================================================
 # Note: These classes are for test fixtures only. For polymorphic serialization

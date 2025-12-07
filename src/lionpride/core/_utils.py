@@ -22,6 +22,7 @@ __all__ = (
     "get_element_serializer_config",
     "get_json_serializable",
     "load_type_from_string",
+    "register_type_prefix",
     "synchronized",
     "to_uuid",
 )
@@ -55,12 +56,46 @@ def async_synchronized(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable
 
 _TYPE_CACHE: dict[str, type] = {}
 
+# Security: Allowlist of module prefixes permitted for dynamic type loading.
+# This prevents deserialization attacks that could load arbitrary modules.
+# Only lionpride types should be dynamically loaded from serialized data.
+_DEFAULT_ALLOWED_PREFIXES: frozenset[str] = frozenset({"lionpride."})
+_ALLOWED_MODULE_PREFIXES: set[str] = set(_DEFAULT_ALLOWED_PREFIXES)
+
+
+def register_type_prefix(prefix: str) -> None:
+    """Register an additional module prefix for dynamic type loading.
+
+    Use this to allow deserialization of user-defined Element subclasses
+    from your own packages.
+
+    Security:
+        Only register prefixes for modules you control. Registering broad
+        prefixes (e.g., "") would defeat the security allowlist.
+
+    Args:
+        prefix: Module prefix to allow (e.g., "myapp.models.").
+                Must end with "." to prevent prefix attacks.
+
+    Example:
+        >>> from lionpride.core._utils import register_type_prefix
+        >>> register_type_prefix("myapp.entities.")
+        >>> # Now Element.from_dict() can load "myapp.entities.MyElement"
+    """
+    if not prefix.endswith("."):
+        raise ValueError(f"Prefix must end with '.': {prefix}")
+    _ALLOWED_MODULE_PREFIXES.add(prefix)
+
 
 def load_type_from_string(type_str: str) -> type:
     """Load type from fully qualified module path (e.g., 'lionpride.core.Node').
 
+    Security:
+        Only modules in the allowlist (_ALLOWED_MODULE_PREFIXES) can be loaded.
+        This prevents deserialization attacks from loading arbitrary code.
+
     Raises:
-        ValueError: If type string invalid or type cannot be loaded.
+        ValueError: If type string invalid, not in allowlist, or type cannot be loaded.
     """
     # Check cache first
     if type_str in _TYPE_CACHE:
@@ -71,6 +106,13 @@ def load_type_from_string(type_str: str) -> type:
 
     if "." not in type_str:
         raise ValueError(f"Invalid type path (no module): {type_str}")
+
+    # Security: Validate module is in allowlist before importing
+    if not any(type_str.startswith(prefix) for prefix in _ALLOWED_MODULE_PREFIXES):
+        raise ValueError(
+            f"Module '{type_str}' is not in the allowed module prefixes. "
+            f"Only types from {sorted(_ALLOWED_MODULE_PREFIXES)} can be loaded."
+        )
 
     try:
         module_path, class_name = type_str.rsplit(".", 1)
