@@ -996,17 +996,16 @@ class TestElementPolymorphicDeserialization:
         Attack vector: Malicious data provides {"metadata": {"lion_class": "os.system"}}.
         Without validation, dynamic import loads os.system and attempts deserialization.
 
-        Defense: issubclass(loaded_class, Element) check rejects non-Element classes
-        before any instantiation occurs. Fail-fast with clear error message.
+        Defense: Module allowlist now blocks non-lionpride imports before the Element
+        subclass check. This provides defense-in-depth security.
 
-        Test strategy: Use builtins.dict (loads successfully but not Element subclass)
-        to verify security check works without triggering import errors.
+        Test strategy: Use builtins.dict to verify module allowlist rejects it.
         """
         # Test with a fake class name that would load to a non-Element class
-        # Dynamic import will try to load 'builtins.dict' which is not an Element
+        # Security: module allowlist blocks builtins.* before Element subclass check
         data = {"metadata": {"lion_class": "builtins.dict"}}
 
-        with pytest.raises(ValueError, match="not an Element subclass"):
+        with pytest.raises(ValueError, match="not in the allowed module prefixes"):
             Element.from_dict(data)
 
     def test_polymorphic_preserves_metadata(self):

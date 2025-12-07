@@ -177,15 +177,27 @@ class TestLoadTypeFromString:
         assert isinstance(result, type)
         assert result.__name__ == "Element"
 
-    def test_load_type_from_string_when_builtin_type_then_returns_type(self):
-        """Test load_type_from_string() loads builtin types."""
+    def test_load_type_from_string_when_builtin_type_then_raises_security_error(self):
+        """Test load_type_from_string() blocks loading builtin types (security)."""
         from lionpride.core._utils import load_type_from_string
 
-        # Test with dict type
-        result = load_type_from_string("builtins.dict")
+        # Builtin types are NOT in the allowlist - this is a security feature
+        with pytest.raises(ValueError, match="not in the allowed module prefixes"):
+            load_type_from_string("builtins.dict")
 
-        assert result is dict
-        assert isinstance(result, type)
+    def test_load_type_from_string_blocks_arbitrary_modules(self):
+        """Test load_type_from_string() blocks arbitrary module loading (security)."""
+        from lionpride.core._utils import load_type_from_string
+
+        # Arbitrary modules should be blocked
+        with pytest.raises(ValueError, match="not in the allowed module prefixes"):
+            load_type_from_string("os.path")
+
+        with pytest.raises(ValueError, match="not in the allowed module prefixes"):
+            load_type_from_string("subprocess.Popen")
+
+        with pytest.raises(ValueError, match="not in the allowed module prefixes"):
+            load_type_from_string("pickle.Pickler")
 
     def test_load_type_from_string_when_cached_then_returns_from_cache(self):
         """Test load_type_from_string() uses cache for repeated calls."""
@@ -229,8 +241,17 @@ class TestLoadTypeFromString:
         """Test load_type_from_string() raises ValueError for invalid module."""
         from lionpride.core._utils import load_type_from_string
 
-        with pytest.raises(ValueError, match="Failed to load type"):
+        # Non-lionpride modules are blocked by allowlist
+        with pytest.raises(ValueError, match="not in the allowed module prefixes"):
             load_type_from_string("nonexistent.module.Type")
+
+    def test_load_type_from_string_when_invalid_lionpride_module_then_raises_valueerror(self):
+        """Test load_type_from_string() raises ValueError for non-existent lionpride module."""
+        from lionpride.core._utils import load_type_from_string
+
+        # Allowed prefix but invalid module
+        with pytest.raises(ValueError, match="Failed to load type"):
+            load_type_from_string("lionpride.nonexistent.module.Type")
 
     def test_load_type_from_string_when_invalid_class_then_raises_valueerror(self):
         """Test load_type_from_string() raises ValueError for invalid class name."""
@@ -253,7 +274,8 @@ class TestLoadTypeFromString:
 
         from lionpride.core._utils import _TYPE_CACHE, load_type_from_string
 
-        type_str = "fake.module.Type"
+        # Use lionpride prefix to pass allowlist check
+        type_str = "lionpride.fake.module.Type"
         # Clear from cache
         _TYPE_CACHE.pop(type_str, None)
 
