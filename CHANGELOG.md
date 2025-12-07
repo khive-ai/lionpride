@@ -7,56 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a7] - 2025-12-06
+
+### Security
+
+- Module allowlist for `load_type_from_string()` - blocks arbitrary code loading (#129)
+- Session-scoped `MCPConnectionPoolInstance` with `create_mcp_pool()` factory (#91)
+
 ### Performance
 
-- Session lazy initialization: `conversations`, `services`, `operations` are now lazily created on first access (#112)
-- `alcall` cyclomatic complexity reduced from 33 to 10 (#116)
-- Extract shared `LazyInit` utility for thread-safe lazy initialization (#115)
+- Session lazy initialization for `conversations`, `services`, `operations` (#112)
+- `alcall` complexity reduced from 33 to 10; extract `LazyInit` utility (#115, #116)
+
+### Changed
+
+- Replace `print()` with `logging` module (#99)
 
 ### Deprecated
 
-The following APIs are deprecated and will change in future versions:
+- `MCPConnectionPool.configure_security()` - use `create_mcp_pool()` instead
 
-#### Session.request() - Branch Parameter Required (target: 2.0.0)
+### Internal
 
-Calling `Session.request()` without a `branch` parameter is deprecated. In a future version, `branch` will be required for access control.
-
-**Before (deprecated):**
-
-```python
-calling = await session.request("my_model", prompt="Hello")
-```
-
-**After (recommended):**
-
-```python
-calling = await session.request("my_model", prompt="Hello", branch=my_branch)
-```
-
-#### S3LogSubscriber - Direct Credentials (target: 2.0.0)
-
-Passing `aws_access_key_id` and `aws_secret_access_key` directly to `S3LogSubscriber` is deprecated. Use environment variable parameters instead.
-
-**Before (deprecated):**
-
-```python
-subscriber = S3LogSubscriber(
-    bucket="my-bucket",
-    aws_access_key_id="AKIA...",
-    aws_secret_access_key="secret..."
-)
-```
-
-**After (recommended):**
-
-```python
-# Set environment variables: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
-subscriber = S3LogSubscriber(
-    bucket="my-bucket",
-    aws_access_key_id_env="AWS_ACCESS_KEY_ID",
-    aws_secret_access_key_env="AWS_SECRET_ACCESS_KEY"
-)
-```
+- Test coverage for `factory.py` and `act.py` edge cases (#85)
 
 ## [1.0.0a6] - 2025-12-05
 
@@ -230,7 +203,8 @@ Initial alpha release of lionpride - foundational primitives for production AI a
 - Interactive Jupyter notebooks
 - 99%+ test coverage
 
-[Unreleased]: https://github.com/khive-ai/lionpride/compare/v1.0.0a6...HEAD
+[Unreleased]: https://github.com/khive-ai/lionpride/compare/v1.0.0a7...HEAD
+[1.0.0a7]: https://github.com/khive-ai/lionpride/releases/tag/v1.0.0a7
 [1.0.0a6]: https://github.com/khive-ai/lionpride/releases/tag/v1.0.0a6
 [1.0.0a5]: https://github.com/khive-ai/lionpride/releases/tag/v1.0.0a5
 [1.0.0a4]: https://github.com/khive-ai/lionpride/releases/tag/v1.0.0a4
