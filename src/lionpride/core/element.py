@@ -227,6 +227,7 @@ class Element(BaseModel):
         pretty: bool = False,
         sort_keys: bool = False,
         decode: bool = True,
+        deterministic_sets: bool = False,
         **kwargs: Any,
     ) -> str | bytes:
         """Serialize to JSON with nested Element/BaseModel support.
@@ -248,6 +249,7 @@ class Element(BaseModel):
             pretty=pretty,
             sort_keys=sort_keys,
             decode=decode,
+            deterministic_sets=deterministic_sets,
         )
 
     def __eq__(self, other: Any) -> bool:
