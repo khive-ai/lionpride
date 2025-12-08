@@ -213,3 +213,5 @@ coverage.*
 
 CLAUDE.md
 AGENTS.md
+
+*_cache/
