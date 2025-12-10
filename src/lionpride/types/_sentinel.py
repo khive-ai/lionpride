@@ -130,12 +130,17 @@ def is_sentinel(
     none_as_sentinel: bool = False,
     empty_as_sentinel: bool = False,
 ) -> bool:
-    """Check if a value is any sentinel (Undefined or Unset)."""
+    """Check if a value is any sentinel (Undefined or Unset).
+
+    Uses isinstance for robustness against module reloading or
+    multiprocessing edge cases where singleton identity may break.
+    """
     if none_as_sentinel and value is None:
         return True
     if empty_as_sentinel and value in _EMPTY_TUPLE:
         return True
-    return value is Undefined or value is Unset
+    # Use isinstance for robustness - identity check can fail after reload
+    return isinstance(value, (UndefinedType, UnsetType))
 
 
 def not_sentinel(

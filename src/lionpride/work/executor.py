@@ -315,15 +315,30 @@ class ReportExecutor:
         # Create tasks for all forms (they handle their own dependency waiting)
         tasks = [self._execute_form(form) for form in forms]
 
-        # Stream completions
+        # Stream completions - use return_exceptions=True so failed forms still report
+        # instead of terminating the stream early
         completed = 0
-        async with CompletionStream(tasks, limit=None) as stream:
-            async for idx, _ in stream:
+        async with CompletionStream(tasks, limit=None, return_exceptions=True) as stream:
+            async for idx, result in stream:
                 completed += 1
                 form = forms[idx]
                 name = form.output_fields[0] if form.output_fields else str(form.id)[:8]
 
-                if form.id in self.errors:
+                # CompletionStream sends exceptions as results when tasks fail
+                if isinstance(result, BaseException):
+                    # Store the error if not already tracked
+                    if form.id not in self.errors:
+                        self.errors[form.id] = (
+                            result if isinstance(result, Exception) else Exception(str(result))
+                        )
+                    yield FormResult(
+                        name=name,
+                        result=None,
+                        error=self.errors[form.id],
+                        completed=completed,
+                        total=total,
+                    )
+                elif form.id in self.errors:
                     yield FormResult(
                         name=name,
                         result=None,

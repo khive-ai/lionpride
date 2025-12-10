@@ -128,11 +128,25 @@ async def bounded_map(
 
 
 class CompletionStream:
-    """Async completion stream with structured concurrency and explicit lifecycle."""
+    """Async completion stream with structured concurrency and explicit lifecycle.
 
-    def __init__(self, aws: Sequence[Awaitable[T]], *, limit: int | None = None):
+    Args:
+        aws: Sequence of awaitables to execute concurrently.
+        limit: Optional concurrency limit.
+        return_exceptions: If True, catch exceptions and send them as results.
+            If False (default), exceptions propagate and may terminate the stream early.
+    """
+
+    def __init__(
+        self,
+        aws: Sequence[Awaitable[T]],
+        *,
+        limit: int | None = None,
+        return_exceptions: bool = False,
+    ):
         self.aws = aws
         self.limit = limit
+        self.return_exceptions = return_exceptions
         self._task_group: anyio.abc.TaskGroup | None = None
         self._send: anyio.abc.ObjectSendStream[tuple[int, T]] | None = None
         self._recv: anyio.abc.ObjectReceiveStream[tuple[int, T]] | None = None
@@ -151,7 +165,15 @@ class CompletionStream:
             if limiter:
                 await limiter.acquire()
             try:
-                res = await aw
+                try:
+                    res = await aw
+                except BaseException as exc:
+                    if self.return_exceptions:
+                        # Send the exception as the result (consumers handle it)
+                        res = exc  # type: ignore[assignment]
+                    else:
+                        # Re-raise to propagate to TaskGroup (old behavior)
+                        raise
                 try:
                     assert self._send is not None
                     await self._send.send((i, res))  # type: ignore[arg-type]
