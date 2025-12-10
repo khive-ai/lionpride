@@ -296,9 +296,21 @@ class ReportExecutor:
         return result
 
     async def execute(self) -> dict[str, Any]:
-        """Execute all forms and return the deliverable."""
+        """Execute all forms and return the deliverable.
+
+        Raises:
+            ExceptionGroup: If any forms failed during execution.
+        """
         async for _ in self.stream_execute():
             pass
+
+        # Raise errors if any forms failed
+        if self.errors:
+            raise ExceptionGroup(
+                f"Report execution failed ({len(self.errors)} form(s) failed)",
+                list(self.errors.values()),
+            )
+
         return self.report.get_deliverable()
 
     async def stream_execute(self) -> AsyncGenerator[FormResult, None]:
