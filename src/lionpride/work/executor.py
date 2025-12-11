@@ -104,8 +104,18 @@ class ReportExecutor:
         )
 
         # Initialize completion events for all forms
+        # Pre-set events for already-completed forms (enables retry/resume)
         for form in report.forms:
-            self.completion_events[form.id] = concurrency.Event()
+            event = concurrency.Event()
+            if form.id in [f.id for f in report.completed_forms]:
+                # Form already completed in a previous run - mark as done
+                event.set()
+                # Also populate results from available_data
+                if form.output_fields:
+                    primary_output = form.output_fields[0]
+                    if primary_output in report.available_data:
+                        self.results[form.id] = report.available_data[primary_output]
+            self.completion_events[form.id] = event
 
     def _resolve_branch(self, form: Form) -> Branch:
         """Resolve branch for form execution."""
@@ -314,26 +324,55 @@ class ReportExecutor:
         return self.report.get_deliverable()
 
     async def stream_execute(self) -> AsyncGenerator[FormResult, None]:
-        """Execute forms, yielding results as each completes."""
+        """Execute forms, yielding results as each completes.
+
+        Supports retry/resume: already-completed forms (in report.completed_forms)
+        are skipped, and execution continues from where it left off.
+        """
         self._check_for_cycles()
+
+        # Identify which forms need execution vs already completed
+        completed_ids = {f.id for f in self.report.completed_forms}
+        pending_forms = [f for f in self.report.forms if f.id not in completed_ids]
+        already_completed = [f for f in self.report.forms if f.id in completed_ids]
+
+        total = len(self.report.forms)
+        already_done = len(already_completed)
 
         if self.verbose:
             logger.debug("Executing report: %s", self.report)
-            logger.debug("Forms: %d", len(self.report.forms))
+            logger.debug(
+                "Forms: %d total, %d already completed, %d pending",
+                total,
+                already_done,
+                len(pending_forms),
+            )
 
-        total = len(self.report.forms)
-        forms = list(self.report.forms)
+        # Yield results for already-completed forms first (for progress tracking)
+        for form in already_completed:
+            name = form.output_fields[0] if form.output_fields else str(form.id)[:8]
+            yield FormResult(
+                name=name,
+                result=self.results.get(form.id),
+                error=None,
+                completed=already_done,  # All pre-completed count as done
+                total=total,
+            )
 
-        # Create tasks for all forms (they handle their own dependency waiting)
-        tasks = [self._execute_form(form) for form in forms]
+        # If nothing pending, we're done
+        if not pending_forms:
+            return
+
+        # Create tasks only for pending forms
+        tasks = [self._execute_form(form) for form in pending_forms]
 
         # Stream completions - use return_exceptions=True so failed forms still report
         # instead of terminating the stream early
-        completed = 0
+        completed = already_done
         async with CompletionStream(tasks, limit=None, return_exceptions=True) as stream:
             async for idx, result in stream:
                 completed += 1
-                form = forms[idx]
+                form = pending_forms[idx]
                 name = form.output_fields[0] if form.output_fields else str(form.id)[:8]
 
                 # CompletionStream sends exceptions as results when tasks fail
