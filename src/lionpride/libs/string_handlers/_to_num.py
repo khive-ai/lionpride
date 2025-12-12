@@ -1,6 +1,7 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
+import math
 from decimal import Decimal
 from typing import Any
 
@@ -17,6 +18,7 @@ def to_num(
     lower_bound: int | float | None = None,
     num_type: type[int] | type[float] = float,
     precision: int | None = None,
+    allow_inf: bool = False,
 ) -> int | float:
     """Convert input to numeric type with optional bounds checking.
 
@@ -26,12 +28,13 @@ def to_num(
         lower_bound: Minimum allowed value (inclusive)
         num_type: Target type (int or float, default: float)
         precision: Decimal places for float rounding
+        allow_inf: If True, allow infinity values (default: False)
 
     Returns:
         Converted numeric value
 
     Raises:
-        ValueError: If string is empty, too long, or out of bounds
+        ValueError: If string is empty, too long, out of bounds, NaN, or inf (when not allowed)
         TypeError: If input type is not convertible
     """
     # Validate num_type
@@ -56,6 +59,13 @@ def to_num(
             raise ValueError(f"Cannot convert '{input_}' to number") from e
     else:
         raise TypeError(f"Cannot convert {type(input_).__name__} to number")
+
+    # Security: Reject NaN (always) and inf (unless explicitly allowed)
+    # NaN comparisons are always False, bypassing bounds checks
+    if math.isnan(value):
+        raise ValueError("NaN is not allowed")
+    if math.isinf(value) and not allow_inf:
+        raise ValueError("Infinity is not allowed (use allow_inf=True to permit)")
 
     # Apply bounds checking
     if upper_bound is not None and value > upper_bound:

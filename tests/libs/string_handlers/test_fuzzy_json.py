@@ -109,9 +109,19 @@ def test_clean_json_string_trailing_comma():
 
 
 def test_clean_json_string_whitespace():
-    """Test _clean_json_string normalizes whitespace"""
+    """Test _clean_json_string handles whitespace.
+
+    Note: The state-machine approach does NOT collapse whitespace,
+    as this is handled by orjson during parsing. The old regex approach
+    collapsed whitespace but could corrupt content inside strings.
+    """
     result = _clean_json_string('{"key":   "value"}')
-    assert "  " not in result
+    # Whitespace is preserved (orjson handles it during parsing)
+    # The important thing is that the JSON is still valid
+    import orjson
+
+    parsed = orjson.loads(result)
+    assert parsed == {"key": "value"}
 
 
 def test_clean_json_string_unquoted_keys():
@@ -464,3 +474,74 @@ class TestSecurityLimits:
         small_input = "x" * 50
         # Should not raise
         _check_valid_str(small_input, max_size=100)
+
+
+# ============================================================================
+# String content preservation tests (state machine correctness)
+# ============================================================================
+
+
+class TestStringContentPreservation:
+    """Test that fuzzy_json preserves content inside strings.
+
+    The old regex-based approach would corrupt apostrophes and quotes
+    inside string values. The state-machine approach should preserve them.
+    """
+
+    def test_apostrophe_in_double_quoted_string(self):
+        """Test apostrophe inside double-quoted string is preserved."""
+        # Valid JSON with apostrophe - should work directly
+        result = fuzzy_json('{"text": "it\'s fine"}')
+        assert result == {"text": "it's fine"}
+
+    def test_apostrophe_in_single_quoted_string(self):
+        """Test apostrophe inside single-quoted string is preserved.
+
+        This was the bug: {'key': "it's fine"} would become {"key": "it"s fine"}
+        because the blind replace("'", '"') corrupted the apostrophe.
+        """
+        # Single-quoted key, double-quoted value with apostrophe
+        result = fuzzy_json("{'text': \"it's fine\"}")
+        assert result == {"text": "it's fine"}
+
+    def test_double_quote_inside_single_quoted_string(self):
+        """Test double quote inside single-quoted string is properly escaped."""
+        # Single-quoted string containing a double quote
+        result = fuzzy_json("{'text': 'say \"hello\"'}")
+        assert result == {"text": 'say "hello"'}
+
+    def test_mixed_quotes_complex(self):
+        """Test complex case with mixed quotes."""
+        # Single-quoted key and value, value contains apostrophe
+        result = fuzzy_json("{'message': 'don\\'t panic'}")
+        assert result == {"message": "don't panic"}
+
+    def test_nested_with_apostrophes(self):
+        """Test nested structure with apostrophes."""
+        result = fuzzy_json("{'outer': {'inner': \"it's nested\", 'also': \"won't break\"}}")
+        assert result == {"outer": {"inner": "it's nested", "also": "won't break"}}
+
+    def test_array_with_apostrophes(self):
+        """Test array with strings containing apostrophes."""
+        result = fuzzy_json('{\'items\': ["it\'s", "that\'s", "what\'s"]}')
+        assert result == {"items": ["it's", "that's", "what's"]}
+
+    def test_unquoted_key_with_quoted_value_apostrophe(self):
+        """Test unquoted key with value containing apostrophe."""
+        result = fuzzy_json('{text: "it\'s fine"}')
+        assert result == {"text": "it's fine"}
+
+    def test_trailing_comma_with_apostrophe(self):
+        """Test trailing comma removal doesn't affect string content."""
+        result = fuzzy_json('{"text": "it\'s fine",}')
+        assert result == {"text": "it's fine"}
+
+    def test_escape_sequences_preserved(self):
+        """Test that escape sequences in strings are preserved."""
+        result = fuzzy_json(r'{"path": "C:\\Users\\file.txt"}')
+        assert result == {"path": "C:\\Users\\file.txt"}
+
+    def test_newlines_in_strings_preserved(self):
+        """Test that newlines in strings are preserved."""
+        result = fuzzy_json('{"text": "line1\\nline2"}')
+        assert result == {"text": "line1\nline2"}

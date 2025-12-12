@@ -167,3 +167,111 @@ class TestToNumDecimal:
 
         assert to_num(Decimal("42"), num_type=int) == 42
         assert isinstance(to_num(Decimal("42"), num_type=int), int)
+
+
+class TestToNumNaNInfSecurity:
+    """Test NaN and infinity rejection for security.
+
+    NaN comparisons are always False, which can bypass bounds checks.
+    For example: float("nan") > 100 is False, so upper_bound wouldn't trigger.
+    """
+
+    def test_nan_string_rejected(self):
+        """Test that NaN string is rejected."""
+        with pytest.raises(ValueError, match="NaN is not allowed"):
+            to_num("nan")
+
+        with pytest.raises(ValueError, match="NaN is not allowed"):
+            to_num("NaN")
+
+        with pytest.raises(ValueError, match="NaN is not allowed"):
+            to_num("NAN")
+
+    def test_nan_float_rejected(self):
+        """Test that NaN float is rejected."""
+        import math
+
+        with pytest.raises(ValueError, match="NaN is not allowed"):
+            to_num(float("nan"))
+
+        with pytest.raises(ValueError, match="NaN is not allowed"):
+            to_num(math.nan)
+
+    def test_inf_string_rejected_by_default(self):
+        """Test that infinity string is rejected by default."""
+        with pytest.raises(ValueError, match="Infinity is not allowed"):
+            to_num("inf")
+
+        with pytest.raises(ValueError, match="Infinity is not allowed"):
+            to_num("Infinity")
+
+        with pytest.raises(ValueError, match="Infinity is not allowed"):
+            to_num("-inf")
+
+        with pytest.raises(ValueError, match="Infinity is not allowed"):
+            to_num("-Infinity")
+
+    def test_inf_float_rejected_by_default(self):
+        """Test that infinity float is rejected by default."""
+        import math
+
+        with pytest.raises(ValueError, match="Infinity is not allowed"):
+            to_num(float("inf"))
+
+        with pytest.raises(ValueError, match="Infinity is not allowed"):
+            to_num(float("-inf"))
+
+        with pytest.raises(ValueError, match="Infinity is not allowed"):
+            to_num(math.inf)
+
+        with pytest.raises(ValueError, match="Infinity is not allowed"):
+            to_num(-math.inf)
+
+    def test_inf_allowed_when_flag_set(self):
+        """Test that infinity is allowed when allow_inf=True."""
+        import math
+
+        result = to_num("inf", allow_inf=True)
+        assert math.isinf(result)
+        assert result > 0
+
+        result = to_num("-inf", allow_inf=True)
+        assert math.isinf(result)
+        assert result < 0
+
+        result = to_num(float("inf"), allow_inf=True)
+        assert math.isinf(result)
+
+    def test_nan_never_allowed(self):
+        """Test that NaN is never allowed, even with allow_inf=True."""
+        with pytest.raises(ValueError, match="NaN is not allowed"):
+            to_num("nan", allow_inf=True)
+
+    def test_nan_would_bypass_bounds(self):
+        """Demonstrate why NaN rejection is security-critical.
+
+        Without NaN rejection, bounds checks are bypassed because
+        NaN comparisons are always False.
+        """
+        import math
+
+        # This would bypass bounds if NaN were allowed
+        # float("nan") > 100 is False, so upper_bound wouldn't trigger
+        with pytest.raises(ValueError, match="NaN is not allowed"):
+            to_num("nan", upper_bound=100)
+
+        # Same for lower bound
+        with pytest.raises(ValueError, match="NaN is not allowed"):
+            to_num("nan", lower_bound=0)
+
+    def test_inf_bounds_work_when_allowed(self):
+        """Test that bounds work correctly with infinity when allowed."""
+        import math
+
+        # Positive infinity should exceed any finite upper bound
+        with pytest.raises(ValueError, match="exceeds upper bound"):
+            to_num("inf", allow_inf=True, upper_bound=1000000)
+
+        # Negative infinity should be below any finite lower bound
+        with pytest.raises(ValueError, match="below lower bound"):
+            to_num("-inf", allow_inf=True, lower_bound=-1000000)

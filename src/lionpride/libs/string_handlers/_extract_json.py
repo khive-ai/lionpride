@@ -1,7 +1,6 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-import contextlib
 import re
 from typing import Any
 
@@ -11,6 +10,10 @@ from ._fuzzy_json import MAX_JSON_INPUT_SIZE, fuzzy_json
 
 # Precompile the regex for extracting JSON code blocks
 _JSON_BLOCK_PATTERN = re.compile(r"```json\s*(.*?)\s*```", re.DOTALL)
+
+# Exceptions that indicate JSON parsing failure (not system errors)
+# We intentionally don't catch MemoryError, KeyboardInterrupt, etc.
+_JSON_PARSE_ERRORS = (orjson.JSONDecodeError, ValueError, TypeError)
 
 
 def extract_json(
@@ -54,9 +57,11 @@ def extract_json(
         raise ValueError(msg)
 
     # 1. Try direct parsing
-    with contextlib.suppress(Exception):
+    try:
         parsed = fuzzy_json(input_str) if fuzzy_parse else orjson.loads(input_str)
         return parsed if return_one_if_single else [parsed]
+    except _JSON_PARSE_ERRORS:
+        pass  # Fall through to markdown extraction
 
     # 2. Attempt extracting JSON blocks from markdown
     matches = _JSON_BLOCK_PATTERN.findall(input_str)
@@ -66,17 +71,20 @@ def extract_json(
     # If only one match, return single dict; if multiple, return list of dicts
     if return_one_if_single and len(matches) == 1:
         data_str = matches[0]
-        with contextlib.suppress(Exception):
+        try:
             if fuzzy_parse:
                 return fuzzy_json(data_str)
             return orjson.loads(data_str)
-        return []
+        except _JSON_PARSE_ERRORS:
+            return []
 
     # Multiple matches
     results: list[Any] = []
     for m in matches:
-        with contextlib.suppress(Exception):
+        try:
             parsed = fuzzy_json(m) if fuzzy_parse else orjson.loads(m)
             # Append valid JSON (dicts, lists, or primitives)
             results.append(parsed)
+        except _JSON_PARSE_ERRORS:
+            continue  # Skip invalid blocks
     return results
