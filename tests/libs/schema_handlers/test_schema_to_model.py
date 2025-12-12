@@ -351,6 +351,84 @@ class TestPrepareSchemaInput:
         with pytest.raises(TypeError, match="Schema must be"):
             _prepare_schema_input(None, "Default")
 
+    def test_schema_size_limit(self):
+        """Test that schemas exceeding size limit are rejected."""
+        from lionpride.libs.schema_handlers._schema_to_model import _prepare_schema_input
+
+        # Create a schema that exceeds a small limit
+        schema = {"title": "Test", "type": "object", "description": "x" * 1000}
+
+        with pytest.raises(ValueError, match=r"Schema size.*exceeds maximum"):
+            _prepare_schema_input(schema, "Default", max_size=100)
+
+    def test_schema_depth_limit(self):
+        """Test that deeply nested schemas are rejected."""
+        from lionpride.libs.schema_handlers._schema_to_model import _prepare_schema_input
+
+        # Create deeply nested schema
+        nested = {"value": "leaf"}
+        for _ in range(10):
+            nested = {"nested": nested}
+
+        with pytest.raises(ValueError, match="nesting depth exceeds maximum"):
+            _prepare_schema_input(nested, "Default", max_depth=5)
+
+    def test_schema_within_limits_passes(self):
+        """Test that schemas within limits are processed correctly."""
+        from lionpride.libs.schema_handlers._schema_to_model import _prepare_schema_input
+
+        schema = {"title": "User", "type": "object", "properties": {"name": {"type": "string"}}}
+
+        # Should not raise with reasonable limits
+        _schema_json, _schema_dict, name = _prepare_schema_input(
+            schema, "Default", max_size=10000, max_depth=50
+        )
+
+        assert name == "User"
+
+
+class TestCheckSchemaDepth:
+    """Test _check_schema_depth function."""
+
+    def test_flat_dict(self):
+        """Test depth check on flat dict."""
+        from lionpride.libs.schema_handlers._schema_to_model import _check_schema_depth
+
+        result = _check_schema_depth({"a": 1, "b": 2})
+        assert result == 1
+
+    def test_nested_dict(self):
+        """Test depth check on nested dict."""
+        from lionpride.libs.schema_handlers._schema_to_model import _check_schema_depth
+
+        result = _check_schema_depth({"a": {"b": {"c": 1}}})
+        assert result == 3
+
+    def test_nested_list(self):
+        """Test depth check on nested list."""
+        from lionpride.libs.schema_handlers._schema_to_model import _check_schema_depth
+
+        result = _check_schema_depth([[[1, 2], [3, 4]], [[5, 6]]])
+        assert result == 3
+
+    def test_mixed_nesting(self):
+        """Test depth check on mixed dict/list nesting."""
+        from lionpride.libs.schema_handlers._schema_to_model import _check_schema_depth
+
+        result = _check_schema_depth({"a": [{"b": [1, 2]}]})
+        assert result == 4
+
+    def test_exceeds_max_depth(self):
+        """Test that exceeding max depth raises ValueError."""
+        from lionpride.libs.schema_handlers._schema_to_model import _check_schema_depth
+
+        deep = {"level": 0}
+        for i in range(1, 20):
+            deep = {f"level_{i}": deep}
+
+        with pytest.raises(ValueError, match="nesting depth exceeds maximum"):
+            _check_schema_depth(deep, max_depth=10)
+
 
 # ===========================================================================
 # Module Loading Tests (no dependency required)

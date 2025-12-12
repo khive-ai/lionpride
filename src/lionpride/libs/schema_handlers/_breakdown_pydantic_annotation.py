@@ -37,20 +37,34 @@ def _clean_type_repr(t: Any) -> str:
     return s
 
 
+# Default maximum recursion depth for safety
+DEFAULT_MAX_DEPTH = 50
+
+
 def breakdown_pydantic_annotation(
     model: type[BaseModel],
-    max_depth: int | None = None,
+    max_depth: int | None = DEFAULT_MAX_DEPTH,
     clean_types: bool = True,
 ) -> dict[str, Any]:
     """Break down a Pydantic model's annotations into a nested dict structure.
 
     Args:
         model: The Pydantic model class to break down.
-        max_depth: Maximum recursion depth for nested models.
+        max_depth: Maximum recursion depth for nested models (default: 50).
+            Set to None for unlimited depth (not recommended).
         clean_types: If True, convert type annotations to clean strings
             without module prefixes (e.g., 'list[CodeModule]' instead of
             'list[__main__.CodeModule]').
+
+    Returns:
+        Dict mapping field names to type representations:
+        - Strings for simple types
+        - Dicts for nested Pydantic models
         - Lists containing the above for list fields
+
+    Raises:
+        TypeError: If model is not a Pydantic BaseModel subclass.
+        RecursionError: If max_depth is exceeded during traversal.
     """
     result = _breakdown_pydantic_annotation(
         model=model,

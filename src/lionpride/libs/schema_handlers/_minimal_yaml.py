@@ -10,6 +10,9 @@ import yaml  # type: ignore[import-untyped]
 
 __all__ = ("minimal_yaml",)
 
+# Maximum recursion depth for pruning to prevent stack overflow
+MAX_PRUNE_DEPTH = 100
+
 
 class MinimalDumper(yaml.SafeDumper):
     """YAML dumper with minimal, readable settings."""
@@ -42,19 +45,45 @@ def _is_empty(x: Any) -> bool:
     return False
 
 
-def _prune(x: Any) -> Any:
-    """Recursively remove empty leaves and empty containers."""
+def _prune(x: Any, *, _depth: int = 0, _max_depth: int = MAX_PRUNE_DEPTH) -> Any:
+    """Recursively remove empty leaves and empty containers.
+
+    Args:
+        x: Value to prune
+        _depth: Current recursion depth (internal use)
+        _max_depth: Maximum recursion depth (default: 100)
+
+    Returns:
+        Pruned value with empty containers removed
+
+    Raises:
+        RecursionError: If depth exceeds _max_depth
+    """
+    if _depth > _max_depth:
+        msg = f"Pruning depth exceeds maximum ({_max_depth})"
+        raise RecursionError(msg)
+
     if isinstance(x, dict):
-        pruned = {k: _prune(v) for k, v in x.items() if not _is_empty(v)}
+        pruned = {
+            k: _prune(v, _depth=_depth + 1, _max_depth=_max_depth)
+            for k, v in x.items()
+            if not _is_empty(v)
+        }
         return {k: v for k, v in pruned.items() if not _is_empty(v)}
     if isinstance(x, list):
-        pruned_list = [_prune(v) for v in x if not _is_empty(v)]
+        pruned_list = [
+            _prune(v, _depth=_depth + 1, _max_depth=_max_depth) for v in x if not _is_empty(v)
+        ]
         return [v for v in pruned_list if not _is_empty(v)]
     if isinstance(x, tuple):
-        pruned_list = [_prune(v) for v in x if not _is_empty(v)]
+        pruned_list = [
+            _prune(v, _depth=_depth + 1, _max_depth=_max_depth) for v in x if not _is_empty(v)
+        ]
         return tuple(v for v in pruned_list if not _is_empty(v))
     if isinstance(x, set):
-        pruned_set = {_prune(v) for v in x if not _is_empty(v)}
+        pruned_set = {
+            _prune(v, _depth=_depth + 1, _max_depth=_max_depth) for v in x if not _is_empty(v)
+        }
         return {v for v in pruned_set if not _is_empty(v)}
     return x
 
@@ -68,7 +97,29 @@ def minimal_yaml(
     sort_keys: bool = False,
     unescape_html: bool = False,
 ) -> str:
-    """Convert value to minimal YAML string."""
+    """Convert value to minimal YAML string.
+
+    Args:
+        value: Value to convert (dict, list, or JSON string)
+        drop_empties: Remove empty/None values recursively (default: True)
+        indent: YAML indentation level (default: 2)
+        line_width: Maximum line width (default: unlimited)
+        sort_keys: Sort dictionary keys alphabetically (default: False)
+        unescape_html: Unescape HTML entities in output (default: False)
+
+    Returns:
+        YAML-formatted string
+
+    Raises:
+        RecursionError: If value nesting exceeds maximum depth (100)
+
+    Security Note:
+        This function only DUMPS (outputs) YAML using SafeDumper - it does
+        not load/parse YAML, so it is not vulnerable to YAML deserialization
+        attacks. However, if unescape_html=True is used and the output is
+        later rendered in HTML without proper escaping, XSS vulnerabilities
+        may occur. Use caution with unescape_html in web contexts.
+    """
     # Auto-parse JSON strings for convenience (fails gracefully on invalid JSON)
     if isinstance(value, str):
         try:

@@ -599,5 +599,49 @@ class TestPruningHelpers:
         assert isinstance(result, str)
 
 
+class TestSecurityLimits:
+    """Test security-related depth limits in pruning."""
+
+    def test_prune_depth_limit(self):
+        """Test that _prune raises RecursionError on deeply nested data."""
+        from lionpride.libs.schema_handlers._minimal_yaml import _prune
+
+        # Create deeply nested structure
+        deep = {"value": "leaf"}
+        for _ in range(150):  # Exceeds MAX_PRUNE_DEPTH (100)
+            deep = {"nested": deep}
+
+        with pytest.raises(RecursionError, match="Pruning depth exceeds maximum"):
+            _prune(deep)
+
+    def test_prune_within_limit(self):
+        """Test that _prune works for moderately nested data."""
+        from lionpride.libs.schema_handlers._minimal_yaml import _prune
+
+        # Create nested structure within limits
+        data = {"a": {"b": {"c": {"d": {"e": "value"}}}}}
+        result = _prune(data)
+
+        assert result == {"a": {"b": {"c": {"d": {"e": "value"}}}}}
+
+    def test_minimal_yaml_depth_limit(self):
+        """Test that minimal_yaml raises on deeply nested input."""
+        # Create deeply nested structure
+        deep = {"value": "leaf"}
+        for _ in range(150):
+            deep = {"nested": deep}
+
+        with pytest.raises(RecursionError, match="Pruning depth exceeds maximum"):
+            minimal_yaml(deep, drop_empties=True)
+
+    def test_minimal_yaml_without_pruning_handles_deep(self):
+        """Test that minimal_yaml without pruning doesn't hit depth limit."""
+        # Create moderately nested structure (yaml.dump handles this)
+        data = {"a": {"b": {"c": {"d": {"e": "value"}}}}}
+        result = minimal_yaml(data, drop_empties=False)
+
+        assert "value" in result
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
