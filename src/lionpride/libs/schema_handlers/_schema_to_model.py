@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import string
 import sys
@@ -15,6 +16,46 @@ from pydantic import BaseModel, PydanticUserError
 from lionpride.ln import json_dumps, to_dict
 
 B = TypeVar("B", bound=BaseModel)
+
+# Security limits to prevent DoS
+MAX_SCHEMA_SIZE = 1024 * 1024  # 1 MB default limit
+MAX_SCHEMA_DEPTH = 50  # Maximum nesting depth
+
+
+def _check_schema_depth(
+    obj: Any,
+    current_depth: int = 0,
+    *,
+    max_depth: int = MAX_SCHEMA_DEPTH,
+) -> int:
+    """Check maximum nesting depth of a schema structure.
+
+    Args:
+        obj: The object to check (dict, list, or primitive)
+        current_depth: Current recursion depth
+        max_depth: Maximum allowed depth
+
+    Returns:
+        Maximum depth found
+
+    Raises:
+        ValueError: If depth exceeds max_depth
+    """
+    if current_depth > max_depth:
+        msg = f"Schema nesting depth exceeds maximum allowed ({max_depth})"
+        raise ValueError(msg)
+
+    if isinstance(obj, dict):
+        if not obj:
+            return current_depth
+        return max(
+            _check_schema_depth(v, current_depth + 1, max_depth=max_depth) for v in obj.values()
+        )
+    if isinstance(obj, list):
+        if not obj:
+            return current_depth
+        return max(_check_schema_depth(v, current_depth + 1, max_depth=max_depth) for v in obj)
+    return current_depth
 
 
 def _get_python_version_enum(python_version_module: Any) -> Any:
@@ -61,8 +102,22 @@ def _extract_model_name_from_schema(schema_dict: dict[str, Any], default: str) -
 def _prepare_schema_input(
     schema: str | dict[str, Any],
     model_name: str,
+    *,
+    max_size: int = MAX_SCHEMA_SIZE,
+    max_depth: int = MAX_SCHEMA_DEPTH,
 ) -> tuple[str, dict[str, Any], str]:
-    """Convert schema to JSON string and extract model name."""
+    """Convert schema to JSON string and extract model name.
+
+    Args:
+        schema: JSON schema as string or dict
+        model_name: Default model name if schema has no title
+        max_size: Maximum schema size in bytes (default: 1MB)
+        max_depth: Maximum nesting depth (default: 50)
+
+    Raises:
+        ValueError: If schema exceeds size/depth limits or is invalid
+        TypeError: If schema is not a string or dict
+    """
     schema_dict: dict[str, Any]
     schema_json: str
     if isinstance(schema, dict):
@@ -73,6 +128,10 @@ def _prepare_schema_input(
             msg = "Invalid dictionary provided for schema"
             raise ValueError(msg) from e
     elif isinstance(schema, str):
+        # Check size before parsing
+        if len(schema) > max_size:
+            msg = f"Schema size ({len(schema)} bytes) exceeds maximum ({max_size} bytes)"
+            raise ValueError(msg)
         try:
             schema_dict = cast(dict[str, Any], to_dict(schema))
         except Exception as e:
@@ -82,6 +141,14 @@ def _prepare_schema_input(
     else:
         msg = "Schema must be a JSON string or a dictionary"
         raise TypeError(msg)
+
+    # Validate size (for dict input, check serialized size)
+    if len(schema_json) > max_size:
+        msg = f"Schema size ({len(schema_json)} bytes) exceeds maximum ({max_size} bytes)"
+        raise ValueError(msg)
+
+    # Validate depth to prevent stack overflow during processing
+    _check_schema_depth(schema_dict, max_depth=max_depth)
 
     resolved_name = _extract_model_name_from_schema(schema_dict, model_name)
     return schema_json, schema_dict, resolved_name
@@ -192,15 +259,44 @@ def load_pydantic_model_from_schema(
     /,
     pydantic_version: Any = None,
     python_version: Any = None,
+    *,
+    max_size: int = MAX_SCHEMA_SIZE,
+    max_depth: int = MAX_SCHEMA_DEPTH,
 ) -> type[BaseModel]:
     """Generate Pydantic model dynamically from JSON schema.
+
+    This function uses datamodel-code-generator to generate Python code from
+    the JSON schema, then dynamically loads and executes that code. This is
+    inherently a code execution operation.
+
+    Security Considerations:
+        - The schema is converted to Python code by datamodel-code-generator
+        - That code is executed in a temporary module
+        - Size and depth limits are enforced to prevent DoS attacks
+        - The generated code quality depends on datamodel-code-generator
+
+    Trust Boundary:
+        This function trusts datamodel-code-generator to produce safe code.
+        Do not use with schemas from untrusted sources without careful review.
+        The max_size and max_depth parameters help prevent resource exhaustion
+        but cannot prevent malicious code if the generator is compromised.
 
     Args:
         schema: JSON schema (string or dict)
         model_name: Base name for model (schema title takes precedence)
+        pydantic_version: Pydantic version for code generation (default: v2)
+        python_version: Target Python version (default: auto-detect)
+        max_size: Maximum schema size in bytes (default: 1MB)
+        max_depth: Maximum schema nesting depth (default: 50)
+
+    Returns:
+        Generated Pydantic model class
 
     Raises:
         ImportError: datamodel-code-generator not installed
+        ValueError: Schema exceeds size/depth limits or is invalid
+        TypeError: Schema is not a string or dict
+        RuntimeError: Code generation or model loading failed
     """
     try:
         from datamodel_code_generator import (
@@ -220,11 +316,15 @@ def load_pydantic_model_from_schema(
     pydantic_version = pydantic_version or DataModelType.PydanticV2BaseModel
     python_version = python_version or _get_python_version_enum(PythonVersion)
 
-    schema_json, _, resolved_name = _prepare_schema_input(schema, model_name)
+    schema_json, _, resolved_name = _prepare_schema_input(
+        schema, model_name, max_size=max_size, max_depth=max_depth
+    )
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
-        output_file = tmpdir_path / f"{resolved_name.lower()}_model_{hash(schema_json)}.py"
+        # Use cryptographic hash to avoid collisions and predictability
+        schema_hash = hashlib.sha256(schema_json.encode()).hexdigest()[:16]
+        output_file = tmpdir_path / f"{resolved_name.lower()}_model_{schema_hash}.py"
         module_name = output_file.stem
 
         _generate_model_code(
