@@ -220,20 +220,28 @@ async def test_priority_queue_qsize(anyio_backend):
 
 @pytest.mark.anyio
 async def test_priority_queue_complex_priority(anyio_backend):
-    """Test with tuple priorities for stable ordering."""
+    """Test with tuple priorities - first element is priority, ties use insertion order.
+
+    Note: PriorityQueue uses (priority, seq, item) internally where:
+    - priority = first element of tuple (or item itself if not a tuple)
+    - seq = insertion order (tie-breaker for equal priorities)
+    - item = the original item
+
+    This prevents TypeError when items with equal priority aren't comparable.
+    """
     q = PriorityQueue()
 
-    # Use (priority, counter, data) pattern
-    await q.put((1, 3, "C"))
-    await q.put((1, 1, "A"))
-    await q.put((1, 2, "B"))
-    await q.put((2, 1, "D"))
+    # Items with different priorities - ordered by priority (first element)
+    await q.put((2, 1, "D"))  # priority=2
+    await q.put((1, 3, "C"))  # priority=1
+    await q.put((1, 1, "A"))  # priority=1
+    await q.put((1, 2, "B"))  # priority=1
 
-    # Should come out ordered by (priority, counter)
-    assert (await q.get())[2] == "A"
-    assert (await q.get())[2] == "B"
-    assert (await q.get())[2] == "C"
-    assert (await q.get())[2] == "D"
+    # Priority 1 items come first (in insertion order for ties), then priority 2
+    assert (await q.get())[2] == "C"  # First inserted with priority=1
+    assert (await q.get())[2] == "A"  # Second inserted with priority=1
+    assert (await q.get())[2] == "B"  # Third inserted with priority=1
+    assert (await q.get())[2] == "D"  # Only item with priority=2
 
 
 @pytest.mark.anyio
@@ -358,3 +366,27 @@ async def test_priority_queue_put_nowait_notifies_blocked_get(anyio_backend):
     # Consumer should have been unblocked
     assert "consumed_(1, 'item')" in results
     assert "producer_done" in results
+
+
+@pytest.mark.anyio
+async def test_priority_queue_non_comparable_items(anyio_backend):
+    """Test that equal-priority items with non-comparable payloads don't crash.
+
+    This is the key fix: without (priority, seq, item) wrapping, heapq would
+    crash with TypeError when comparing dicts or other non-comparable objects.
+    """
+    q = PriorityQueue()
+
+    # Items with same priority but non-comparable payloads (dicts)
+    await q.put((1, {"name": "alice"}))
+    await q.put((1, {"name": "bob"}))
+    await q.put((1, {"name": "charlie"}))
+
+    # Should get items in insertion order (no crash!)
+    item1 = await q.get()
+    item2 = await q.get()
+    item3 = await q.get()
+
+    assert item1[1]["name"] == "alice"
+    assert item2[1]["name"] == "bob"
+    assert item3[1]["name"] == "charlie"
