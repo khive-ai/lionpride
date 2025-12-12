@@ -428,3 +428,39 @@ def test_fuzzy_json_accepts_dict():
     """Test fuzzy_json accepts dict"""
     result = fuzzy_json('{"key": "value"}')
     assert result == {"key": "value"}
+
+
+# ============================================================================
+# Security tests - input size limits
+# ============================================================================
+
+
+class TestSecurityLimits:
+    """Test security-related input size limits."""
+
+    def test_fuzzy_json_size_limit(self):
+        """Test that fuzzy_json rejects inputs exceeding max_size."""
+        # Use a small max_size for testing
+        large_input = '{"key": "' + "x" * 1000 + '"}'
+
+        with pytest.raises(ValueError, match="exceeds maximum"):
+            fuzzy_json(large_input, max_size=100)
+
+    def test_fuzzy_json_within_limit(self):
+        """Test that fuzzy_json works for inputs within limit."""
+        json_str = '{"key": "value"}'
+        result = fuzzy_json(json_str, max_size=1000)
+        assert result == {"key": "value"}
+
+    def test_check_valid_str_size_limit(self):
+        """Test that _check_valid_str enforces size limits."""
+        large_input = "x" * 1000
+
+        with pytest.raises(ValueError, match="exceeds maximum"):
+            _check_valid_str(large_input, max_size=100)
+
+    def test_check_valid_str_within_limit(self):
+        """Test that _check_valid_str passes inputs within limit."""
+        small_input = "x" * 50
+        # Should not raise
+        _check_valid_str(small_input, max_size=100)

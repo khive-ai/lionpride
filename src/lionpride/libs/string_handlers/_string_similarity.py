@@ -13,6 +13,31 @@ if TYPE_CHECKING:
 
 __all__ = ("SimilarityAlgo", "string_similarity")
 
+# Security limit: Maximum string length for similarity computations.
+# Levenshtein distance has O(m*n) time and space complexity.
+# For 10,000 char strings: 100M operations, ~400MB memory.
+# Default allows reasonable use while preventing DoS attacks.
+MAX_STRING_LENGTH = 10_000
+
+
+def _validate_string_length(s: str, name: str = "string") -> None:
+    """Validate string length is within security limits.
+
+    Args:
+        s: String to validate
+        name: Name for error message
+
+    Raises:
+        ValueError: If string exceeds MAX_STRING_LENGTH
+    """
+    if len(s) > MAX_STRING_LENGTH:
+        msg = (
+            f"{name} length ({len(s)}) exceeds maximum allowed "
+            f"({MAX_STRING_LENGTH}). This limit prevents DoS attacks "
+            f"from O(n²) algorithm complexity."
+        )
+        raise ValueError(msg)
+
 
 class SimilarityAlgo(Enum):
     """String similarity algorithm names.
@@ -70,13 +95,23 @@ def hamming_similarity(s1: str, s2: str) -> float:
 def jaro_distance(s: str, t: str) -> float:
     """Calculate the Jaro distance between two strings.
 
+    Complexity: O(m*n) time where m, n are string lengths.
+    Input strings are limited to MAX_STRING_LENGTH to prevent DoS attacks.
+
     Args:
         s: First input string
         t: Second input string
 
     Returns:
         float: Jaro distance score between 0 and 1
+
+    Raises:
+        ValueError: If either string exceeds MAX_STRING_LENGTH
     """
+    # Validate string lengths to prevent DoS
+    _validate_string_length(s, "First string")
+    _validate_string_length(t, "Second string")
+
     s_len = len(s)
     t_len = len(t)
 
@@ -159,6 +194,9 @@ def jaro_winkler_similarity(s: str, t: str, scaling: float = 0.1) -> float:
 def levenshtein_distance(a: str, b: str) -> int:
     """Calculate the Levenshtein (edit) distance between two strings.
 
+    Complexity: O(m*n) time and space where m, n are string lengths.
+    Input strings are limited to MAX_STRING_LENGTH to prevent DoS attacks.
+
     Args:
         a: First input string
         b: Second input string
@@ -166,8 +204,15 @@ def levenshtein_distance(a: str, b: str) -> int:
     Returns:
         int: Minimum number of single-character edits needed to change one
              string into the other
+
+    Raises:
+        ValueError: If either string exceeds MAX_STRING_LENGTH
     """
     from itertools import product
+
+    # Validate string lengths to prevent DoS from O(m*n) complexity
+    _validate_string_length(a, "First string")
+    _validate_string_length(b, "Second string")
 
     if not a:
         return len(b)

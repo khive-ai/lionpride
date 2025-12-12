@@ -1,6 +1,8 @@
 # Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
+import pytest
+
 from lionpride.libs.string_handlers._extract_json import extract_json
 
 # ============================================================================
@@ -181,3 +183,33 @@ More text
     assert {"block1": "valid"} in result
     assert ["valid", "array"] in result
     assert {"block2": "also valid"} in result
+
+
+# ============================================================================
+# Security tests - input size limits
+# ============================================================================
+
+
+class TestSecurityLimits:
+    """Test security-related input size limits."""
+
+    def test_extract_json_size_limit(self):
+        """Test that extract_json rejects inputs exceeding max_size."""
+        large_input = "x" * 1000
+
+        with pytest.raises(ValueError, match="exceeds maximum"):
+            extract_json(large_input, max_size=100)
+
+    def test_extract_json_list_size_limit(self):
+        """Test that extract_json checks size after joining list inputs."""
+        # Each element is 100 chars, 15 elements = 1500+ chars
+        large_list = ["x" * 100] * 15
+
+        with pytest.raises(ValueError, match="exceeds maximum"):
+            extract_json(large_list, max_size=1000)
+
+    def test_extract_json_within_limit(self):
+        """Test that extract_json works for inputs within limit."""
+        json_str = '{"key": "value"}'
+        result = extract_json(json_str, max_size=1000)
+        assert result == {"key": "value"}

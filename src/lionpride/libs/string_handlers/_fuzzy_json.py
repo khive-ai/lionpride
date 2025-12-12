@@ -7,19 +7,37 @@ from typing import Any
 
 import orjson
 
+# Security limit: Maximum input string size for JSON parsing.
+# Large inputs can cause memory exhaustion during parsing and regex operations.
+# Default: 10MB - generous for most use cases while preventing DoS.
+MAX_JSON_INPUT_SIZE = 10 * 1024 * 1024  # 10 MB
 
-def fuzzy_json(str_to_parse: str, /) -> dict[str, Any] | list[dict[str, Any]]:
+
+def fuzzy_json(
+    str_to_parse: str,
+    /,
+    *,
+    max_size: int = MAX_JSON_INPUT_SIZE,
+) -> dict[str, Any] | list[dict[str, Any]]:
     """Parse JSON string with fuzzy error correction (quotes, spacing, brackets).
+
+    Security Note:
+        Input size is limited to prevent memory exhaustion attacks.
+        Uses orjson which has built-in recursion depth limits (CVE-2024-27454 fixed).
+
+    Args:
+        str_to_parse: JSON string to parse
+        max_size: Maximum allowed input size in bytes (default: 10MB)
 
     Returns:
         Either a dict or a list of dicts. Will NOT return primitive types
         (int, float, str, bool, None) or lists of primitives.
 
     Raises:
-        TypeError: If parsed JSON is a primitive type or list of primitives.
-        ValueError: If JSON parsing fails after all correction attempts.
+        TypeError: If input is not a string or parsed JSON is a primitive type.
+        ValueError: If input is empty, exceeds size limit, or parsing fails.
     """
-    _check_valid_str(str_to_parse)
+    _check_valid_str(str_to_parse, max_size=max_size)
 
     # 1. Direct attempt
     with contextlib.suppress(orjson.JSONDecodeError):
@@ -42,11 +60,32 @@ def fuzzy_json(str_to_parse: str, /) -> dict[str, Any] | list[dict[str, Any]]:
     raise ValueError("Invalid JSON string")
 
 
-def _check_valid_str(str_to_parse: str, /) -> None:
+def _check_valid_str(
+    str_to_parse: str,
+    /,
+    *,
+    max_size: int = MAX_JSON_INPUT_SIZE,
+) -> None:
+    """Validate input string for JSON parsing.
+
+    Args:
+        str_to_parse: Input string to validate
+        max_size: Maximum allowed size in bytes
+
+    Raises:
+        TypeError: If input is not a string
+        ValueError: If input is empty or exceeds size limit
+    """
     if not isinstance(str_to_parse, str):
         raise TypeError("Input must be a string")
     if not str_to_parse.strip():
         raise ValueError("Input string is empty")
+    if len(str_to_parse) > max_size:
+        msg = (
+            f"Input size ({len(str_to_parse)} bytes) exceeds maximum "
+            f"({max_size} bytes). This limit prevents memory exhaustion."
+        )
+        raise ValueError(msg)
 
 
 def _validate_return_type(result: Any) -> dict[str, Any] | list[dict[str, Any]]:

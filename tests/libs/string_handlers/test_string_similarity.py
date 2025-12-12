@@ -246,3 +246,63 @@ def test_string_similarity_hamming_different_lengths_skip():
     # "hi" and "hey" have different lengths than "hello", so they should be skipped
     # Only "hello" should match
     assert result == ["hello"]
+
+
+# ============================================================================
+# Security tests - string length limits
+# ============================================================================
+
+
+class TestSecurityLimits:
+    """Test security-related string length limits."""
+
+    def test_levenshtein_length_limit(self):
+        """Test that levenshtein_distance rejects strings exceeding MAX_STRING_LENGTH."""
+        from lionpride.libs.string_handlers._string_similarity import MAX_STRING_LENGTH
+
+        long_string = "a" * (MAX_STRING_LENGTH + 1)
+
+        with pytest.raises(ValueError, match="exceeds maximum allowed"):
+            levenshtein_distance(long_string, "short")
+
+        with pytest.raises(ValueError, match="exceeds maximum allowed"):
+            levenshtein_distance("short", long_string)
+
+    def test_levenshtein_within_limit(self):
+        """Test that levenshtein_distance works for strings within limit."""
+        # Use moderately sized strings
+        s1 = "a" * 100
+        s2 = "b" * 100
+
+        result = levenshtein_distance(s1, s2)
+        assert result == 100  # All characters different
+
+    def test_jaro_distance_length_limit(self):
+        """Test that jaro_distance rejects strings exceeding MAX_STRING_LENGTH."""
+        from lionpride.libs.string_handlers._string_similarity import MAX_STRING_LENGTH
+
+        long_string = "a" * (MAX_STRING_LENGTH + 1)
+
+        with pytest.raises(ValueError, match="exceeds maximum allowed"):
+            jaro_distance(long_string, "short")
+
+        with pytest.raises(ValueError, match="exceeds maximum allowed"):
+            jaro_distance("short", long_string)
+
+    def test_jaro_winkler_length_limit(self):
+        """Test that jaro_winkler_similarity rejects strings exceeding MAX_STRING_LENGTH."""
+        from lionpride.libs.string_handlers._string_similarity import MAX_STRING_LENGTH
+
+        long_string = "a" * (MAX_STRING_LENGTH + 1)
+
+        with pytest.raises(ValueError, match="exceeds maximum allowed"):
+            jaro_winkler_similarity(long_string, "short")
+
+    def test_levenshtein_similarity_length_limit(self):
+        """Test that levenshtein_similarity rejects strings exceeding MAX_STRING_LENGTH."""
+        from lionpride.libs.string_handlers._string_similarity import MAX_STRING_LENGTH
+
+        long_string = "a" * (MAX_STRING_LENGTH + 1)
+
+        with pytest.raises(ValueError, match="exceeds maximum allowed"):
+            levenshtein_similarity(long_string, "short")
