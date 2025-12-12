@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a8] - 2025-12-12
+
+### Added
+
+- `ReportExecutor` retry/resume support for fault-tolerant workflows (#134)
+- `deterministic_sets` parameter to `Element.to_json` for reproducible serialization (#131)
+- `rapidfuzz` optional dependency for O([n/64]*m) string similarity algorithms (#137)
+- `RAPIDFUZZ_AVAILABLE` flag for runtime detection of rapidfuzz availability (#137)
+- `allow_inf` parameter to `to_num` for explicit infinity handling (#137)
+
+### Security
+
+- **NaN/Infinity bypass fix**: `to_num` now rejects NaN (always) and infinity (by default) to prevent bounds check bypass (#137)
+- **Fuzzy JSON state machine**: Replaced regex-based parsing with state machine to prevent inside-string content corruption (#137)
+- **Narrowed exception handling**: `extract_json` now catches only JSON-specific errors, not `MemoryError`/`KeyboardInterrupt` (#137)
+- **Input size limits**: Added `MAX_STRING_LENGTH`, `MAX_JSON_INPUT_SIZE`, `MAX_NUMBER_STRING_LENGTH` constants (#137)
+- **Schema handler hardening**: Added recursion depth limits, size caps, and cycle detection (#136)
+- **Concurrency safety**: Fixed race conditions and improved error propagation (#135)
+
+### Fixed
+
+- Form error propagation from `ReportExecutor.execute()` (#133)
+- Exception handling in `CompletionStream` and `is_sentinel` (#132)
+- Cache files now properly ignored via `.gitignore`
+
+### Changed
+
+- String similarity functions use rapidfuzz when available, pure Python with size limits as fallback (#137)
+- `fuzzy_json` preserves apostrophes and quotes inside string values correctly (#137)
+
 ## [1.0.0a7] - 2025-12-06
 
 ### Security
@@ -203,7 +233,8 @@ Initial alpha release of lionpride - foundational primitives for production AI a
 - Interactive Jupyter notebooks
 - 99%+ test coverage
 
-[Unreleased]: https://github.com/khive-ai/lionpride/compare/v1.0.0a7...HEAD
+[Unreleased]: https://github.com/khive-ai/lionpride/compare/v1.0.0a8...HEAD
+[1.0.0a8]: https://github.com/khive-ai/lionpride/releases/tag/v1.0.0a8
 [1.0.0a7]: https://github.com/khive-ai/lionpride/releases/tag/v1.0.0a7
 [1.0.0a6]: https://github.com/khive-ai/lionpride/releases/tag/v1.0.0a6
 [1.0.0a5]: https://github.com/khive-ai/lionpride/releases/tag/v1.0.0a5
