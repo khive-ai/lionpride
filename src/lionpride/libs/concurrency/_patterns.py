@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import random
 from collections.abc import Awaitable, Callable, Iterable, Sequence
 from typing import TypeVar
 
@@ -47,7 +48,7 @@ async def gather(*aws: Awaitable[T], return_exceptions: bool = False) -> list[T 
         async with create_task_group() as tg:
             for i, aw in enumerate(aws):
                 tg.start_soon(_runner, i, aw)
-    except ExceptionGroup as eg:
+    except BaseExceptionGroup as eg:
         if not return_exceptions:
             # Separate cancellations from real failures while preserving structure/tracebacks
             rest = non_cancel_subgroup(eg)
@@ -63,7 +64,8 @@ async def race(*aws: Awaitable[T]) -> T:
     """Return first completion."""
     if not aws:
         raise ValueError("race() requires at least one awaitable")
-    send, recv = anyio.create_memory_object_stream(0)
+    # Buffer size 1 so winner doesn't block on synchronous handoff
+    send, recv = anyio.create_memory_object_stream(1)
 
     async def _runner(aw: Awaitable[T]) -> None:
         try:
@@ -115,7 +117,7 @@ async def bounded_map(
         async with create_task_group() as tg:
             for i, x in enumerate(seq):
                 tg.start_soon(_runner, i, x)
-    except ExceptionGroup as eg:
+    except BaseExceptionGroup as eg:
         if not return_exceptions:
             # Separate cancellations from real failures while preserving structure/tracebacks
             rest = non_cancel_subgroup(eg)
@@ -193,12 +195,15 @@ class CompletionStream:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         # Cancel remaining tasks and clean up
-        if self._task_group:
-            await self._task_group.__aexit__(exc_type, exc_val, exc_tb)
-        if self._send:
-            await self._send.aclose()
-        if self._recv:
-            await self._recv.aclose()
+        # Use try/finally to guarantee stream cleanup even if TaskGroup raises
+        try:
+            if self._task_group:
+                await self._task_group.__aexit__(exc_type, exc_val, exc_tb)
+        finally:
+            if self._send:
+                await self._send.aclose()
+            if self._recv:
+                await self._recv.aclose()
         return False
 
     def __aiter__(self):
@@ -227,7 +232,26 @@ async def retry(
     retry_on: tuple[type[BaseException], ...] = (Exception,),
     jitter: float = 0.1,
 ) -> T:
-    """Deadline-aware exponential backoff retry."""
+    """Deadline-aware exponential backoff retry.
+
+    Safety:
+        - Cancellation is never retried (would break structured concurrency)
+        - Parameter validation prevents accidental hot-loops
+    """
+    if attempts < 1:
+        raise ValueError("attempts must be >= 1")
+    if base_delay <= 0:
+        raise ValueError("base_delay must be > 0")
+    if max_delay < 0:
+        raise ValueError("max_delay must be >= 0")
+    if jitter < 0:
+        raise ValueError("jitter must be >= 0")
+
+    # Prevent accidentally retrying cancellation (would break structured concurrency)
+    cancelled_exc = anyio.get_cancelled_exc_class()
+    if any(issubclass(cancelled_exc, t) for t in retry_on):
+        raise ValueError("retry_on must not include the cancellation exception type")
+
     attempt = 0
     deadline = effective_deadline()
     while True:
@@ -240,8 +264,6 @@ async def retry(
 
             delay = min(max_delay, base_delay * (2 ** (attempt - 1)))
             if jitter:
-                import random
-
                 delay *= 1 + random.random() * jitter
 
             # Cap by ambient deadline if one exists

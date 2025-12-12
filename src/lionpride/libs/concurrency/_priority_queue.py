@@ -27,6 +27,10 @@ class PriorityQueue(Generic[T]):
 
     API: Similar to asyncio.PriorityQueue, but nowait methods are async.
 
+    Items are stored internally as (priority, sequence_number, item) to ensure
+    stable ordering when priorities are equal, preventing TypeError when items
+    aren't directly comparable.
+
     Attributes:
         maxsize: Maximum queue size (0 = unlimited)
     """
@@ -37,9 +41,23 @@ class PriorityQueue(Generic[T]):
         Args:
             maxsize: Max size (0 = unlimited)
         """
+        if maxsize < 0:
+            raise ValueError("maxsize must be >= 0")
         self.maxsize = maxsize
-        self._queue: list[Any] = []  # heapq requires comparable items
+        self._queue: list[Any] = []  # heapq entries: (priority, seq, item)
+        self._seq = 0  # Tie-breaker to ensure stable ordering
         self._condition = Condition()
+
+    @staticmethod
+    def _get_priority(item: Any) -> Any:
+        """Extract priority from item.
+
+        Convention: if item is a tuple/list, first element is priority.
+        Otherwise, the item itself is the priority.
+        """
+        if isinstance(item, (tuple, list)) and item:
+            return item[0]
+        return item
 
     async def put(self, item: T) -> None:
         """Put item into queue (blocks if full).
@@ -52,7 +70,10 @@ class PriorityQueue(Generic[T]):
             while self.maxsize > 0 and len(self._queue) >= self.maxsize:
                 await self._condition.wait()
 
-            heapq.heappush(self._queue, item)
+            priority = self._get_priority(item)
+            entry = (priority, self._seq, item)
+            self._seq += 1
+            heapq.heappush(self._queue, entry)
             self._condition.notify()
 
     async def put_nowait(self, item: T) -> None:
@@ -68,7 +89,10 @@ class PriorityQueue(Generic[T]):
             if self.maxsize > 0 and len(self._queue) >= self.maxsize:
                 raise QueueFull("Queue is full")
 
-            heapq.heappush(self._queue, item)
+            priority = self._get_priority(item)
+            entry = (priority, self._seq, item)
+            self._seq += 1
+            heapq.heappush(self._queue, entry)
             # Notify waiting getters that item is available
             self._condition.notify()
 
@@ -83,7 +107,7 @@ class PriorityQueue(Generic[T]):
             while not self._queue:
                 await self._condition.wait()
 
-            item = heapq.heappop(self._queue)
+            _priority, _seq, item = heapq.heappop(self._queue)
             self._condition.notify()
             return item
 
@@ -100,7 +124,7 @@ class PriorityQueue(Generic[T]):
             if not self._queue:
                 raise QueueEmpty("Queue is empty")
 
-            item = heapq.heappop(self._queue)
+            _priority, _seq, item = heapq.heappop(self._queue)
             # Notify waiting putters that space is available
             self._condition.notify()
             return item

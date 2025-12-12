@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from math import isinf
 
 import anyio
 
@@ -79,7 +78,13 @@ def move_on_at(deadline: float | None) -> Iterator[CancelScope]:
 def effective_deadline() -> float | None:
     """Return the ambient effective deadline, or None if unlimited.
 
-    AnyIO uses +inf to indicate "no deadline".
+    AnyIO uses:
+    - +inf to indicate "no deadline"
+    - -inf to indicate "scope already cancelled"
+
+    Returns None only for +inf (no deadline). Returns -inf as-is for cancelled
+    scopes so callers can detect cancellation.
     """
     d = anyio.current_effective_deadline()
-    return None if isinf(d) else d
+    # Only treat +inf as "no deadline", not -inf (which means cancelled)
+    return None if d == float("inf") else d
