@@ -193,12 +193,15 @@ class CompletionStream:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         # Cancel remaining tasks and clean up
-        if self._task_group:
-            await self._task_group.__aexit__(exc_type, exc_val, exc_tb)
-        if self._send:
-            await self._send.aclose()
-        if self._recv:
-            await self._recv.aclose()
+        # Use try/finally to guarantee stream cleanup even if TaskGroup raises
+        try:
+            if self._task_group:
+                await self._task_group.__aexit__(exc_type, exc_val, exc_tb)
+        finally:
+            if self._send:
+                await self._send.aclose()
+            if self._recv:
+                await self._recv.aclose()
         return False
 
     def __aiter__(self):

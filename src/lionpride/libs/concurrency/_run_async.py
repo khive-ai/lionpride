@@ -15,7 +15,7 @@ __all__ = ("run_async",)
 def run_async(coro: Awaitable[T]) -> T:
     """Run async coroutine from sync context (creates isolated thread with event loop)."""
     result_container: list[Any] = []
-    exception_container: list[Exception] = []
+    exception_container: list[BaseException] = []
 
     def run_in_thread() -> None:
         """Execute coroutine using anyio.run() in isolated thread."""
@@ -26,7 +26,7 @@ def run_async(coro: Awaitable[T]) -> T:
 
             result = anyio.run(_runner)
             result_container.append(result)
-        except Exception as e:
+        except BaseException as e:
             exception_container.append(e)
 
     thread = threading.Thread(target=run_in_thread, daemon=False)
