@@ -17,19 +17,21 @@ __all__ = ("current_time", "is_coro_func", "run_sync", "sleep")
 
 
 @cache
-def _is_coro_func(func: Callable[..., Any]) -> bool:
-    """Cached check for coroutine function, handles partials."""
-    # Unwrap partials to get the underlying function
-    while isinstance(func, partial):
-        func = func.func
-
-    # Check if it's a coroutine function
+def _is_coro_func_cached(func: Callable[..., Any]) -> bool:
+    """Cached check for coroutine function (internal, expects unwrapped func)."""
     return inspect.iscoroutinefunction(func)
 
 
 def is_coro_func(func: Callable[..., Any]) -> bool:
-    """Check if function is coroutine function."""
-    return _is_coro_func(func)
+    """Check if function is coroutine function, handles partials.
+
+    Unwraps partials BEFORE caching to avoid unbounded cache growth.
+    Each unique partial(f, x) would otherwise create separate cache entries.
+    """
+    # Unwrap partials BEFORE calling cached function to prevent memory leak
+    while isinstance(func, partial):
+        func = func.func
+    return _is_coro_func_cached(func)
 
 
 def current_time() -> float:

@@ -47,7 +47,7 @@ async def gather(*aws: Awaitable[T], return_exceptions: bool = False) -> list[T 
         async with create_task_group() as tg:
             for i, aw in enumerate(aws):
                 tg.start_soon(_runner, i, aw)
-    except ExceptionGroup as eg:
+    except BaseExceptionGroup as eg:
         if not return_exceptions:
             # Separate cancellations from real failures while preserving structure/tracebacks
             rest = non_cancel_subgroup(eg)
@@ -115,7 +115,7 @@ async def bounded_map(
         async with create_task_group() as tg:
             for i, x in enumerate(seq):
                 tg.start_soon(_runner, i, x)
-    except ExceptionGroup as eg:
+    except BaseExceptionGroup as eg:
         if not return_exceptions:
             # Separate cancellations from real failures while preserving structure/tracebacks
             rest = non_cancel_subgroup(eg)
