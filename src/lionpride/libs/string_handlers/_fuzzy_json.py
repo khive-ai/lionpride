@@ -211,28 +211,27 @@ def _clean_json_string_safe(s: str) -> str:
                 pos += 1
             continue
 
-        # Handle trailing commas before ] or }
-        if char == ",":
-            # Look ahead (skipping whitespace) for ] or }
-            lookahead = pos + 1
-            while lookahead < length and s[lookahead] in " \t\n\r":
-                lookahead += 1
-            if lookahead < length and s[lookahead] in "]}":
-                # Skip the comma (trailing comma)
-                pos += 1
-                continue
-            result.append(char)
-            pos += 1
-            continue
+        # Handle { and , - check for unquoted keys and trailing commas
+        if char in "{,":
+            # For comma, first check if it's a trailing comma
+            if char == ",":
+                lookahead = pos + 1
+                while lookahead < length and s[lookahead] in " \t\n\r":
+                    lookahead += 1
+                if lookahead < length and s[lookahead] in "]}":
+                    # Skip the trailing comma
+                    pos += 1
+                    continue
 
-        # Handle unquoted keys: pattern like {key: or ,key:
-        if char in "{," and pos + 1 < length:
+            # Append the { or , and check for unquoted key
             result.append(char)
             pos += 1
+
             # Skip whitespace
             while pos < length and s[pos] in " \t\n\r":
                 result.append(s[pos])
                 pos += 1
+
             # Check if we have an unquoted key (alphanumeric/underscore followed by :)
             if pos < length and s[pos] not in "\"'{[":
                 key_start = pos
