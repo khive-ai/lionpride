@@ -40,6 +40,7 @@ dependencies = [
 [project.optional-dependencies]
 schema-gen = ["datamodel-code-generator>=0.25.0"]
 mcp = ["fastmcp>=2.13.0", "mcp>=1.23.0"] # CVE-2025-66416 fix
+fuzzy = ["rapidfuzz>=3.9.0"] # Fast string similarity (MIT license)
 log-sqlite = ["aiosqlite>=0.19.0"]
 log-postgres = ["sqlalchemy[asyncio]>=2.0.0", "asyncpg>=0.29.0"]
 log-s3 = [
@@ -47,7 +48,7 @@ log-s3 = [
   "urllib3>=2.6.0",
 ] # CVE-2025-66418, CVE-2025-66471 fix
 log-all = ["lionpride[log-sqlite, log-postgres, log-s3]"]
-all = ["lionpride[schema-gen, mcp, log-all]"]
+all = ["lionpride[schema-gen, mcp, fuzzy, log-all]"]
 
 [project.urls]
 Homepage = "https://github.com/khive-ai/lionpride"

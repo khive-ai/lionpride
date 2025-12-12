@@ -11,17 +11,29 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
-__all__ = ("SimilarityAlgo", "string_similarity")
+__all__ = ("RAPIDFUZZ_AVAILABLE", "SimilarityAlgo", "string_similarity")
 
-# Security limit: Maximum string length for similarity computations.
+# Check for rapidfuzz availability (optional dependency for performance)
+# rapidfuzz uses Myers' bit-vector algorithm: O([N/64]*M) instead of O(N*M)
+try:
+    import rapidfuzz.distance as _rf_distance
+    import rapidfuzz.fuzz as _rf_fuzz
+
+    RAPIDFUZZ_AVAILABLE = True
+except ImportError:
+    RAPIDFUZZ_AVAILABLE = False
+    _rf_distance = None  # type: ignore[assignment]
+    _rf_fuzz = None  # type: ignore[assignment]
+
+# Security limit: Maximum string length for PURE PYTHON similarity computations.
+# Only applies when rapidfuzz is not available.
 # Levenshtein distance has O(m*n) time and space complexity.
 # For 10,000 char strings: 100M operations, ~400MB memory.
-# Default allows reasonable use while preventing DoS attacks.
 MAX_STRING_LENGTH = 10_000
 
 
 def _validate_string_length(s: str, name: str = "string") -> None:
-    """Validate string length is within security limits.
+    """Validate string length is within security limits (pure Python only).
 
     Args:
         s: String to validate
@@ -34,7 +46,8 @@ def _validate_string_length(s: str, name: str = "string") -> None:
         msg = (
             f"{name} length ({len(s)}) exceeds maximum allowed "
             f"({MAX_STRING_LENGTH}). This limit prevents DoS attacks "
-            f"from O(n²) algorithm complexity."
+            f"from O(n²) algorithm complexity. Install rapidfuzz for "
+            f"faster O([n/64]*m) algorithms: pip install 'lionpride[fuzzy]'"
         )
         raise ValueError(msg)
 
@@ -95,8 +108,8 @@ def hamming_similarity(s1: str, s2: str) -> float:
 def jaro_distance(s: str, t: str) -> float:
     """Calculate the Jaro distance between two strings.
 
-    Complexity: O(m*n) time where m, n are string lengths.
-    Input strings are limited to MAX_STRING_LENGTH to prevent DoS attacks.
+    Uses rapidfuzz when available (O([n/64]*m) bit-vector algorithm).
+    Falls back to pure Python with size limits when rapidfuzz is not installed.
 
     Args:
         s: First input string
@@ -106,7 +119,20 @@ def jaro_distance(s: str, t: str) -> float:
         float: Jaro distance score between 0 and 1
 
     Raises:
-        ValueError: If either string exceeds MAX_STRING_LENGTH
+        ValueError: If using pure Python and either string exceeds MAX_STRING_LENGTH
+    """
+    # Use rapidfuzz if available (much faster, no size limits needed)
+    if RAPIDFUZZ_AVAILABLE:
+        return _rf_distance.Jaro.similarity(s, t)
+
+    # Pure Python fallback with size limits
+    return _jaro_distance_pure(s, t)
+
+
+def _jaro_distance_pure(s: str, t: str) -> float:
+    """Pure Python Jaro distance implementation.
+
+    Complexity: O(m*n) time where m, n are string lengths.
     """
     # Validate string lengths to prevent DoS
     _validate_string_length(s, "First string")
@@ -163,10 +189,13 @@ def jaro_distance(s: str, t: str) -> float:
 def jaro_winkler_similarity(s: str, t: str, scaling: float = 0.1) -> float:
     """Calculate the Jaro-Winkler similarity between two strings.
 
+    Uses rapidfuzz when available (O([n/64]*m) bit-vector algorithm).
+    Falls back to pure Python with size limits when rapidfuzz is not installed.
+
     Args:
         s: First input string
         t: Second input string
-        scaling: Scaling factor for common prefix adjustment
+        scaling: Scaling factor for common prefix adjustment (default 0.1)
 
     Returns:
         float: Jaro-Winkler similarity score between 0 and 1
@@ -177,6 +206,11 @@ def jaro_winkler_similarity(s: str, t: str, scaling: float = 0.1) -> float:
     if not 0 <= scaling <= 0.25:
         raise ValueError("Scaling factor must be between 0 and 0.25")
 
+    # Use rapidfuzz if available (much faster)
+    if RAPIDFUZZ_AVAILABLE:
+        return _rf_distance.JaroWinkler.similarity(s, t, prefix_weight=scaling)
+
+    # Pure Python fallback
     jaro_sim = jaro_distance(s, t)
 
     # Find length of common prefix (up to 4 chars)
@@ -194,8 +228,8 @@ def jaro_winkler_similarity(s: str, t: str, scaling: float = 0.1) -> float:
 def levenshtein_distance(a: str, b: str) -> int:
     """Calculate the Levenshtein (edit) distance between two strings.
 
-    Complexity: O(m*n) time and space where m, n are string lengths.
-    Input strings are limited to MAX_STRING_LENGTH to prevent DoS attacks.
+    Uses rapidfuzz when available (O([n/64]*m) bit-vector algorithm).
+    Falls back to pure Python with size limits when rapidfuzz is not installed.
 
     Args:
         a: First input string
@@ -206,7 +240,20 @@ def levenshtein_distance(a: str, b: str) -> int:
              string into the other
 
     Raises:
-        ValueError: If either string exceeds MAX_STRING_LENGTH
+        ValueError: If using pure Python and either string exceeds MAX_STRING_LENGTH
+    """
+    # Use rapidfuzz if available (much faster, no size limits needed)
+    if RAPIDFUZZ_AVAILABLE:
+        return _rf_distance.Levenshtein.distance(a, b)
+
+    # Pure Python fallback with size limits
+    return _levenshtein_distance_pure(a, b)
+
+
+def _levenshtein_distance_pure(a: str, b: str) -> int:
+    """Pure Python Levenshtein distance implementation.
+
+    Complexity: O(m*n) time and space where m, n are string lengths.
     """
     from itertools import product
 
@@ -241,7 +288,8 @@ def levenshtein_distance(a: str, b: str) -> int:
 def levenshtein_similarity(s1: str, s2: str) -> float:
     """Calculate the Levenshtein similarity between two strings.
 
-    Converts Levenshtein distance to a similarity score between 0 and 1.
+    Uses rapidfuzz when available (O([n/64]*m) bit-vector algorithm).
+    Falls back to pure Python with size limits when rapidfuzz is not installed.
 
     Args:
         s1: First input string
@@ -249,7 +297,15 @@ def levenshtein_similarity(s1: str, s2: str) -> float:
 
     Returns:
         float: Levenshtein similarity score between 0 and 1
+
+    Raises:
+        ValueError: If using pure Python and either string exceeds MAX_STRING_LENGTH
     """
+    # Use rapidfuzz if available (much faster)
+    if RAPIDFUZZ_AVAILABLE:
+        return _rf_distance.Levenshtein.normalized_similarity(s1, s2)
+
+    # Pure Python fallback
     if not s1 and not s2:
         return 1.0
     if not s1 or not s2:

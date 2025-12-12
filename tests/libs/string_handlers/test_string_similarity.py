@@ -249,16 +249,28 @@ def test_string_similarity_hamming_different_lengths_skip():
 
 
 # ============================================================================
-# Security tests - string length limits
+# Security tests - string length limits (pure Python fallback only)
 # ============================================================================
 
 
 class TestSecurityLimits:
-    """Test security-related string length limits."""
+    """Test security-related string length limits.
+
+    These limits only apply when rapidfuzz is NOT available.
+    When rapidfuzz is installed, it uses O([n/64]*m) bit-vector algorithms
+    that are efficient enough to handle large strings safely.
+    """
 
     def test_levenshtein_length_limit(self):
-        """Test that levenshtein_distance rejects strings exceeding MAX_STRING_LENGTH."""
-        from lionpride.libs.string_handlers._string_similarity import MAX_STRING_LENGTH
+        """Test that pure Python levenshtein rejects strings exceeding MAX_STRING_LENGTH."""
+        from lionpride.libs.string_handlers._string_similarity import (
+            MAX_STRING_LENGTH,
+            RAPIDFUZZ_AVAILABLE,
+            _levenshtein_distance_pure,
+        )
+
+        if RAPIDFUZZ_AVAILABLE:
+            pytest.skip("Length limits only apply to pure Python fallback")
 
         long_string = "a" * (MAX_STRING_LENGTH + 1)
 
@@ -267,6 +279,18 @@ class TestSecurityLimits:
 
         with pytest.raises(ValueError, match="exceeds maximum allowed"):
             levenshtein_distance("short", long_string)
+
+    def test_levenshtein_pure_python_length_limit(self):
+        """Test pure Python levenshtein function directly."""
+        from lionpride.libs.string_handlers._string_similarity import (
+            MAX_STRING_LENGTH,
+            _levenshtein_distance_pure,
+        )
+
+        long_string = "a" * (MAX_STRING_LENGTH + 1)
+
+        with pytest.raises(ValueError, match="exceeds maximum allowed"):
+            _levenshtein_distance_pure(long_string, "short")
 
     def test_levenshtein_within_limit(self):
         """Test that levenshtein_distance works for strings within limit."""
@@ -278,8 +302,15 @@ class TestSecurityLimits:
         assert result == 100  # All characters different
 
     def test_jaro_distance_length_limit(self):
-        """Test that jaro_distance rejects strings exceeding MAX_STRING_LENGTH."""
-        from lionpride.libs.string_handlers._string_similarity import MAX_STRING_LENGTH
+        """Test that pure Python jaro rejects strings exceeding MAX_STRING_LENGTH."""
+        from lionpride.libs.string_handlers._string_similarity import (
+            MAX_STRING_LENGTH,
+            RAPIDFUZZ_AVAILABLE,
+            _jaro_distance_pure,
+        )
+
+        if RAPIDFUZZ_AVAILABLE:
+            pytest.skip("Length limits only apply to pure Python fallback")
 
         long_string = "a" * (MAX_STRING_LENGTH + 1)
 
@@ -289,9 +320,27 @@ class TestSecurityLimits:
         with pytest.raises(ValueError, match="exceeds maximum allowed"):
             jaro_distance("short", long_string)
 
+    def test_jaro_pure_python_length_limit(self):
+        """Test pure Python jaro function directly."""
+        from lionpride.libs.string_handlers._string_similarity import (
+            MAX_STRING_LENGTH,
+            _jaro_distance_pure,
+        )
+
+        long_string = "a" * (MAX_STRING_LENGTH + 1)
+
+        with pytest.raises(ValueError, match="exceeds maximum allowed"):
+            _jaro_distance_pure(long_string, "short")
+
     def test_jaro_winkler_length_limit(self):
-        """Test that jaro_winkler_similarity rejects strings exceeding MAX_STRING_LENGTH."""
-        from lionpride.libs.string_handlers._string_similarity import MAX_STRING_LENGTH
+        """Test that pure Python jaro_winkler rejects strings exceeding MAX_STRING_LENGTH."""
+        from lionpride.libs.string_handlers._string_similarity import (
+            MAX_STRING_LENGTH,
+            RAPIDFUZZ_AVAILABLE,
+        )
+
+        if RAPIDFUZZ_AVAILABLE:
+            pytest.skip("Length limits only apply to pure Python fallback")
 
         long_string = "a" * (MAX_STRING_LENGTH + 1)
 
@@ -299,10 +348,95 @@ class TestSecurityLimits:
             jaro_winkler_similarity(long_string, "short")
 
     def test_levenshtein_similarity_length_limit(self):
-        """Test that levenshtein_similarity rejects strings exceeding MAX_STRING_LENGTH."""
-        from lionpride.libs.string_handlers._string_similarity import MAX_STRING_LENGTH
+        """Test that pure Python levenshtein_similarity rejects long strings."""
+        from lionpride.libs.string_handlers._string_similarity import (
+            MAX_STRING_LENGTH,
+            RAPIDFUZZ_AVAILABLE,
+        )
+
+        if RAPIDFUZZ_AVAILABLE:
+            pytest.skip("Length limits only apply to pure Python fallback")
 
         long_string = "a" * (MAX_STRING_LENGTH + 1)
 
         with pytest.raises(ValueError, match="exceeds maximum allowed"):
             levenshtein_similarity(long_string, "short")
+
+
+# ============================================================================
+# Tests for rapidfuzz integration
+# ============================================================================
+
+
+class TestRapidfuzzIntegration:
+    """Test rapidfuzz integration when available."""
+
+    def test_rapidfuzz_available_exported(self):
+        """Test that RAPIDFUZZ_AVAILABLE flag is exported."""
+        from lionpride.libs.string_handlers._string_similarity import RAPIDFUZZ_AVAILABLE
+
+        assert isinstance(RAPIDFUZZ_AVAILABLE, bool)
+
+    def test_levenshtein_with_large_strings_when_rapidfuzz(self):
+        """Test levenshtein handles large strings when rapidfuzz is available."""
+        from lionpride.libs.string_handlers._string_similarity import (
+            MAX_STRING_LENGTH,
+            RAPIDFUZZ_AVAILABLE,
+        )
+
+        if not RAPIDFUZZ_AVAILABLE:
+            pytest.skip("rapidfuzz not installed")
+
+        # This would fail with pure Python due to size limits
+        long_string = "a" * (MAX_STRING_LENGTH + 100)
+
+        # Should work with rapidfuzz (no exception)
+        result = levenshtein_distance(long_string, "b")
+        assert result == MAX_STRING_LENGTH + 100  # All insertions
+
+    def test_jaro_with_large_strings_when_rapidfuzz(self):
+        """Test jaro handles large strings when rapidfuzz is available."""
+        from lionpride.libs.string_handlers._string_similarity import (
+            MAX_STRING_LENGTH,
+            RAPIDFUZZ_AVAILABLE,
+        )
+
+        if not RAPIDFUZZ_AVAILABLE:
+            pytest.skip("rapidfuzz not installed")
+
+        # This would fail with pure Python due to size limits
+        long_string = "a" * (MAX_STRING_LENGTH + 100)
+
+        # Should work with rapidfuzz (no exception)
+        result = jaro_distance(long_string, long_string)
+        assert result == 1.0  # Identical strings
+
+    def test_consistency_between_rapidfuzz_and_pure_python(self):
+        """Test that rapidfuzz and pure Python produce consistent results."""
+        from lionpride.libs.string_handlers._string_similarity import (
+            RAPIDFUZZ_AVAILABLE,
+            _jaro_distance_pure,
+            _levenshtein_distance_pure,
+        )
+
+        test_cases = [
+            ("hello", "hello"),
+            ("hello", "hallo"),
+            ("", ""),
+            ("test", ""),
+            ("", "test"),
+            ("kitten", "sitting"),
+        ]
+
+        for s1, s2 in test_cases:
+            # Pure Python results
+            pure_lev = _levenshtein_distance_pure(s1, s2)
+            pure_jaro = _jaro_distance_pure(s1, s2)
+
+            # Main function results (uses rapidfuzz if available)
+            main_lev = levenshtein_distance(s1, s2)
+            main_jaro = jaro_distance(s1, s2)
+
+            # Results should be consistent
+            assert main_lev == pure_lev, f"Levenshtein mismatch for {s1!r}, {s2!r}"
+            assert abs(main_jaro - pure_jaro) < 0.001, f"Jaro mismatch for {s1!r}, {s2!r}"
