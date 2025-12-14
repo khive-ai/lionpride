@@ -1470,7 +1470,7 @@ class TestAPICalling:
 
     # Lines 590-592: _estimate_text_tokens method
     def test_estimate_text_tokens_string(self):
-        """Test _estimate_text_tokens with string input (line 590-591)."""
+        """Test _estimate_text_tokens with string input using tiktoken."""
         config = EndpointConfig(
             name="test",
             provider="test",
@@ -1483,17 +1483,17 @@ class TestAPICalling:
 
         calling = APICalling(
             backend=endpoint,
-            payload={},
+            payload={"model": "text-embedding-3-small"},
             headers={},
         )
 
         tokens = calling._estimate_text_tokens("This is a test string")
-        # Should return ~chars / 4
+        # Uses TokenCalculator for accurate tiktoken-based estimation
         assert tokens > 0
-        assert tokens == len("This is a test string") // 4
+        assert isinstance(tokens, int)
 
     def test_estimate_text_tokens_list(self):
-        """Test _estimate_text_tokens with list input (line 592)."""
+        """Test _estimate_text_tokens with list input using tiktoken."""
         config = EndpointConfig(
             name="test",
             provider="test",
@@ -1506,16 +1506,18 @@ class TestAPICalling:
 
         calling = APICalling(
             backend=endpoint,
-            payload={},
+            payload={"model": "text-embedding-3-small"},
             headers={},
         )
 
         texts = ["First text", "Second text", "Third text"]
         tokens = calling._estimate_text_tokens(texts)
-        # Should sum tokens from all texts
+        # Uses TokenCalculator for accurate tiktoken-based estimation
         assert tokens > 0
-        expected = sum(len(t) // 4 for t in texts)
-        assert tokens == expected
+        assert isinstance(tokens, int)
+        # List input should return sum of tokens for all texts
+        single_tokens = sum(calling._estimate_text_tokens(t) for t in texts)
+        assert tokens == single_tokens
 
     def test_permission_request_property(self):
         """Test permission_request returns required_tokens."""

@@ -20,6 +20,7 @@ from pydantic import (
 
 from ..utilities.header_factory import AUTH_TYPES, HeaderFactory
 from ..utilities.resilience import CircuitBreaker, RetryConfig, retry_with_backoff
+from ..utilities.token_calculator import TokenCalculator
 from .backend import Calling, ServiceBackend, ServiceConfig
 
 logger = logging.getLogger(__name__)
@@ -549,21 +550,15 @@ class APICalling(Calling):
         return None
 
     def _estimate_message_tokens(self, messages: list[dict]) -> int:
-        """Estimate token usage for chat messages.
-
-        Simple approximation: ~4 chars per token.
-        For production, use tiktoken or provider-specific libraries.
-        """
-        total_chars = sum(
-            len(str(msg.get("content", ""))) + len(msg.get("role", "")) for msg in messages
-        )
-        return int(total_chars / 4) + 10  # +10 for message overhead
+        """Calculate token usage for chat messages using tiktoken."""
+        model = self.payload.get("model", "gpt-4o")
+        return TokenCalculator.calculate_message_tokens(messages, model=model)
 
     def _estimate_text_tokens(self, text: str | list[str]) -> int:
-        """Estimate token usage for text input."""
-        if isinstance(text, str):
-            return int(len(text) / 4)
-        return sum(int(len(t) / 4) for t in text)
+        """Calculate token usage for text/embedding input using tiktoken."""
+        model = self.payload.get("model", "text-embedding-3-small")
+        inputs = [text] if isinstance(text, str) else text
+        return TokenCalculator.calculate_embed_token(inputs, model=model)
 
     @property
     def request(self) -> dict:
