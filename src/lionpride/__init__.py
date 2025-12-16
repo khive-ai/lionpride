@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 # Only import what's absolutely necessary at module load
 from .protocols import implements
 
-__version__ = "1.0.0a8"
+__version__ = "1.0.0a9"
 
 # Lazy import mapping: attribute name -> (module, attribute)
 _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
