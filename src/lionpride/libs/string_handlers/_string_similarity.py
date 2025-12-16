@@ -3,9 +3,8 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import TYPE_CHECKING, Literal
-
-from lionpride.types.base import Enum
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -52,11 +51,10 @@ def _validate_string_length(s: str, name: str = "string") -> None:
         raise ValueError(msg)
 
 
-class SimilarityAlgo(Enum):
+class SimilarityAlgo(StrEnum):
     """String similarity algorithm names.
 
     Provides type-safe enum values while maintaining string compatibility.
-    Use .allowed() to get all valid algorithm names as a tuple.
     """
 
     JARO_WINKLER = "jaro_winkler"
@@ -64,6 +62,11 @@ class SimilarityAlgo(Enum):
     SEQUENCE_MATCHER = "sequence_matcher"
     HAMMING = "hamming"
     COSINE = "cosine"
+
+    @classmethod
+    def allowed(cls) -> tuple[str, ...]:
+        """Return tuple of all allowed string values."""
+        return tuple(e.value for e in cls)
 
 
 def cosine_similarity(s1: str, s2: str) -> float:
