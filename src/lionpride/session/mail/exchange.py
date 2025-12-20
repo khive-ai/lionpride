@@ -9,11 +9,12 @@ mailbox. It handles registration, routing, and synchronization.
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 from uuid import UUID
 
 from pydantic import PrivateAttr
+
+from lionpride.libs import concurrency
 
 from ...core.element import Element
 from ...core.flow import Flow
@@ -153,13 +154,13 @@ class Exchange(Element):
         # Phase 2: Deliver concurrently (lock released, each Flow has own lock)
         # Use return_exceptions=True so one failure doesn't cancel others
         if deliveries:
-            results = await asyncio.gather(
+            results = await concurrency.gather(
                 *[self._deliver_to(recipient_id, mail) for recipient_id, mail in deliveries],
                 return_exceptions=True,
             )
             # Log failures but don't raise - mail delivery is best-effort
             for i, result in enumerate(results):
-                if isinstance(result, Exception):
+                if isinstance(result, BaseException):
                     _recipient_id, _mail = deliveries[i]
                     # Silently drop failed deliveries (recipient may have unregistered)
 
@@ -213,7 +214,7 @@ class Exchange(Element):
         self._stop = False
         while not self._stop:
             await self.sync()
-            await asyncio.sleep(interval)
+            await concurrency.sleep(interval)
 
     def stop(self) -> None:
         """Stop the continuous run loop."""

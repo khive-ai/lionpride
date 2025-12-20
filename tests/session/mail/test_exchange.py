@@ -3,11 +3,11 @@
 
 """Tests for Exchange routing system."""
 
-import asyncio
 from uuid import uuid4
 
 import pytest
 
+from lionpride.libs import concurrency
 from lionpride.session.mail import OUTBOX, Exchange, Mail
 
 
@@ -395,7 +395,7 @@ class TestExchangeConcurrency:
             exchange.send(alice, bob, content=f"msg{i}")
 
         # Multiple concurrent syncs
-        results = await asyncio.gather(
+        results = await concurrency.gather(
             exchange.sync(),
             exchange.sync(),
             exchange.sync(),
@@ -423,14 +423,14 @@ class TestExchangeRunLoop:
         exchange.register(bob)
 
         async def send_and_stop():
-            await asyncio.sleep(0.05)
+            await concurrency.sleep(0.05)
             exchange.send(alice, bob, content="hello")
-            await asyncio.sleep(0.15)
+            await concurrency.sleep(0.15)
             exchange.stop()
 
-        task = asyncio.create_task(send_and_stop())
-        await exchange.run(interval=0.05)
-        await task  # Ensure task completes
+        async with concurrency.create_task_group() as tg:
+            tg.start_soon(send_and_stop)
+            await exchange.run(interval=0.05)
 
         # Mail should have been routed
         messages = exchange.receive(bob)
