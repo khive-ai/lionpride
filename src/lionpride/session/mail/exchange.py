@@ -147,7 +147,13 @@ class Exchange(Element):
                     # Copy mail for each recipient to prevent shared mutable state
                     for other_id in self._owner_index:
                         if other_id != owner_id:
-                            deliveries.append((other_id, mail.model_copy(deep=True)))
+                            try:
+                                mail_copy = mail.model_copy(deep=True)
+                            except Exception:
+                                # Content not deep-copyable, use shallow copy
+                                # Caller should ensure broadcast content is immutable
+                                mail_copy = mail.model_copy()
+                            deliveries.append((other_id, mail_copy))
                 elif mail.recipient is not None and mail.recipient in self._owner_index:
                     # Queue direct delivery
                     deliveries.append((mail.recipient, mail))
@@ -272,14 +278,15 @@ class Exchange(Element):
             return []
 
         result = []
-        for prog_name in flow._progression_names:
-            if prog_name.startswith("inbox_"):
+        # Iterate over progressions Pile (public API) instead of _progression_names
+        for progression in flow.progressions:
+            prog_name = progression.name
+            if prog_name and prog_name.startswith("inbox_"):
                 if sender is not None:
                     expected_name = _inbox_name(sender)
                     if prog_name != expected_name:
                         continue
-                inbox = flow.get_progression(prog_name)
-                for mail_id in inbox:
+                for mail_id in progression:
                     mail = flow.items.get(mail_id, None)
                     if mail is not None:
                         result.append(mail)
@@ -320,9 +327,11 @@ class Exchange(Element):
         return self.has(owner_id)
 
     def __repr__(self) -> str:
-        pending = sum(
-            len(flow.get_progression(OUTBOX))
-            for flow in self.flows
-            if OUTBOX in flow._progression_names
-        )
+        pending = 0
+        for flow in self.flows:
+            try:
+                outbox = flow.get_progression(OUTBOX)
+                pending += len(outbox)
+            except KeyError:
+                pass  # No outbox progression
         return f"Exchange(entities={len(self)}, pending_out={pending})"

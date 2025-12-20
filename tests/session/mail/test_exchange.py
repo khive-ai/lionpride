@@ -541,6 +541,62 @@ class TestExchangeEdgeCases:
         assert carol_msgs[0].content["data"] == "original"
 
     @pytest.mark.asyncio
+    async def test_broadcast_isolation_nested(self):
+        """Broadcast deep copies nested structures."""
+        exchange = Exchange()
+        alice = uuid4()
+        bob = uuid4()
+        carol = uuid4()
+
+        exchange.register(alice)
+        exchange.register(bob)
+        exchange.register(carol)
+
+        # Nested structure
+        exchange.send(alice, None, content={"outer": {"inner": [1, 2, 3]}})
+        await exchange.sync()
+
+        # Mutate bob's nested content
+        bob_msgs = exchange.receive(bob, sender=alice)
+        bob_msgs[0].content["outer"]["inner"].append(4)
+        bob_msgs[0].content["outer"]["new_key"] = "added"
+
+        # Carol's copy should be unaffected
+        carol_msgs = exchange.receive(carol, sender=alice)
+        assert carol_msgs[0].content["outer"]["inner"] == [1, 2, 3]
+        assert "new_key" not in carol_msgs[0].content["outer"]
+
+    @pytest.mark.asyncio
+    async def test_collect_handles_concurrent_unregister(self):
+        """collect_all handles concurrent unregistration gracefully."""
+        exchange = Exchange()
+        alice = uuid4()
+        bob = uuid4()
+        carol = uuid4()
+
+        exchange.register(alice)
+        exchange.register(bob)
+        exchange.register(carol)
+
+        # Send mail
+        exchange.send(alice, carol, content="from alice")
+        exchange.send(bob, carol, content="from bob")
+
+        async def unregister_bob_soon():
+            await concurrency.sleep(0.01)
+            exchange.unregister(bob)
+
+        # Run sync and unregister concurrently
+        async with concurrency.create_task_group() as tg:
+            tg.start_soon(unregister_bob_soon)
+            # collect_all should handle bob disappearing mid-iteration
+            count = await exchange.collect_all()
+
+        # Should complete without error
+        # Count may vary depending on timing
+        assert count >= 0
+
+    @pytest.mark.asyncio
     async def test_pop_mail_removes_from_receive(self):
         """pop_mail() should remove message from receive() results."""
         exchange = Exchange()
