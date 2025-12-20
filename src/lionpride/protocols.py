@@ -12,6 +12,7 @@ __all__ = (
     "Allowable",
     "AsyncAdaptable",
     "AsyncAdapterRegisterable",
+    "Communicatable",
     "Containable",
     "Deserializable",
     "Hashable",
@@ -141,6 +142,26 @@ class Allowable(Protocol):
 
     def allowed(self) -> set[str]:
         """Return set of allowed keys/values."""
+        ...
+
+
+@runtime_checkable
+class Communicatable(Protocol):
+    """Entity that can participate in mail exchange.
+
+    Communicatable entities have a unique ID and a mailbox for sending/receiving mail.
+    This protocol enables multi-agent communication patterns without prescribing
+    the identity layer (Agent, Branch, etc.) - that's left to higher-level packages.
+    """
+
+    @property
+    def id(self) -> UUID:
+        """Unique identifier for routing."""
+        ...
+
+    @property
+    def mailbox(self) -> Any:
+        """Mailbox for sending/receiving mail. Returns session.mail.Mailbox."""
         ...
 
 
