@@ -14,6 +14,7 @@ from uuid import UUID
 
 from pydantic import PrivateAttr
 
+from lionpride.errors import ExistsError
 from lionpride.libs import concurrency
 
 from ...core.element import Element
@@ -143,9 +144,10 @@ class Exchange(Element):
 
                 if mail.is_broadcast:
                     # Queue delivery to all except sender
+                    # Copy mail for each recipient to prevent shared mutable state
                     for other_id in self._owner_index:
                         if other_id != owner_id:
-                            deliveries.append((other_id, mail))
+                            deliveries.append((other_id, mail.model_copy(deep=True)))
                 elif mail.recipient is not None and mail.recipient in self._owner_index:
                     # Queue direct delivery
                     deliveries.append((mail.recipient, mail))
@@ -178,10 +180,12 @@ class Exchange(Element):
         if recipient_flow is None:
             return  # Recipient unregistered, drop mail
 
-        # Ensure inbox for this sender exists
+        # Ensure inbox for this sender exists (idempotent creation)
         inbox_name = _inbox_name(mail.sender)
-        if inbox_name not in recipient_flow._progression_names:
+        try:
             recipient_flow.add_progression(Progression(name=inbox_name))
+        except ExistsError:
+            pass  # Already exists, that's fine
 
         # Add mail to recipient's flow
         recipient_flow.add_item(mail, progressions=inbox_name)
@@ -189,12 +193,18 @@ class Exchange(Element):
     async def collect_all(self) -> int:
         """Collect and route mail from all entities.
 
+        Gracefully handles entities that unregister during iteration.
+
         Returns:
             Total number of mail items routed
         """
         total = 0
         for owner_id in list(self._owner_index.keys()):
-            total += await self.collect(owner_id)
+            try:
+                total += await self.collect(owner_id)
+            except ValueError:
+                # Owner unregistered mid-iteration, skip
+                continue
         return total
 
     async def sync(self) -> int:
@@ -290,10 +300,11 @@ class Exchange(Element):
             return None
 
         inbox_name = _inbox_name(sender)
-        if inbox_name not in flow._progression_names:
+        try:
+            inbox = flow.get_progression(inbox_name)
+        except KeyError:
             return None
 
-        inbox = flow.get_progression(inbox_name)
         if len(inbox) == 0:
             return None
 

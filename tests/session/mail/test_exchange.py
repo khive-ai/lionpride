@@ -455,3 +455,128 @@ class TestExchangeRepr:
         assert "Exchange(" in repr_str
         assert "entities=2" in repr_str
         assert "pending_out=1" in repr_str
+
+
+class TestExchangeEdgeCases:
+    """Edge cases identified by code review."""
+
+    @pytest.mark.asyncio
+    async def test_unregister_during_sync(self):
+        """Unregister during sync() should not raise."""
+        exchange = Exchange()
+        alice = uuid4()
+        bob = uuid4()
+        carol = uuid4()
+
+        exchange.register(alice)
+        exchange.register(bob)
+        exchange.register(carol)
+
+        exchange.send(alice, carol, content="alice to carol")
+        exchange.send(bob, carol, content="bob to carol")
+
+        # Unregister bob before sync - bob's outbox is lost with their flow
+        exchange.unregister(bob)
+
+        # Should not raise, should skip unregistered owner
+        count = await exchange.sync()
+
+        # Only alice's mail routed (bob unregistered, their outbox gone)
+        assert count == 1
+        messages = exchange.receive(carol)
+        assert len(messages) == 1
+        assert messages[0].content == "alice to carol"
+
+    @pytest.mark.asyncio
+    async def test_broadcast_only_sender_registered(self):
+        """Broadcast with only sender should route zero mails."""
+        exchange = Exchange()
+        alice = uuid4()
+
+        exchange.register(alice)
+
+        exchange.send(alice, None, content="broadcast to no one")
+        count = await exchange.sync()
+
+        assert count == 0
+        assert exchange.receive(alice) == []
+
+    @pytest.mark.asyncio
+    async def test_direct_mail_to_self(self):
+        """Direct mail to self should be delivered."""
+        exchange = Exchange()
+        alice = uuid4()
+
+        exchange.register(alice)
+
+        exchange.send(alice, alice, content="note to self")
+        count = await exchange.sync()
+
+        assert count == 1
+        messages = exchange.receive(alice, sender=alice)
+        assert len(messages) == 1
+        assert messages[0].content == "note to self"
+
+    @pytest.mark.asyncio
+    async def test_broadcast_isolation(self):
+        """Broadcast copies should be independent (mutation isolation)."""
+        exchange = Exchange()
+        alice = uuid4()
+        bob = uuid4()
+        carol = uuid4()
+
+        exchange.register(alice)
+        exchange.register(bob)
+        exchange.register(carol)
+
+        exchange.send(alice, None, content={"data": "original"})
+        await exchange.sync()
+
+        # Get bob's copy and mutate it
+        bob_msgs = exchange.receive(bob, sender=alice)
+        bob_msgs[0].content["data"] = "mutated by bob"
+
+        # Carol's copy should be unaffected
+        carol_msgs = exchange.receive(carol, sender=alice)
+        assert carol_msgs[0].content["data"] == "original"
+
+    @pytest.mark.asyncio
+    async def test_pop_mail_removes_from_receive(self):
+        """pop_mail() should remove message from receive() results."""
+        exchange = Exchange()
+        alice = uuid4()
+        bob = uuid4()
+
+        exchange.register(alice)
+        exchange.register(bob)
+
+        exchange.send(alice, bob, content="msg1")
+        exchange.send(alice, bob, content="msg2")
+        await exchange.sync()
+
+        # Initially 2 messages
+        assert len(exchange.receive(bob, sender=alice)) == 2
+
+        # Pop one
+        popped = exchange.pop_mail(bob, alice)
+        assert popped is not None
+        assert popped.content == "msg1"
+
+        # Now only 1 message
+        remaining = exchange.receive(bob, sender=alice)
+        assert len(remaining) == 1
+        assert remaining[0].content == "msg2"
+
+
+class TestMailValidation:
+    """Mail validation edge cases."""
+
+    def test_invalid_sender_uuid_raises(self):
+        """Invalid UUID string for sender should raise."""
+        with pytest.raises((ValueError, TypeError)):
+            Mail(sender="not-a-uuid", content="test")
+
+    def test_invalid_recipient_uuid_raises(self):
+        """Invalid UUID string for recipient should raise."""
+        with pytest.raises((ValueError, TypeError)):
+            Mail(sender=uuid4(), recipient="not-a-uuid", content="test")
