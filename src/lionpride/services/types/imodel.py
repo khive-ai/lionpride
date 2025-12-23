@@ -563,3 +563,35 @@ class iModel(Element):  # noqa: N801
         if self.backend is None:
             return "iModel(backend=None)"
         return f"iModel(backend={self.backend.name}, version={self.backend.version})"
+
+    async def __aenter__(self) -> iModel:
+        """Enter async context, starting executor if configured.
+
+        Example:
+            >>> async with iModel(provider="openai", limit_requests=50) as model:
+            ...     result = await model.invoke(messages=[...])
+        """
+        if self.executor is not None and (
+            self.executor.processor is None or self.executor.processor.is_stopped()
+        ):
+            await self.executor.start()
+        return self
+
+    async def __aexit__(
+        self,
+        _exc_type: type[BaseException] | None,
+        _exc_val: BaseException | None,
+        _exc_tb: Any,
+    ) -> bool:
+        """Exit async context, stopping executor if running.
+
+        Returns:
+            False to propagate any exceptions (never suppresses)
+        """
+        if (
+            self.executor is not None
+            and self.executor.processor is not None
+            and not self.executor.processor.is_stopped()
+        ):
+            await self.executor.stop()
+        return False

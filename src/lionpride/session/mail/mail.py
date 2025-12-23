@@ -14,7 +14,7 @@ from uuid import UUID
 
 from pydantic import Field, field_validator
 
-from ...core.element import Element
+from lionpride.core import Element
 
 __all__ = ("Mail",)
 

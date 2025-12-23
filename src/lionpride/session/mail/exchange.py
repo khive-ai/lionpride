@@ -14,13 +14,10 @@ from uuid import UUID
 
 from pydantic import PrivateAttr
 
+from lionpride.core import Element, Flow, Pile, Progression
 from lionpride.errors import ExistsError
 from lionpride.libs import concurrency
 
-from ...core.element import Element
-from ...core.flow import Flow
-from ...core.pile import Pile
-from ...core.progression import Progression
 from .mail import Mail
 
 __all__ = ("OUTBOX", "Exchange")
