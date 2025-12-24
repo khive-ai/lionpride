@@ -39,6 +39,7 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "prepare_messages_for_chat": ("lionpride.session.messages", "prepare_messages_for_chat"),
     # session
     "Branch": ("lionpride.session.session", "Branch"),
+    "ErrorAction": ("lionpride.session.session", "ErrorAction"),
     "Session": ("lionpride.session.session", "Session"),
 }
 
@@ -96,13 +97,14 @@ if TYPE_CHECKING:
         SystemContent,
         prepare_messages_for_chat,
     )
-    from .session import Branch, Session
+    from .session import Branch, ErrorAction, Session
 
 __all__ = (
     "ActionRequestContent",
     "ActionResponseContent",
     "AssistantResponseContent",
     "Branch",
+    "ErrorAction",
     "InstructionContent",
     "Log",
     "LogAdapter",

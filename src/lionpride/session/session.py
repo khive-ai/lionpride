@@ -11,14 +11,16 @@ from __future__ import annotations
 
 import contextlib
 import warnings
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
+from enum import Enum, auto
 from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID
 
+import anyio
 from pydantic import Field, PrivateAttr
 
 from lionpride.core import Element, Flow, Graph, Progression
-from lionpride.errors import AccessError, NotFoundError
+from lionpride.errors import AccessError, LionprideError, NotFoundError
 from lionpride.operations.node import Operation
 from lionpride.operations.registry import OperationRegistry
 from lionpride.services import ServiceRegistry, iModel
@@ -26,10 +28,30 @@ from lionpride.types import Unset, not_sentinel
 
 from .messages import Message, SystemContent
 
+
+class ErrorAction(Enum):
+    """Action to take when an error occurs during an operation.
+
+    Used by error hooks to control recovery behavior.
+    """
+
+    RETRY = auto()
+    """Retry the operation (respects error.retryable flag)."""
+
+    CONTINUE = auto()
+    """Continue execution, treating the error as non-fatal."""
+
+    ABORT = auto()
+    """Abort the operation, re-raising the error."""
+
+
+# Type alias for error hook callbacks
+ErrorHook = Callable[["LionprideError", dict[str, Any]], "ErrorAction"]
+
 if TYPE_CHECKING:
     from lionpride.services.types import Calling
 
-__all__ = ("Branch", "Session")
+__all__ = ("Branch", "ErrorAction", "Session")
 
 
 # =============================================================================
@@ -89,11 +111,20 @@ class Session(Element):
         op = await session.conduct("operate", branch, instruction="Analyze this")
         result = op.response
 
-    Note:
-        Session is not thread-safe. The lazy initialization of internal containers
-        (conversations, services, operations) uses simple None-checks without
-        synchronization. For concurrent access, use external synchronization
-        or create separate Session instances per thread.
+    Thread Safety:
+        Session uses an internal async lock (anyio.Lock) to protect state mutations.
+        The following methods acquire the lock automatically:
+        - conduct() - operation execution
+        - fork() - branch forking
+
+        This makes Session safe for concurrent async tasks within a single event loop.
+        For true multi-threaded access across event loops, use separate Session
+        instances per thread.
+
+    Error Handling:
+        Operations can register error hooks via on_operation_error() decorator.
+        Hooks receive the error and context, returning ErrorAction (RETRY, CONTINUE,
+        ABORT) to control recovery. Hooks are called in registration order.
 
     Lazy Initialization:
         By default, conversations, services, and operations are lazily initialized
@@ -125,6 +156,23 @@ class Session(Element):
 
     _default_branch_id: UUID | None = PrivateAttr(None)
     _default_backends: dict[str, str] = PrivateAttr(default_factory=dict)
+
+    # Async lock for concurrent access protection
+    _lock: anyio.Lock | None = PrivateAttr(None)
+
+    # Error hooks for operation error handling
+    _error_hooks: list[ErrorHook] = PrivateAttr(default_factory=list)
+
+    # -------------------------------------------------------------------------
+    # Lock Property
+    # -------------------------------------------------------------------------
+
+    @property
+    def lock(self) -> anyio.Lock:
+        """Async lock for concurrent access protection. Lazily initialized."""
+        if self._lock is None:
+            self._lock = anyio.Lock()
+        return self._lock
 
     # -------------------------------------------------------------------------
     # Lazy Properties (initialize on first access)
@@ -349,7 +397,7 @@ class Session(Element):
         resolved = self.get_branch(branch)
         self._default_branch_id = resolved.id
 
-    def fork(
+    async def fork(
         self,
         branch: Branch | UUID | str,
         *,
@@ -370,25 +418,26 @@ class Session(Element):
         Returns:
             New forked Branch with lineage metadata.
         """
-        source = self.get_branch(branch)
+        async with self.lock:
+            source = self.get_branch(branch)
 
-        forked = self.create_branch(
-            name=name or f"{source.name}_fork",
-            messages=source.order,
-            capabilities={*source.capabilities}
-            if capabilities is True
-            else (capabilities or set()),
-            resources={*source.resources} if resources is True else (resources or set()),
-            system=source.system_message if system is True else system,
-        )
+            forked = self.create_branch(
+                name=name or f"{source.name}_fork",
+                messages=source.order,
+                capabilities={*source.capabilities}
+                if capabilities is True
+                else (capabilities or set()),
+                resources={*source.resources} if resources is True else (resources or set()),
+                system=source.system_message if system is True else system,
+            )
 
-        forked.metadata["forked_from"] = {
-            "branch_id": str(source.id),
-            "branch_name": source.name,
-            "created_at": source.created_at.isoformat(),
-            "message_count": len(source),
-        }
-        return forked
+            forked.metadata["forked_from"] = {
+                "branch_id": str(source.id),
+                "branch_name": source.name,
+                "created_at": source.created_at.isoformat(),
+                "message_count": len(source),
+            }
+            return forked
 
     # -------------------------------------------------------------------------
     # Message Management
@@ -478,6 +527,8 @@ class Session(Element):
         operation_type: str,
         branch: Branch | UUID | str | None = None,
         params: Any | None = None,
+        *,
+        max_retries: int = 0,
     ) -> Operation:
         """Execute an operation on a branch.
 
@@ -485,6 +536,7 @@ class Session(Element):
             operation_type: Operation name (operate, react, communicate, generate).
             branch: Target branch (uses default if None).
             params: Typed operation parameters (GenerateParams, OperateParams, etc.).
+            max_retries: Maximum retries if error hooks return RETRY (default 0).
 
         Returns:
             Invoked Operation (access result via op.response).
@@ -492,14 +544,37 @@ class Session(Element):
         Raises:
             RuntimeError: If no branch and no default set.
             KeyError: If operation not registered.
+            LionprideError: If operation fails and error hooks return ABORT.
         """
-        resolved = self._resolve_branch(branch)
-        op = Operation(
-            operation_type=operation_type, parameters=params, timeout=None, streaming=False
-        )
-        op.bind(self, resolved)
-        await op.invoke()
-        return op
+        async with self.lock:
+            resolved = self._resolve_branch(branch)
+            op = Operation(
+                operation_type=operation_type, parameters=params, timeout=None, streaming=False
+            )
+            op.bind(self, resolved)
+
+            retries = 0
+            while True:
+                try:
+                    await op.invoke()
+                    return op
+                except LionprideError as e:
+                    action = self._dispatch_error_hooks(
+                        e,
+                        {
+                            "operation_type": operation_type,
+                            "branch": resolved.name,
+                            "retry_count": retries,
+                        },
+                    )
+
+                    if action == ErrorAction.CONTINUE:
+                        return op
+                    elif action == ErrorAction.RETRY and e.retryable and retries < max_retries:
+                        retries += 1
+                        continue
+                    else:
+                        raise
 
     async def flow(
         self,
@@ -602,6 +677,57 @@ class Session(Element):
         self.operations.register(name, factory, override=override)
 
     # -------------------------------------------------------------------------
+    # Error Hooks
+    # -------------------------------------------------------------------------
+
+    def on_operation_error(self, hook: ErrorHook) -> ErrorHook:
+        """Register an error hook for operation failures.
+
+        Error hooks are called in order when an operation raises a LionprideError.
+        The first hook to return a non-ABORT action wins.
+
+        Args:
+            hook: Callable(error, context) -> ErrorAction
+
+        Returns:
+            The hook (for use as decorator).
+
+        Example:
+            @session.on_operation_error
+            def handle_timeout(error: LionprideError, ctx: dict) -> ErrorAction:
+                if isinstance(error, LionTimeoutError):
+                    return ErrorAction.RETRY
+                return ErrorAction.ABORT
+        """
+        self._error_hooks.append(hook)
+        return hook
+
+    def remove_error_hook(self, hook: ErrorHook) -> bool:
+        """Remove an error hook.
+
+        Args:
+            hook: Hook to remove.
+
+        Returns:
+            True if hook was found and removed.
+        """
+        try:
+            self._error_hooks.remove(hook)
+            return True
+        except ValueError:
+            return False
+
+    def clear_error_hooks(self) -> int:
+        """Remove all error hooks.
+
+        Returns:
+            Number of hooks removed.
+        """
+        count = len(self._error_hooks)
+        self._error_hooks.clear()
+        return count
+
+    # -------------------------------------------------------------------------
     # Internal
     # -------------------------------------------------------------------------
 
@@ -612,6 +738,27 @@ class Session(Element):
         if self.default_branch is not None:
             return self.default_branch
         raise RuntimeError("No branch provided and no default branch set")
+
+    def _dispatch_error_hooks(self, error: LionprideError, context: dict[str, Any]) -> ErrorAction:
+        """Dispatch error to registered hooks.
+
+        Args:
+            error: The error that occurred.
+            context: Context about the operation.
+
+        Returns:
+            ErrorAction from first hook that doesn't return ABORT,
+            or ABORT if no hooks registered or all return ABORT.
+        """
+        for hook in self._error_hooks:
+            try:
+                action = hook(error, context)
+                if action != ErrorAction.ABORT:
+                    return action
+            except Exception:
+                # Hook failed, treat as ABORT
+                continue
+        return ErrorAction.ABORT
 
     def __repr__(self) -> str:
         return (
