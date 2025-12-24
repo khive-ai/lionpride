@@ -212,7 +212,8 @@ class TestBranchSystemMessages:
 class TestBranchForking:
     """Test branch forking and message lineage."""
 
-    def test_basic_branch_fork(self):
+    @pytest.mark.anyio
+    async def test_basic_branch_fork(self):
         """Test basic branch forking."""
         session = Session()
         original = session.create_branch(name="original")
@@ -232,7 +233,7 @@ class TestBranchForking:
         session.conversations.add_item(msg2, progressions=[original])
 
         # Fork branch
-        cloned = session.fork(original, name="cloned")
+        cloned = await session.fork(original, name="cloned")
 
         # Verify independent branches
         assert cloned.id != original.id
@@ -243,7 +244,8 @@ class TestBranchForking:
         cloned_msgs = list(session.messages[cloned])
         assert len(cloned_msgs) == len(original_msgs)
 
-    def test_fork_with_system_message(self):
+    @pytest.mark.anyio
+    async def test_fork_with_system_message(self):
         """Test forking preserves system message content."""
         session = Session()
 
@@ -254,7 +256,7 @@ class TestBranchForking:
         )
 
         original = session.create_branch(name="original", system=sys_msg)
-        cloned = session.fork(original, name="cloned", system=True)
+        cloned = await session.fork(original, name="cloned", system=True)
 
         # Verify system message UUID is copied (same message referenced)
         original_system = session.get_branch_system(original)
@@ -264,7 +266,8 @@ class TestBranchForking:
         assert cloned_system.id == original_system.id  # Same message referenced
         assert cloned_system.content.system_message == "System prompt"
 
-    def test_fork_by_branch_reference(self):
+    @pytest.mark.anyio
+    async def test_fork_by_branch_reference(self):
         """Test forking branch via direct reference."""
         session = Session()
         original = session.create_branch(name="original")
@@ -277,14 +280,15 @@ class TestBranchForking:
         session.conversations.add_item(msg, progressions=[original])
 
         # Fork via session.fork()
-        cloned = session.fork(original, name="cloned")
+        cloned = await session.fork(original, name="cloned")
 
         # Verify cloned successfully
         assert cloned.name == "cloned"
         cloned_msgs = list(session.messages[cloned])
         assert len(cloned_msgs) == 1
 
-    def test_fork_shares_message_uuids(self):
+    @pytest.mark.anyio
+    async def test_fork_shares_message_uuids(self):
         """Test forked branch shares same message UUIDs (not cloned)."""
         session = Session()
         original = session.create_branch(name="original")
@@ -297,7 +301,7 @@ class TestBranchForking:
         session.conversations.add_item(msg, progressions=[original])
 
         # Fork branch
-        forked = session.fork(original, name="forked")
+        forked = await session.fork(original, name="forked")
 
         # Verify forked branch has same message UUIDs
         assert len(forked) == len(original)
@@ -335,7 +339,8 @@ class TestMultiBranchWorkflows:
         assert len(branch2_msgs) == 1
         assert branch1_msgs[0].id != branch2_msgs[0].id
 
-    def test_divergent_branches(self):
+    @pytest.mark.anyio
+    async def test_divergent_branches(self):
         """Test branches that diverge from common ancestor."""
         session = Session()
         main = session.create_branch(name="main")
@@ -356,7 +361,7 @@ class TestMultiBranchWorkflows:
         session.conversations.add_item(msg2, progressions=[main])
 
         # Create divergent branch via fork
-        experiment = session.fork(main, name="experiment")
+        experiment = await session.fork(main, name="experiment")
 
         # Add different messages to each
         main_msg = Message(

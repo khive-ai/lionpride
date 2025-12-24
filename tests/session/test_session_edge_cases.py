@@ -95,7 +95,8 @@ class TestSessionNoDefaultBranch:
 class TestBranchForkInheritance:
     """Test fork() capability/resource inheritance modes."""
 
-    def test_fork_with_capabilities_true_copies_all(self):
+    @pytest.mark.anyio
+    async def test_fork_with_capabilities_true_copies_all(self):
         """fork() with capabilities=True should copy all capabilities from source.
 
         Edge case: Verify True means full copy, not just reference.
@@ -103,14 +104,15 @@ class TestBranchForkInheritance:
         session = Session()
         source = session.create_branch(name="source", capabilities={"cap1", "cap2", "cap3"})
 
-        forked = session.fork(source, capabilities=True)
+        forked = await session.fork(source, capabilities=True)
 
         assert forked.capabilities == {"cap1", "cap2", "cap3"}
         # Verify it's a copy, not a reference
         forked.capabilities.add("cap4")
         assert "cap4" not in source.capabilities
 
-    def test_fork_with_capabilities_none_creates_empty_set(self):
+    @pytest.mark.anyio
+    async def test_fork_with_capabilities_none_creates_empty_set(self):
         """fork() with capabilities=None should create empty capabilities.
 
         Edge case: Source has capabilities, but fork wants none.
@@ -118,11 +120,12 @@ class TestBranchForkInheritance:
         session = Session()
         source = session.create_branch(name="source", capabilities={"cap1", "cap2"})
 
-        forked = session.fork(source, capabilities=None)
+        forked = await session.fork(source, capabilities=None)
 
         assert forked.capabilities == set()
 
-    def test_fork_with_explicit_capabilities_set(self):
+    @pytest.mark.anyio
+    async def test_fork_with_explicit_capabilities_set(self):
         """fork() with explicit capabilities set should use that set.
 
         Edge case: Override source capabilities with different set.
@@ -130,12 +133,13 @@ class TestBranchForkInheritance:
         session = Session()
         source = session.create_branch(name="source", capabilities={"cap1", "cap2"})
 
-        forked = session.fork(source, capabilities={"new_cap"})
+        forked = await session.fork(source, capabilities={"new_cap"})
 
         assert forked.capabilities == {"new_cap"}
         assert source.capabilities == {"cap1", "cap2"}
 
-    def test_fork_with_resources_true_copies_all(self):
+    @pytest.mark.anyio
+    async def test_fork_with_resources_true_copies_all(self):
         """fork() with resources=True should copy all resources from source.
 
         Edge case: Verify resources copying works like capabilities.
@@ -143,14 +147,15 @@ class TestBranchForkInheritance:
         session = Session()
         source = session.create_branch(name="source", resources={"res1", "res2"})
 
-        forked = session.fork(source, resources=True)
+        forked = await session.fork(source, resources=True)
 
         assert forked.resources == {"res1", "res2"}
         # Verify independence
         forked.resources.add("res3")
         assert "res3" not in source.resources
 
-    def test_fork_with_resources_none_creates_empty_set(self):
+    @pytest.mark.anyio
+    async def test_fork_with_resources_none_creates_empty_set(self):
         """fork() with resources=None should create empty resources.
 
         Edge case: Source has resources but fork wants none.
@@ -158,11 +163,12 @@ class TestBranchForkInheritance:
         session = Session()
         source = session.create_branch(name="source", resources={"res1"})
 
-        forked = session.fork(source, resources=None)
+        forked = await session.fork(source, resources=None)
 
         assert forked.resources == set()
 
-    def test_fork_with_mixed_inheritance_modes(self):
+    @pytest.mark.anyio
+    async def test_fork_with_mixed_inheritance_modes(self):
         """fork() can use different modes for capabilities vs resources.
 
         Edge case: capabilities=True but resources=explicit set.
@@ -174,7 +180,7 @@ class TestBranchForkInheritance:
             resources={"res1", "res2"},
         )
 
-        forked = session.fork(
+        forked = await session.fork(
             source,
             capabilities=True,  # Copy from source
             resources={"custom_res"},  # Explicit override
@@ -515,7 +521,8 @@ class TestSetDefaultModelEdgeCases:
 class TestForkChainLineage:
     """Test fork chain lineage tracking."""
 
-    def test_fork_records_lineage_metadata(self):
+    @pytest.mark.anyio
+    async def test_fork_records_lineage_metadata(self):
         """fork() records lineage in metadata.forked_from.
 
         Edge case: Verify lineage metadata structure.
@@ -523,7 +530,7 @@ class TestForkChainLineage:
         session = Session()
         original = session.create_branch(name="original")
 
-        forked = session.fork(original, name="forked")
+        forked = await session.fork(original, name="forked")
 
         assert "forked_from" in forked.metadata
         lineage = forked.metadata["forked_from"]
@@ -532,7 +539,8 @@ class TestForkChainLineage:
         assert "created_at" in lineage
         assert lineage["message_count"] == 0
 
-    def test_fork_chain_accumulates_lineage(self):
+    @pytest.mark.anyio
+    async def test_fork_chain_accumulates_lineage(self):
         """Chain of forks accumulates lineage in metadata.
 
         Edge case: Fork a fork - each forked branch has its own lineage,
@@ -544,9 +552,9 @@ class TestForkChainLineage:
         msg = Message(content=InstructionContent(instruction="Start"))
         session.conversations.add_item(msg, progressions=[gen0])
 
-        gen1 = session.fork(gen0, name="gen1")
-        gen2 = session.fork(gen1, name="gen2")
-        gen3 = session.fork(gen2, name="gen3")
+        gen1 = await session.fork(gen0, name="gen1")
+        gen2 = await session.fork(gen1, name="gen2")
+        gen3 = await session.fork(gen2, name="gen3")
 
         # Each fork only knows its immediate parent
         assert gen1.metadata["forked_from"]["branch_name"] == "gen0"
@@ -556,7 +564,8 @@ class TestForkChainLineage:
         # gen3 doesn't directly know about gen0
         assert gen3.metadata["forked_from"]["branch_name"] != "gen0"
 
-    def test_fork_chain_message_propagation(self):
+    @pytest.mark.anyio
+    async def test_fork_chain_message_propagation(self):
         """Messages accumulate through fork chain.
 
         Edge case: Each fork starts with parent's messages, can diverge.
@@ -567,11 +576,11 @@ class TestForkChainLineage:
         msg0 = Message(content=InstructionContent(instruction="Gen0"))
         session.conversations.add_item(msg0, progressions=[gen0])
 
-        gen1 = session.fork(gen0, name="gen1")
+        gen1 = await session.fork(gen0, name="gen1")
         msg1 = Message(content=InstructionContent(instruction="Gen1"))
         session.conversations.add_item(msg1, progressions=[gen1])
 
-        gen2 = session.fork(gen1, name="gen2")
+        gen2 = await session.fork(gen1, name="gen2")
         msg2 = Message(content=InstructionContent(instruction="Gen2"))
         session.conversations.add_item(msg2, progressions=[gen2])
 
@@ -602,7 +611,8 @@ class TestEmptyBranchOperations:
         system = session.get_branch_system(branch)
         assert system is None
 
-    def test_fork_empty_branch(self):
+    @pytest.mark.anyio
+    async def test_fork_empty_branch(self):
         """Forking an empty branch creates empty fork.
 
         Edge case: Fork with no messages to copy.
@@ -610,7 +620,7 @@ class TestEmptyBranchOperations:
         session = Session()
         empty = session.create_branch(name="empty")
 
-        forked = session.fork(empty, name="forked_empty")
+        forked = await session.fork(empty, name="forked_empty")
 
         assert len(forked) == 0
         assert forked.metadata["forked_from"]["message_count"] == 0
