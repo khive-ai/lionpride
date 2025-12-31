@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a10] - 2025-12-31
+
+### Added
+
+- Comprehensive API documentation for session module (#148)
+  - `mail.md` - Mail, Exchange, OUTBOX multi-agent communication
+  - `logs.md` - Log, LogStore, LogType, LogStoreConfig
+  - `log_adapter.md` - LogAdapter, SQLiteWALLogAdapter, PostgresLogAdapter
+  - `log_broadcaster.md` - LogBroadcaster, subscribers, LogRedactor
+- Comprehensive API documentation for services module (#148)
+  - `backend.md` - ServiceBackend, ServiceConfig, NormalizedResponse, Calling
+  - `endpoint.md` - Endpoint, EndpointConfig, APICalling
+  - `utilities.md` - RateLimitConfig, TokenBucket, CircuitBreaker, RetryConfig
+  - `mcps.md` - MCPConnectionPool, MCPSecurityConfig, create_mcp_pool
+  - `hook.md` - HookRegistry, HookEvent, HookPhase
+- Export `Mail`, `Exchange`, `OUTBOX` from `lionpride.session` (#148)
+
+### Fixed
+
+- Documentation linting issues across existing docs (#148)
+
 ## [1.0.0a8] - 2025-12-12
 
 ### Added
