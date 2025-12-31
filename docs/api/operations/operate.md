@@ -185,7 +185,8 @@ async def generate(
 ) -> APICalling | str | dict | Message: ...
 ```
 
-Returns type based on `params.return_as`. Raises `ConfigurationError` if no valid imodel.
+Returns type based on `params.return_as`. Raises `ConfigurationError` if no valid
+imodel.
 
 ```python
 params = GenerateParams(instruction="What is 2 + 2?", return_as="text")
@@ -219,7 +220,8 @@ async def communicate(
 ) -> str | Any: ...
 ```
 
-**Two paths**: Text (no operable) returns `str`. IPU (with operable) returns validated model.
+**Two paths**: Text (no operable) returns `str`. IPU (with operable) returns validated
+model.
 
 ```python
 # Text path
@@ -247,7 +249,8 @@ async def operate(
 ) -> Any: ...
 ```
 
-Returns validated model, `(result, message)` tuple if `return_message=True`, or `str` if `skip_validation=True`.
+Returns validated model, `(result, message)` tuple if `return_message=True`, or `str` if
+`skip_validation=True`.
 
 ```python
 class Sentiment(BaseModel):
@@ -263,7 +266,8 @@ params = OperateParams(
 result = await operate(session, branch, params)  # Sentiment instance
 ```
 
-**With tools**: Set `actions=True` and ensure branch has `action_requests`, `action_responses` capabilities.
+**With tools**: Set `actions=True` and ensure branch has `action_requests`,
+`action_responses` capabilities.
 
 ---
 
@@ -308,7 +312,8 @@ Multi-turn ReAct reasoning loop. Runs operate() until `is_done=True` or `max_ste
 async def react(session: Session, branch: Branch | str, params: ReactParams) -> ReactResult: ...
 ```
 
-**Required capabilities**: `reasoning`, `action_requests`, `is_done`, plus any intermediate options.
+**Required capabilities**: `reasoning`, `action_requests`, `is_done`, plus any
+intermediate options.
 
 ```python
 branch = session.create_branch(
@@ -391,7 +396,8 @@ params = OperateParams(
 )
 ```
 
-**Gates**: Branch capabilities > Params capabilities. Resources checked for models/tools.
+**Gates**: Branch capabilities > Params capabilities. Resources checked for
+models/tools.
 
 ---
 
@@ -506,14 +512,20 @@ branch = session.create_branch(capabilities={"summary", "action_requests", "acti
 
 ## See Also
 
-- [Session](../session/session.md), [Message](../session/message.md), [iModel](../services/imodel.md), [Tool](../services/tool.md), [Operable](../types/operable.md)
+- [Session](../session/session.md), [Message](../session/message.md),
+  [iModel](../services/imodel.md), [Tool](../services/tool.md),
+  [Operable](../types/operable.md)
 
 ---
 
 ## Design Rationale
 
-**Layered Operations**: Each layer adds capabilities while keeping lower layers testable. generate (pure) -> parse (isolated) -> communicate (persistent) -> operate (secure) -> react (multi-turn).
+**Layered Operations**: Each layer adds capabilities while keeping lower layers
+testable. generate (pure) -> parse (isolated) -> communicate (persistent) -> operate
+(secure) -> react (multi-turn).
 
-**Explicit Capabilities**: Prevents accidental field exposure, privilege escalation, and silent failures. Missing capabilities raise immediately.
+**Explicit Capabilities**: Prevents accidental field exposure, privilege escalation, and
+silent failures. Missing capabilities raise immediately.
 
-**Flat Inheritance**: `react.generate.instruction` not `react.operate.communicate.generate.instruction`. Reduces cognitive load.
+**Flat Inheritance**: `react.generate.instruction` not
+`react.operate.communicate.generate.instruction`. Reduces cognitive load.

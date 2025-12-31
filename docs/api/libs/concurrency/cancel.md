@@ -4,12 +4,18 @@
 
 ## Overview
 
-The `lionpride.libs.concurrency.cancel` module provides a unified interface for timeout and deadline management built on top of AnyIO's cancellation scopes. It offers both **relative timeouts** (seconds from now) and **absolute deadlines** (specific time points), with two cancellation strategies: **fail** (raise TimeoutError) and **move on** (silent cancellation).
+The `lionpride.libs.concurrency.cancel` module provides a unified interface for timeout
+and deadline management built on top of AnyIO's cancellation scopes. It offers both
+**relative timeouts** (seconds from now) and **absolute deadlines** (specific time
+points), with two cancellation strategies: **fail** (raise TimeoutError) and **move on**
+(silent cancellation).
 
 **Key Capabilities:**
 
-- **Relative Timeouts**: Time-limited operations with `fail_after()` and `move_on_after()`
-- **Absolute Deadlines**: Deadline-based cancellation with `fail_at()` and `move_on_at()`
+- **Relative Timeouts**: Time-limited operations with `fail_after()` and
+  `move_on_after()`
+- **Absolute Deadlines**: Deadline-based cancellation with `fail_at()` and
+  `move_on_at()`
 - **Flexible Cancellation**: Choose between error-raising or silent cancellation
 - **Null Timeout Support**: `None` timeout creates cancellable scope without deadline
 - **Deadline Inspection**: Query effective deadline with `effective_deadline()`
@@ -46,7 +52,9 @@ from lionpride.libs.concurrency import (
 
 ### CancelScope
 
-Re-exported from `anyio.CancelScope`. See [AnyIO documentation](https://anyio.readthedocs.io/en/stable/cancellation.html) for detailed API.
+Re-exported from `anyio.CancelScope`. See
+[AnyIO documentation](https://anyio.readthedocs.io/en/stable/cancellation.html) for
+detailed API.
 
 **Type:** `type[anyio.CancelScope]`
 
@@ -77,7 +85,8 @@ def fail_after(seconds: float | None) -> Iterator[CancelScope]: ...
 **Parameters:**
 
 - `seconds` (float or None): Maximum execution time in seconds
-  - If `None`, creates cancellable scope without timeout (still cancellable by outer scopes)
+  - If `None`, creates cancellable scope without timeout (still cancellable by outer
+    scopes)
   - If float, raises `TimeoutError` after specified seconds
   - Must be non-negative if provided
 
@@ -122,7 +131,9 @@ async def example():
 
 **Notes:**
 
-Internally delegates to `anyio.fail_after()` for non-None timeouts. The `None` timeout case creates a plain `CancelScope()` that can still be cancelled by outer scopes or manual `scope.cancel()` calls.
+Internally delegates to `anyio.fail_after()` for non-None timeouts. The `None` timeout
+case creates a plain `CancelScope()` that can still be cancelled by outer scopes or
+manual `scope.cancel()` calls.
 
 ---
 
@@ -183,7 +194,8 @@ async def example():
 
 **Notes:**
 
-Use for **optional operations** where timeout is acceptable. The operation is silently cancelled, allowing code to continue with fallback values or degraded functionality.
+Use for **optional operations** where timeout is acceptable. The operation is silently
+cancelled, allowing code to continue with fallback values or degraded functionality.
 
 ---
 
@@ -200,7 +212,8 @@ def fail_at(deadline: float | None) -> Iterator[CancelScope]: ...
 
 **Parameters:**
 
-- `deadline` (float or None): Absolute deadline as monotonic timestamp (from `time.monotonic()`)
+- `deadline` (float or None): Absolute deadline as monotonic timestamp (from
+  `time.monotonic()`)
   - If `None`, creates cancellable scope without deadline
   - If float, raises `TimeoutError` when current time reaches deadline
   - If deadline is in the past, raises immediately
@@ -253,9 +266,12 @@ async def example():
 
 **Notes:**
 
-Converts absolute deadline to relative timeout by subtracting current time. If deadline is in the past, `max(0.0, deadline - now)` ensures immediate timeout rather than negative duration.
+Converts absolute deadline to relative timeout by subtracting current time. If deadline
+is in the past, `max(0.0, deadline - now)` ensures immediate timeout rather than
+negative duration.
 
-**Use Case:** Coordinating multiple operations under a shared deadline where each operation should respect the remaining time budget.
+**Use Case:** Coordinating multiple operations under a shared deadline where each
+operation should respect the remaining time budget.
 
 ---
 
@@ -272,7 +288,8 @@ def move_on_at(deadline: float | None) -> Iterator[CancelScope]: ...
 
 **Parameters:**
 
-- `deadline` (float or None): Absolute deadline as monotonic timestamp (from `time.monotonic()`)
+- `deadline` (float or None): Absolute deadline as monotonic timestamp (from
+  `time.monotonic()`)
   - If `None`, creates cancellable scope without deadline
   - If float, silently cancels when current time reaches deadline
   - If deadline is in the past, cancels immediately
@@ -316,13 +333,15 @@ async def example():
 
 **Notes:**
 
-Use for **best-effort operations** where partial results are acceptable. Silently stops at deadline, allowing code to proceed with whatever was collected.
+Use for **best-effort operations** where partial results are acceptable. Silently stops
+at deadline, allowing code to proceed with whatever was collected.
 
 ---
 
 ### effective_deadline()
 
-Return the ambient effective deadline from enclosing cancel scopes, or None if unlimited.
+Return the ambient effective deadline from enclosing cancel scopes, or None if
+unlimited.
 
 **Signature:**
 
@@ -332,7 +351,8 @@ def effective_deadline() -> float | None: ...
 
 **Returns:**
 
-- float or None: Effective deadline as monotonic timestamp, or None if no deadline is set
+- float or None: Effective deadline as monotonic timestamp, or None if no deadline is
+  set
   - Aggregates all enclosing `CancelScope` deadlines (returns earliest)
   - Returns `None` if all scopes are unlimited
 
@@ -384,9 +404,12 @@ async def example():
 
 **Notes:**
 
-**AnyIO Conversion:** AnyIO uses `+inf` to represent "no deadline". This function converts that to `None` for consistency with lionpride's `None`-based unlimited timeout convention.
+**AnyIO Conversion:** AnyIO uses `+inf` to represent "no deadline". This function
+converts that to `None` for consistency with lionpride's `None`-based unlimited timeout
+convention.
 
-**Use Case:** Adaptive algorithms that adjust behavior based on available time. For example, caching strategies that skip expensive validation when deadline is tight.
+**Use Case:** Adaptive algorithms that adjust behavior based on available time. For
+example, caching strategies that skip expensive validation when deadline is tight.
 
 ---
 
@@ -713,16 +736,20 @@ deadline = current_time() + 5.0
 ## See Also
 
 - **Related Modules**:
-  - [Concurrency Utils](../concurrency/utils.md): `current_time()` for monotonic timestamps and other async helpers
+  - [Concurrency Utils](../concurrency/utils.md): `current_time()` for monotonic
+    timestamps and other async helpers
 - **External Documentation**:
-  - [AnyIO Cancellation](https://anyio.readthedocs.io/en/stable/cancellation.html): Underlying cancellation scope API
-  - [Trio Timeouts](https://trio.readthedocs.io/en/stable/reference-core.html#cancellation-and-timeouts): Inspiration for timeout patterns
+  - [AnyIO Cancellation](https://anyio.readthedocs.io/en/stable/cancellation.html):
+    Underlying cancellation scope API
+  - [Trio Timeouts](https://trio.readthedocs.io/en/stable/reference-core.html#cancellation-and-timeouts):
+    Inspiration for timeout patterns
 
 See [User Guides](../../../user_guide/) for practical patterns and best practices.
 
 ## Examples
 
-> **Note:** For production patterns and complex use cases, see the tutorials section. These examples focus on demonstrating the API surface.
+> **Note:** For production patterns and complex use cases, see the tutorials section.
+> These examples focus on demonstrating the API surface.
 
 ### Example 1: Retry with Timeout
 
@@ -787,4 +814,8 @@ async def environment_aware_operation():
 result = await environment_aware_operation()
 ```
 
-> **Note:** For more complex patterns like parallel operations with timeouts, deadline-aware task queues, and circuit breakers, see the concurrency tutorials (issues [#64](https://github.com/khive-ai/lionpride/issues/64), [#65](https://github.com/khive-ai/lionpride/issues/65), [#66](https://github.com/khive-ai/lionpride/issues/66)).
+> **Note:** For more complex patterns like parallel operations with timeouts,
+> deadline-aware task queues, and circuit breakers, see the concurrency tutorials
+> (issues [#64](https://github.com/khive-ai/lionpride/issues/64),
+> [#65](https://github.com/khive-ai/lionpride/issues/65),
+> [#66](https://github.com/khive-ai/lionpride/issues/66)).

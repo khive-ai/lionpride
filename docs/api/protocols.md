@@ -4,19 +4,25 @@
 
 ## Overview
 
-The `protocols` module provides **runtime-checkable protocol definitions** that enable structural typing (duck typing with explicit declarations) throughout lionpride. This approach follows **Rust traits** and **Go interfaces** philosophy: composition over inheritance, loose coupling, and explicit capability declarations.
+The `protocols` module provides **runtime-checkable protocol definitions** that enable
+structural typing (duck typing with explicit declarations) throughout lionpride. This
+approach follows **Rust traits** and **Go interfaces** philosophy: composition over
+inheritance, loose coupling, and explicit capability declarations.
 
 **Key Components:**
 
-- **Core Protocols**: Observable, Serializable, Deserializable, Adaptable, AdapterRegisterable, AsyncAdaptable, AsyncAdapterRegisterable
+- **Core Protocols**: Observable, Serializable, Deserializable, Adaptable,
+  AdapterRegisterable, AsyncAdaptable, AsyncAdapterRegisterable
 - **Container Protocols**: Containable, Invocable, Hashable, Allowable
 - **@implements() Decorator**: Explicit protocol implementation declaration
 
 **Why Protocol-Based Composition?**
 
-Traditional class inheritance creates tight coupling and multiple inheritance complexity. Protocols provide:
+Traditional class inheritance creates tight coupling and multiple inheritance
+complexity. Protocols provide:
 
-1. **Structural Typing**: Objects are compatible if they implement required methods, not if they inherit from specific base classes
+1. **Structural Typing**: Objects are compatible if they implement required methods, not
+   if they inherit from specific base classes
 2. **Loose Coupling**: No shared base class requirements, components compose freely
 3. **Explicit Contracts**: `@implements()` declares capabilities in class definition
 4. **Runtime Checking**: `isinstance(obj, Protocol)` validates structural compatibility
@@ -56,7 +62,8 @@ from lionpride.protocols import (
 
 ### Observable
 
-**Purpose**: Objects with unique UUID identifier for tracking and identity-based operations.
+**Purpose**: Objects with unique UUID identifier for tracking and identity-based
+operations.
 
 #### Protocol Definition
 
@@ -182,13 +189,15 @@ Implementations typically support:
 #### See Also
 
 - [Element.to_dict()](base/element.md#to_dict): Multi-mode serialization implementation
-- [Pile.to_dict()](base/pile.md#to_dict): Collection serialization with progression preservation
+- [Pile.to_dict()](base/pile.md#to_dict): Collection serialization with progression
+  preservation
 
 ---
 
 ### Deserializable
 
-**Purpose**: Objects that can be deserialized from dictionary representation via classmethod.
+**Purpose**: Objects that can be deserialized from dictionary representation via
+classmethod.
 
 #### Protocol Definition
 
@@ -262,7 +271,8 @@ Classmethod pattern enables:
 
 #### See Also
 
-- [Element.from_dict()](base/element.md#from_dict): Polymorphic deserialization via `lion_class`
+- [Element.from_dict()](base/element.md#from_dict): Polymorphic deserialization via
+  `lion_class`
 - [Serializable](#serializable): Companion protocol for roundtrip serialization
 
 ---
@@ -372,7 +382,8 @@ Adapter protocol enables:
 
 #### See Also
 
-- [AdapterRegisterable](#adapterregisterable): Separate protocol for adapter registration
+- [AdapterRegisterable](#adapterregisterable): Separate protocol for adapter
+  registration
 - [AsyncAdaptable](#asyncadaptable): Async version for I/O-bound conversion
 - [pydapter documentation](https://github.com/khive-ai/pydapter): Adapter library
 
@@ -380,7 +391,8 @@ Adapter protocol enables:
 
 ### AdapterRegisterable
 
-**Purpose**: Mutable adapter registry protocol for configurable adapters. Compose with Adaptable for full adapter support.
+**Purpose**: Mutable adapter registry protocol for configurable adapters. Compose with
+Adaptable for full adapter support.
 
 #### Protocol Definition
 
@@ -408,8 +420,10 @@ class AdapterRegisterable(Protocol):
 `AdapterRegisterable` is **separate from `Adaptable`** because:
 
 1. **Separation of concerns**: Adaptation methods vs registration
-2. **Composition**: Some classes may be Adaptable but use fixed adapters (no registration needed)
-3. **Immutability option**: Adaptable without AdapterRegisterable allows frozen adapter configurations
+2. **Composition**: Some classes may be Adaptable but use fixed adapters (no
+   registration needed)
+3. **Immutability option**: Adaptable without AdapterRegisterable allows frozen adapter
+   configurations
 
 #### Usage Pattern
 
@@ -436,7 +450,8 @@ class Node:
 
 ### AsyncAdaptable
 
-**Purpose**: Async adapter protocol for I/O-bound format conversion (databases, network, files).
+**Purpose**: Async adapter protocol for I/O-bound format conversion (databases, network,
+files).
 
 #### Protocol Definition
 
@@ -517,7 +532,8 @@ Separate async protocol enables:
 
 #### See Also
 
-- [AsyncAdapterRegisterable](#asyncadapterregisterable): Separate protocol for async adapter registration
+- [AsyncAdapterRegisterable](#asyncadapterregisterable): Separate protocol for async
+  adapter registration
 - [Adaptable](#adaptable): Synchronous adapter protocol
 - [anyio documentation](https://anyio.readthedocs.io/en/stable/): Async I/O framework
 
@@ -525,7 +541,8 @@ Separate async protocol enables:
 
 ### AsyncAdapterRegisterable
 
-**Purpose**: Mutable async adapter registry protocol. Compose with AsyncAdaptable for configurable async adapters.
+**Purpose**: Mutable async adapter registry protocol. Compose with AsyncAdaptable for
+configurable async adapters.
 
 #### Protocol Definition
 
@@ -553,7 +570,8 @@ class AsyncAdapterRegisterable(Protocol):
 Separate protocol mirrors the sync `AdapterRegisterable` pattern:
 
 1. **Isolation**: Sync and async adapters coexist without conflicts
-2. **Composition**: Use `AsyncAdaptable` alone for fixed async adapters, add `AsyncAdapterRegisterable` for runtime configuration
+2. **Composition**: Use `AsyncAdaptable` alone for fixed async adapters, add
+   `AsyncAdapterRegisterable` for runtime configuration
 
 #### Usage Pattern
 
@@ -641,7 +659,8 @@ Pythonic `in` operator enables:
 
 #### See Also
 
-- [Pile.**contains**](base/pile.md#__contains__): Collection membership with UUID/instance support
+- [Pile.**contains**](base/pile.md#__contains__): Collection membership with
+  UUID/instance support
 
 ---
 
@@ -860,7 +879,8 @@ Allowable protocol enables:
 
 ## @implements() Decorator
 
-**Purpose**: Explicitly declare protocol implementations with strict enforcement (Rust-like trait implementation).
+**Purpose**: Explicitly declare protocol implementations with strict enforcement
+(Rust-like trait implementation).
 
 ### Decorator Signature
 
@@ -965,8 +985,8 @@ The `@implements()` decorator enforces **explicit over implicit** (Rust philosop
 
 From test design insights (lines 132-175 in protocols.py):
 
-> "This is Rust-like trait implementation: you must provide the implementation
-> in the impl block, not rely on inheritance."
+> "This is Rust-like trait implementation: you must provide the implementation in the
+> impl block, not rely on inheritance."
 
 ### Multiple Protocols
 
@@ -1272,8 +1292,8 @@ obj = MyClass()
 
 From test design insights:
 
-> "Explicit > Implicit (Rust philosophy). Clear ownership: each class declares
-> what it implements. No ambiguity about where implementation lives."
+> "Explicit > Implicit (Rust philosophy). Clear ownership: each class declares what it
+> implements. No ambiguity about where implementation lives."
 
 The decorator enforces:
 
@@ -1310,7 +1330,8 @@ This bridges static typing (type hints) and runtime validation (isinstance), ena
 ## See Also
 
 - **Base Classes**:
-  - [Element](base/element.md): Implements Observable, Serializable, Deserializable, Hashable
+  - [Element](base/element.md): Implements Observable, Serializable, Deserializable,
+    Hashable
   - [Node](base/node.md): Implements all Element protocols plus Adaptable
   - [Pile](base/pile.md): Implements Containable, Serializable, Adaptable
 - **Type System**:

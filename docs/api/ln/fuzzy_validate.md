@@ -1,16 +1,23 @@
 # Fuzzy Validate
 
-> Pydantic model validation and dictionary parsing with fuzzy JSON extraction and key matching
+> Pydantic model validation and dictionary parsing with fuzzy JSON extraction and key
+> matching
 
 ## Overview
 
-The fuzzy validation module provides utilities for validating and parsing inputs into Pydantic models or dictionaries with robust error handling. It combines fuzzy JSON extraction, fuzzy key matching, and Pydantic validation to handle noisy inputs from LLMs, APIs, or user submissions.
+The fuzzy validation module provides utilities for validating and parsing inputs into
+Pydantic models or dictionaries with robust error handling. It combines fuzzy JSON
+extraction, fuzzy key matching, and Pydantic validation to handle noisy inputs from
+LLMs, APIs, or user submissions.
 
 **Key Capabilities:**
 
-- **Fuzzy JSON Extraction**: Parse JSON from markdown code blocks, text with noise, or malformed strings
-- **Pydantic Validation**: Convert text/dict to validated Pydantic models with fuzzy parsing
-- **Fuzzy Key Matching**: Correct misspelled keys using similarity algorithms before validation
+- **Fuzzy JSON Extraction**: Parse JSON from markdown code blocks, text with noise, or
+  malformed strings
+- **Pydantic Validation**: Convert text/dict to validated Pydantic models with fuzzy
+  parsing
+- **Fuzzy Key Matching**: Correct misspelled keys using similarity algorithms before
+  validation
 - **Multi-Format Parsing**: Handle dict, JSON string, XML, or arbitrary objects
 - **Flexible Error Handling**: Suppress conversion errors or raise with detailed context
 - **Strict/Lenient Modes**: Choose between strict validation or permissive parsing
@@ -67,7 +74,8 @@ Input data to validate and parse.
   - `dict`: Validates directly (skips JSON extraction)
   - `str`: Extracts JSON, then validates
 - Validation: Must be convertible to dict or valid JSON string
-- Behavior: If already instance of `model_type`, returns immediately without revalidation
+- Behavior: If already instance of `model_type`, returns immediately without
+  revalidation
 - Note: Strings may contain JSON in markdown code blocks, extra text, or malformed JSON
 
 #### Keyword-Only Parameters
@@ -185,13 +193,16 @@ Expected keys to validate against.
 
 #### Keyword-Only Parameters
 
-**similarity_algo** : SIMILARITY_TYPE or Callable[[str, str], float], default "jaro_winkler"
+**similarity_algo** : SIMILARITY_TYPE or Callable[[str, str], float], default
+"jaro_winkler"
 
-Algorithm for computing string similarity (see [fuzzy_match.md](fuzzy_match.md#similarity_algo) for details).
+Algorithm for computing string similarity (see
+[fuzzy_match.md](fuzzy_match.md#similarity_algo) for details).
 
 **similarity_threshold** : float, default 0.85
 
-Minimum similarity score (0.0-1.0) for considering keys a match (see [fuzzy_match.md](fuzzy_match.md#similarity_threshold) for details).
+Minimum similarity score (0.0-1.0) for considering keys a match (see
+[fuzzy_match.md](fuzzy_match.md#similarity_threshold) for details).
 
 **fuzzy_match** : bool, default True
 
@@ -201,21 +212,26 @@ Enable fuzzy key matching for keys that don't match exactly.
 - False: Only exact matches considered
 - Note: Differs from `fuzzy_validate_pydantic()` where default is False
 
-**handle_unmatched** : Literal["ignore", "raise", "remove", "fill", "force"], default "ignore"
+**handle_unmatched** : Literal["ignore", "raise", "remove", "fill", "force"], default
+"ignore"
 
-Strategy for handling keys that don't match expected keys (see [fuzzy_match.md](fuzzy_match.md#handle_unmatched) for details).
+Strategy for handling keys that don't match expected keys (see
+[fuzzy_match.md](fuzzy_match.md#handle_unmatched) for details).
 
 **fill_value** : Any, default None
 
-Default value for missing expected keys when `handle_unmatched` is "fill" or "force" (see [fuzzy_match.md](fuzzy_match.md#fill_value) for details).
+Default value for missing expected keys when `handle_unmatched` is "fill" or "force"
+(see [fuzzy_match.md](fuzzy_match.md#fill_value) for details).
 
 **fill_mapping** : dict of {str : Any} or None, default None
 
-Custom values for specific missing expected keys (see [fuzzy_match.md](fuzzy_match.md#fill_mapping) for details).
+Custom values for specific missing expected keys (see
+[fuzzy_match.md](fuzzy_match.md#fill_mapping) for details).
 
 **strict** : bool, default False
 
-Raise ValueError if any expected keys are missing after matching (see [fuzzy_match.md](fuzzy_match.md#strict) for details).
+Raise ValueError if any expected keys are missing after matching (see
+[fuzzy_match.md](fuzzy_match.md#strict) for details).
 
 **suppress_conversion_errors** : bool, default False
 
@@ -224,7 +240,8 @@ Return empty dict on conversion failure instead of raising exception.
 - True: Conversion errors return `{}` (permissive)
 - False: Conversion errors raise ValueError with detailed message (default)
 - Use case: Pipelines where missing data should be handled gracefully
-- Note: Validation errors (post-conversion) still raise if `strict=True` or `handle_unmatched="raise"`
+- Note: Validation errors (post-conversion) still raise if `strict=True` or
+  `handle_unmatched="raise"`
 
 ### Returns
 
@@ -282,7 +299,6 @@ Here's the user data:
 user = fuzzy_validate_pydantic(llm_output, model_type=User)
 
 # User(username='alice', email='<alice@example.com>', age=30)
-
 ````
 
 ### Pydantic Validation with Fuzzy Keys
@@ -395,7 +411,7 @@ validated = fuzzy_validate_mapping(
 
 ### Multi-Format Input Handling
 
-```python
+````python
 from lionpride.ln import fuzzy_validate_mapping
 from pydantic import BaseModel
 
@@ -424,7 +440,7 @@ for input_data in inputs:
     result = fuzzy_validate_mapping(input_data, expected)
     print(result)
     # {'setting1': 'value1', 'setting2': 'value2'} (all produce same output)
-```
+````
 
 ## Common Pitfalls
 
@@ -491,7 +507,8 @@ result = fuzzy_validate_mapping(
 
 ### Pitfall 3: Confusing Default `fuzzy_match` Values
 
-**Issue**: Different default values between `fuzzy_validate_pydantic` and `fuzzy_validate_mapping`.
+**Issue**: Different default values between `fuzzy_validate_pydantic` and
+`fuzzy_validate_mapping`.
 
 ```python
 # fuzzy_validate_pydantic: fuzzy_match=False (default)
@@ -532,7 +549,9 @@ except ValueError as e:
     print(e)  # ValueError: Missing required keys: {'name'}
 ```
 
-**Solution**: `suppress_conversion_errors` only affects dict conversion, not fuzzy matching validation. Use `strict=False` or `handle_unmatched="fill"` to avoid validation errors.
+**Solution**: `suppress_conversion_errors` only affects dict conversion, not fuzzy
+matching validation. Use `strict=False` or `handle_unmatched="fill"` to avoid validation
+errors.
 
 ### Pitfall 5: Mutating Already-Valid Models
 
@@ -552,7 +571,8 @@ result = fuzzy_validate_pydantic(user, model_type=User)
 assert result is user  # True (same object)
 ```
 
-**Solution**: `fuzzy_validate_pydantic` returns existing instances immediately without revalidation. If revalidation is needed, convert to dict first:
+**Solution**: `fuzzy_validate_pydantic` returns existing instances immediately without
+revalidation. If revalidation is needed, convert to dict first:
 
 ```python
 # Force revalidation
@@ -565,18 +585,25 @@ result = fuzzy_validate_pydantic(user.model_dump(), model_type=User)
 
 `fuzzy_validate_pydantic()` and `fuzzy_validate_mapping()` serve different use cases:
 
-1. **Pydantic**: End-to-end validation for structured LLM outputs (JSON → Pydantic model)
-2. **Dict**: Intermediate validation for pipelines where dict is needed before model conversion
+1. **Pydantic**: End-to-end validation for structured LLM outputs (JSON → Pydantic
+   model)
+2. **Dict**: Intermediate validation for pipelines where dict is needed before model
+   conversion
 
-Separation provides clear intent and avoids parameter bloat (Pydantic-specific vs dict-specific options).
+Separation provides clear intent and avoids parameter bloat (Pydantic-specific vs
+dict-specific options).
 
 ### Why Default `fuzzy_match=False` for Pydantic?
 
-Pydantic validation is already permissive (coerces types, handles aliases). Fuzzy key matching adds overhead and potential false corrections. Default to strict validation; users opt-in to fuzzy matching when needed (LLM outputs, user inputs).
+Pydantic validation is already permissive (coerces types, handles aliases). Fuzzy key
+matching adds overhead and potential false corrections. Default to strict validation;
+users opt-in to fuzzy matching when needed (LLM outputs, user inputs).
 
 ### Why Default `fuzzy_match=True` for Mapping?
 
-`fuzzy_validate_mapping()` targets noisy inputs (APIs, user submissions) where key variations are common. Default fuzzy matching improves usability for typical use cases while maintaining override option.
+`fuzzy_validate_mapping()` targets noisy inputs (APIs, user submissions) where key
+variations are common. Default fuzzy matching improves usability for typical use cases
+while maintaining override option.
 
 ### Why `suppress_conversion_errors` Instead of Try/Except?
 
@@ -589,19 +616,24 @@ Explicit parameter provides:
 
 ### Why Combine Fuzzy Parse + Fuzzy Match?
 
-LLM outputs often have **both** formatting issues (malformed JSON, markdown blocks) **and** key variations (typos, casing). Combining both strategies provides robust end-to-end parsing without manual pre-processing.
+LLM outputs often have **both** formatting issues (malformed JSON, markdown blocks)
+**and** key variations (typos, casing). Combining both strategies provides robust
+end-to-end parsing without manual pre-processing.
 
 ## See Also
 
 - **Related Functions**:
   - [fuzzy_match_keys](fuzzy_match.md): Underlying fuzzy key matching implementation
   - [to_dict](to_dict.md): Universal dict conversion (used internally)
-  - [extract_json()](../libs/string_handlers/extract_json.md): Extract JSON from unstructured text
+  - [extract_json()](../libs/string_handlers/extract_json.md): Extract JSON from
+    unstructured text
 - **Related Types**:
   - [Spec](../types/spec.md): Pydantic models with built-in fuzzy validation
   - [Operable](../types/operable.md): Structured LLM outputs with validation
-  - [FuzzyMatchKeysParams](fuzzy_match.md#class-fuzzymatchkeysparams): Reusable fuzzy match configuration
-  - [String Similarity](../libs/string_handlers/string_similarity.md): Fuzzy string matching algorithms
+  - [FuzzyMatchKeysParams](fuzzy_match.md#class-fuzzymatchkeysparams): Reusable fuzzy
+    match configuration
+  - [String Similarity](../libs/string_handlers/string_similarity.md): Fuzzy string
+    matching algorithms
 
 ## Examples
 
@@ -618,7 +650,6 @@ from pydantic import BaseModel
 ### Example 1: LLM JSON Parsing Pipeline
 
 ````python
-
 class AgentTask(BaseModel):
     task_name: str
     priority: str
@@ -664,7 +695,6 @@ print(task)
 # estimated_hours=8
 
 # )
-
 ````
 
 ### Example 2: API Response Normalization

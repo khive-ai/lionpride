@@ -6,22 +6,29 @@
 
 ## Overview
 
-**Processor** is a background event execution engine designed for high-throughput async workflows. It manages a priority queue of events, enforces capacity limits per batch cycle, and provides customizable permission checks for rate limiting and authorization.
+**Processor** is a background event execution engine designed for high-throughput async
+workflows. It manages a priority queue of events, enforces capacity limits per batch
+cycle, and provides customizable permission checks for rate limiting and authorization.
 
 **Core Responsibilities:**
 
-- **Priority Queue Execution**: Process events ordered by priority value (default: creation time)
-- **Capacity-Limited Batching**: Process up to `queue_capacity` events per `capacity_refresh_time` interval
-- **Permission Gating**: Override `request_permission()` for rate limiting, quotas, or auth checks
+- **Priority Queue Execution**: Process events ordered by priority value (default:
+  creation time)
+- **Capacity-Limited Batching**: Process up to `queue_capacity` events per
+  `capacity_refresh_time` interval
+- **Permission Gating**: Override `request_permission()` for rate limiting, quotas, or
+  auth checks
 - **Concurrency Control**: Limit concurrent executions via semaphore (default: 100)
-- **Flow Integration**: Updates executor progressions automatically when events transition between states
+- **Flow Integration**: Updates executor progressions automatically when events
+  transition between states
 
 **When to Use Processor:**
 
 - **High-volume event processing**: Thousands of events with priority-based scheduling
 - **Rate-limited operations**: External API calls with quota restrictions
 - **Background task execution**: Long-running operations without blocking main workflow
-- **Resource-constrained systems**: Control batch size and concurrency to prevent overload
+- **Resource-constrained systems**: Control batch size and concurrency to prevent
+  overload
 
 **When Not to Use:**
 
@@ -29,7 +36,10 @@
 - Single event execution → No need for queue overhead
 - Real-time processing with zero latency tolerance → Queue adds batching delay
 
-**Architecture Integration:** Processor is created by [Executor](executor.md) and shares a reference to `Executor.states.items` (the Flow's Pile containing events). The queue stores event UUIDs only, keeping memory overhead minimal. For integration patterns, see [Processor/Executor Integration](../../user_guide/processor_executor.md).
+**Architecture Integration:** Processor is created by [Executor](executor.md) and shares
+a reference to `Executor.states.items` (the Flow's Pile containing events). The queue
+stores event UUIDs only, keeping memory overhead minimal. For integration patterns, see
+[Processor/Executor Integration](../../user_guide/processor_executor.md).
 
 ---
 
@@ -70,20 +80,21 @@ class Processor:
 
 ### `__init__`
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `queue_capacity` | `int` | *(required)* | Max events per batch (must be in [1, 10000]) |
-| `capacity_refresh_time` | `float` | *(required)* | Refresh interval in seconds (must be in [0.01, 3600]) |
-| `pile` | `Pile[Event]` | *(required)* | Reference to executor's Flow.items for event storage |
-| `executor` | `Executor \| None` | `None` | Reference to executor for progression updates |
-| `concurrency_limit` | `int` | `100` | Max concurrent executions (prevents resource exhaustion) |
-| `max_queue_size` | `int` | `1000` | Max queue size before rejecting new events |
-| `max_denial_tracking` | `int` | `10000` | Max denial entries to track (prevents unbounded growth) |
+| Parameter               | Type               | Default      | Description                                              |
+| ----------------------- | ------------------ | ------------ | -------------------------------------------------------- |
+| `queue_capacity`        | `int`              | _(required)_ | Max events per batch (must be in [1, 10000])             |
+| `capacity_refresh_time` | `float`            | _(required)_ | Refresh interval in seconds (must be in [0.01, 3600])    |
+| `pile`                  | `Pile[Event]`      | _(required)_ | Reference to executor's Flow.items for event storage     |
+| `executor`              | `Executor \| None` | `None`       | Reference to executor for progression updates            |
+| `concurrency_limit`     | `int`              | `100`        | Max concurrent executions (prevents resource exhaustion) |
+| `max_queue_size`        | `int`              | `1000`       | Max queue size before rejecting new events               |
+| `max_denial_tracking`   | `int`              | `10000`      | Max denial entries to track (prevents unbounded growth)  |
 
 **Validation Rules:**
 
 - `queue_capacity`: Must be ≥ 1 and ≤ 10000 (prevent unbounded batches)
-- `capacity_refresh_time`: Must be ≥ 0.01s (prevent CPU hot loop) and ≤ 3600s (prevent starvation)
+- `capacity_refresh_time`: Must be ≥ 0.01s (prevent CPU hot loop) and ≤ 3600s (prevent
+  starvation)
 - `concurrency_limit`: Must be ≥ 1
 - `max_queue_size`: Must be ≥ 1
 - `max_denial_tracking`: Must be ≥ 1
@@ -98,28 +109,29 @@ class Processor:
 
 ### Class Variables
 
-| Attribute | Type | Description |
-|-----------|------|-------------|
+| Attribute    | Type                    | Description                                                     |
+| ------------ | ----------------------- | --------------------------------------------------------------- |
 | `event_type` | `ClassVar[type[Event]]` | Event subclass this processor handles (must be set in subclass) |
 
 ### Instance Attributes
 
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `queue_capacity` | `int` | Max events per batch cycle |
-| `capacity_refresh_time` | `float` | Seconds before capacity resets to `queue_capacity` |
-| `max_queue_size` | `int` | Max queue size (prevents unbounded memory growth) |
-| `max_denial_tracking` | `int` | Max denial entries tracked (FIFO eviction when exceeded) |
-| `pile` | `Pile[Event]` | Reference to executor's event storage (Flow.items) |
-| `executor` | `Executor \| None` | Reference to executor for automatic progression updates |
-| `queue` | `PriorityQueue[tuple[float, UUID]]` | Priority queue storing `(priority, event_uuid)` tuples (lower priority values processed first) |
+| Attribute               | Type                                | Description                                                                                    |
+| ----------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `queue_capacity`        | `int`                               | Max events per batch cycle                                                                     |
+| `capacity_refresh_time` | `float`                             | Seconds before capacity resets to `queue_capacity`                                             |
+| `max_queue_size`        | `int`                               | Max queue size (prevents unbounded memory growth)                                              |
+| `max_denial_tracking`   | `int`                               | Max denial entries tracked (FIFO eviction when exceeded)                                       |
+| `pile`                  | `Pile[Event]`                       | Reference to executor's event storage (Flow.items)                                             |
+| `executor`              | `Executor \| None`                  | Reference to executor for automatic progression updates                                        |
+| `queue`                 | `PriorityQueue[tuple[float, UUID]]` | Priority queue storing `(priority, event_uuid)` tuples (lower priority values processed first) |
 
 **Private Attributes** (implementation details):
 
 - `_available_capacity`: Current capacity remaining in batch cycle
 - `_execution_mode`: Whether processor is actively executing (`execute()` loop)
 - `_stop_event`: Async event for signaling stop
-- `_denial_counts`: Tracks permission denials per event UUID (max 3 attempts before ABORTED)
+- `_denial_counts`: Tracks permission denials per event UUID (max 3 attempts before
+  ABORTED)
 - `_concurrency_sem`: Semaphore for concurrency control
 
 ---
@@ -183,10 +195,12 @@ async def enqueue(self, event_id: UUID, priority: float | None = None) -> None:
 
 **Behavior:**
 
-- **Default Priority**: If `priority=None`, uses `event.created_at.timestamp()` (earlier events have lower priority value → processed first)
+- **Default Priority**: If `priority=None`, uses `event.created_at.timestamp()` (earlier
+  events have lower priority value → processed first)
 - **Queue Size Check**: Raises `QueueFullError` if `queue.qsize() >= max_queue_size`
 - **Priority Validation**: Rejects NaN or Inf values (prevents heap corruption)
-- **Storage**: Queue stores `(priority, event_id)` tuples, NOT event objects (memory efficient)
+- **Storage**: Queue stores `(priority, event_id)` tuples, NOT event objects (memory
+  efficient)
 
 **Example:**
 
@@ -240,14 +254,20 @@ async def process(self) -> None:
 - **Batch Processing**: Processes up to `available_capacity` events
 - **Permission Checks**: Calls `request_permission(**event.request)` before processing
 - **Denial Handling**: Tracks denials in `_denial_counts` (max 3 attempts → ABORTED)
-- **Exponential Backoff**: Requeues denied events with priority adjustment (1st retry +1s, 2nd retry +2s)
+- **Exponential Backoff**: Requeues denied events with priority adjustment (1st retry
+  +1s, 2nd retry +2s)
 - **Missing Events**: Gracefully handles events removed from pile (cleanup race)
-- **Progression Updates**: Calls `executor._update_progression()` for state transitions (PROCESSING → COMPLETED/FAILED)
-- **Streaming Support**: Detects `event.streaming` flag and consumes via `event.stream()` async generator
-- **Concurrency**: Runs event executions concurrently up to `concurrency_limit` (via semaphore)
-- **Capacity Reset**: Resets `available_capacity = queue_capacity` after batch completes (only if events were processed)
+- **Progression Updates**: Calls `executor._update_progression()` for state transitions
+  (PROCESSING → COMPLETED/FAILED)
+- **Streaming Support**: Detects `event.streaming` flag and consumes via
+  `event.stream()` async generator
+- **Concurrency**: Runs event executions concurrently up to `concurrency_limit` (via
+  semaphore)
+- **Capacity Reset**: Resets `available_capacity = queue_capacity` after batch completes
+  (only if events were processed)
 
-**Thread Safety**: Uses task group for concurrent execution, safe for multiple `process()` calls.
+**Thread Safety**: Uses task group for concurrent execution, safe for multiple
+`process()` calls.
 
 **Example:**
 
@@ -562,16 +582,20 @@ if processor.is_stopped():
 
 **Pattern:**
 
-- **High Throughput**: Large `queue_capacity` (e.g., 1000), longer `capacity_refresh_time` (e.g., 10s)
-- **Low Latency**: Small `queue_capacity` (e.g., 10), short `capacity_refresh_time` (e.g., 0.1s)
-- **Balanced**: Medium `queue_capacity` (e.g., 50), moderate `capacity_refresh_time` (e.g., 1.0s)
+- **High Throughput**: Large `queue_capacity` (e.g., 1000), longer
+  `capacity_refresh_time` (e.g., 10s)
+- **Low Latency**: Small `queue_capacity` (e.g., 10), short `capacity_refresh_time`
+  (e.g., 0.1s)
+- **Balanced**: Medium `queue_capacity` (e.g., 50), moderate `capacity_refresh_time`
+  (e.g., 1.0s)
 
 **Trade-offs:**
 
 - Larger batches → better throughput, higher latency
 - Smaller batches → lower latency, more CPU overhead (more `process()` calls)
 
-**Recommendation:** Start with `queue_capacity=50`, `capacity_refresh_time=1.0` and tune based on metrics.
+**Recommendation:** Start with `queue_capacity=50`, `capacity_refresh_time=1.0` and tune
+based on metrics.
 
 ---
 
@@ -610,7 +634,8 @@ await processor.enqueue(low_priority_event.id, priority=9999.0)
 - **I/O-bound**: Set `concurrency_limit` to max concurrent connections (e.g., 100)
 - **Memory-constrained**: Set `concurrency_limit` to prevent OOM (e.g., 10)
 
-**Implementation:** Uses `anyio.Semaphore` internally. Each `event.invoke()` acquires semaphore before execution.
+**Implementation:** Uses `anyio.Semaphore` internally. Each `event.invoke()` acquires
+semaphore before execution.
 
 **Default:** `concurrency_limit=100` (safe for most I/O-bound workloads).
 
@@ -618,7 +643,8 @@ await processor.enqueue(low_priority_event.id, priority=9999.0)
 
 ### Streaming Support
 
-**Purpose:** Handle events that produce async generators (e.g., LLM streaming responses).
+**Purpose:** Handle events that produce async generators (e.g., LLM streaming
+responses).
 
 **Pattern:**
 
@@ -644,24 +670,24 @@ class StreamingEvent(Event):
 
 ### Parameter Tuning Recommendations
 
-| Use Case | `queue_capacity` | `capacity_refresh_time` | `concurrency_limit` |
-|----------|------------------|-------------------------|---------------------|
-| **High-volume ETL** | 500-1000 | 5-10s | 50-100 |
-| **API rate limiting** | 50-100 | 1s | 10-50 |
-| **Real-time notifications** | 10-50 | 0.1-0.5s | 100-200 |
-| **Resource-constrained** | 10-20 | 1s | 5-10 |
-| **CPU-intensive tasks** | 20-50 | 1-5s | num_cpus |
+| Use Case                    | `queue_capacity` | `capacity_refresh_time` | `concurrency_limit` |
+| --------------------------- | ---------------- | ----------------------- | ------------------- |
+| **High-volume ETL**         | 500-1000         | 5-10s                   | 50-100              |
+| **API rate limiting**       | 50-100           | 1s                      | 10-50               |
+| **Real-time notifications** | 10-50            | 0.1-0.5s                | 100-200             |
+| **Resource-constrained**    | 10-20            | 1s                      | 5-10                |
+| **CPU-intensive tasks**     | 20-50            | 1-5s                    | num_cpus            |
 
 ---
 
 ### Performance Trade-offs
 
-| Parameter | Increase → Effect | Decrease → Effect |
-|-----------|-------------------|-------------------|
-| `queue_capacity` | + throughput, + latency, + memory | - latency, - throughput |
-| `capacity_refresh_time` | + batch efficiency, + latency | - latency, + CPU overhead |
-| `concurrency_limit` | + throughput (I/O), risk OOM | - memory, - throughput |
-| `max_queue_size` | + burst capacity, + memory | - memory, risk QueueFullError |
+| Parameter               | Increase → Effect                 | Decrease → Effect             |
+| ----------------------- | --------------------------------- | ----------------------------- |
+| `queue_capacity`        | + throughput, + latency, + memory | - latency, - throughput       |
+| `capacity_refresh_time` | + batch efficiency, + latency     | - latency, + CPU overhead     |
+| `concurrency_limit`     | + throughput (I/O), risk OOM      | - memory, - throughput        |
+| `max_queue_size`        | + burst capacity, + memory        | - memory, risk QueueFullError |
 
 ---
 
@@ -669,12 +695,13 @@ class StreamingEvent(Event):
 
 #### 1. Queue Size vs Capacity Confusion
 
-**Issue:** Confusing `queue_capacity` (batch size) with `max_queue_size` (total queue limit).
+**Issue:** Confusing `queue_capacity` (batch size) with `max_queue_size` (total queue
+limit).
 
 **Solution:**
 
-- `queue_capacity`: Max events processed *per batch cycle*
-- `max_queue_size`: Max events *waiting in queue* before rejection
+- `queue_capacity`: Max events processed _per batch cycle_
+- `max_queue_size`: Max events _waiting in queue_ before rejection
 
 **Rule of Thumb:** `max_queue_size >= queue_capacity * 10` (buffer for bursts).
 
@@ -727,11 +754,13 @@ class StreamingEvent(Event):
 
 ## See Also
 
-- **[Executor](executor.md)**: Flow-based state tracking for events (creates and manages Processor)
+- **[Executor](executor.md)**: Flow-based state tracking for events (creates and manages
+  Processor)
 - **[Event](event.md)**: Base event class with `invoke()` and `stream()` methods
 - **[Flow](flow.md)**: Dual-pile state machine (used by Executor for event storage)
 - **[EventStatus](event.md#eventstatus)**: Enum for event lifecycle states
-- **[Processor/Executor Integration](../../user_guide/processor_executor.md)**: Integration patterns and shared concepts
+- **[Processor/Executor Integration](../../user_guide/processor_executor.md)**:
+  Integration patterns and shared concepts
 
 ---
 

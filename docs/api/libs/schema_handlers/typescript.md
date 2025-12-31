@@ -4,13 +4,19 @@
 
 ## Overview
 
-The TypeScript schema handler provides utilities to convert JSON Schema definitions into TypeScript-style type notation, optimized for LLM tool use documentation. This conversion makes schema specifications more readable and familiar to developers while maintaining semantic accuracy.
+The TypeScript schema handler provides utilities to convert JSON Schema definitions into
+TypeScript-style type notation, optimized for LLM tool use documentation. This
+conversion makes schema specifications more readable and familiar to developers while
+maintaining semantic accuracy.
 
 **Key Capabilities:**
 
-- **Type Mapping**: Converts JSON Schema types to TypeScript-like types (`string`, `int`, `float`, `bool`)
-- **Enum Unions**: Formats enum values as TypeScript literal unions (`"value1" | "value2" | null`)
-- **Complex Types**: Handles arrays, objects, unions (`anyOf`), and schema references (`$ref`)
+- **Type Mapping**: Converts JSON Schema types to TypeScript-like types (`string`,
+  `int`, `float`, `bool`)
+- **Enum Unions**: Formats enum values as TypeScript literal unions
+  (`"value1" | "value2" | null`)
+- **Complex Types**: Handles arrays, objects, unions (`anyOf`), and schema references
+  (`$ref`)
 - **Optional Fields**: Marks optional fields with `?` suffix and detects nullable types
 - **Default Values**: Includes default value annotations in generated output
 - **Inline Descriptions**: Appends field descriptions for inline documentation
@@ -132,7 +138,9 @@ config: Config
 
 **Notes:**
 
-This function processes top-level properties only. For nested object schemas, recursively call `typescript_schema()` on nested property definitions with incremented `indent`.
+This function processes top-level properties only. For nested object schemas,
+recursively call `typescript_schema()` on nested property definitions with incremented
+`indent`.
 
 ## Usage Patterns
 
@@ -351,7 +359,8 @@ else:
 'config?: object'  # Doesn't expand nested properties
 ```
 
-**Solution**: Manually recurse or use custom formatter (see "Indented Output" pattern above).
+**Solution**: Manually recurse or use custom formatter (see "Indented Output" pattern
+above).
 
 ### Pitfall 3: Schema References Not Resolved
 
@@ -367,7 +376,8 @@ else:
 'item?: Item'  # Reference name extracted, not resolved
 ```
 
-**Solution**: This is expected behavior. Handler extracts reference name for documentation. If full resolution needed, pre-process schema with JSON Schema resolver.
+**Solution**: This is expected behavior. Handler extracts reference name for
+documentation. If full resolution needed, pre-process schema with JSON Schema resolver.
 
 ### Pitfall 4: Default Values Not Type-Checked
 
@@ -384,7 +394,8 @@ else:
 'count?: int = "invalid"'  # Type mismatch not caught
 ```
 
-**Solution**: Handler focuses on documentation, not validation. Validate schema separately using JSON Schema validators before conversion.
+**Solution**: Handler focuses on documentation, not validation. Validate schema
+separately using JSON Schema validators before conversion.
 
 ## Design Rationale
 
@@ -406,7 +417,8 @@ status: "active" | "inactive"
 }
 ```
 
-**LLM Comprehension**: Modern LLMs are extensively trained on TypeScript documentation and understand the type syntax patterns better than verbose JSON Schema.
+**LLM Comprehension**: Modern LLMs are extensively trained on TypeScript documentation
+and understand the type syntax patterns better than verbose JSON Schema.
 
 ### Why Optional Marker (`?`) Over Explicit Flags?
 
@@ -428,11 +440,14 @@ This matches developer expectations from TypeScript/JavaScript ecosystems.
 
 This handler generates TypeScript-**style** notation, not valid TypeScript code:
 
-- Uses `int`/`float` instead of TypeScript's `number` (more precise for LLM understanding)
+- Uses `int`/`float` instead of TypeScript's `number` (more precise for LLM
+  understanding)
 - Doesn't generate interface/type declarations (focuses on inline documentation)
-- Handles JSON Schema features without TypeScript equivalents (like `anyOf` → union translation)
+- Handles JSON Schema features without TypeScript equivalents (like `anyOf` → union
+  translation)
 
-**Use Case**: Tool documentation, not code generation. For actual TypeScript types, use dedicated schema-to-TypeScript converters.
+**Use Case**: Tool documentation, not code generation. For actual TypeScript types, use
+dedicated schema-to-TypeScript converters.
 
 ### Why Inline Descriptions?
 
@@ -453,7 +468,8 @@ age?: int = 0
 // Age in years
 ```
 
-This improves readability in constrained contexts (LLM context windows, terminal output).
+This improves readability in constrained contexts (LLM context windows, terminal
+output).
 
 ## See Also
 

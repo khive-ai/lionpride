@@ -6,14 +6,18 @@
 
 ## Overview
 
-`Progression` is an ordered sequence container that combines list-like operations with workflow-specific functionality. It extends Element to provide UUID ordering with identity, serialization, and metadata tracking.
+`Progression` is an ordered sequence container that combines list-like operations with
+workflow-specific functionality. It extends Element to provide UUID ordering with
+identity, serialization, and metadata tracking.
 
 **Key Capabilities:**
 
-- **Element Inheritance**: Auto-generated UUID, timestamps, metadata (from Element base class)
+- **Element Inheritance**: Auto-generated UUID, timestamps, metadata (from Element base
+  class)
 - **List Operations**: `append`, `extend`, `insert`, `remove`, `pop`, `popleft`, `clear`
 - **Workflow Operations**: `move`, `swap`, `reverse` for dynamic reordering
-- **Idempotent Operations**: `include`, `exclude` for safe retry (operations that can be called multiple times with the same effect as calling once)
+- **Idempotent Operations**: `include`, `exclude` for safe retry (operations that can be
+  called multiple times with the same effect as calling once)
 - **Query Operations**: `len`, `contains`, `getitem`, `setitem`, `index`, iteration
 - **Serialization**: JSON roundtrip with UUID string conversion
 
@@ -93,7 +97,8 @@ class Progression(Element):
 
 ## Parameters
 
-**order**: `list[UUID | Element] | None = None` - Ordered sequence (auto-converts Elements to UUIDs, duplicates allowed)
+**order**: `list[UUID | Element] | None = None` - Ordered sequence (auto-converts
+Elements to UUIDs, duplicates allowed)
 
 - Default: `[]` (empty progression)
 
@@ -119,13 +124,13 @@ Additional metadata dictionary.
 
 ## Attributes
 
-| Attribute    | Type                | Mutable | Inherited | Description                        |
-|--------------|---------------------|---------|-----------|-----------------------------------|
-| `order`      | `list[UUID]`        | Yes     | No        | Ordered sequence of UUIDs         |
-| `name`       | `str \| None`       | Yes     | No        | Descriptive name                  |
-| `id`         | `UUID`              | No      | Yes       | Unique identifier (frozen)        |
-| `created_at` | `datetime`          | No      | Yes       | Creation timestamp (frozen)       |
-| `metadata`   | `dict[str, Any]`    | Yes     | Yes       | Additional metadata               |
+| Attribute    | Type             | Mutable | Inherited | Description                 |
+| ------------ | ---------------- | ------- | --------- | --------------------------- |
+| `order`      | `list[UUID]`     | Yes     | No        | Ordered sequence of UUIDs   |
+| `name`       | `str \| None`    | Yes     | No        | Descriptive name            |
+| `id`         | `UUID`           | No      | Yes       | Unique identifier (frozen)  |
+| `created_at` | `datetime`       | No      | Yes       | Creation timestamp (frozen) |
+| `metadata`   | `dict[str, Any]` | Yes     | Yes       | Additional metadata         |
 
 ## Methods
 
@@ -247,7 +252,8 @@ prog.remove(uid)
 
 #### `pop()`
 
-Remove and return item at index (default: last item). Optionally provide a default value for safe fallback.
+Remove and return item at index (default: last item). Optionally provide a default value
+for safe fallback.
 
 **Signature:**
 
@@ -258,15 +264,18 @@ def pop(self, index: int = -1, default: Any = ...) -> UUID | Any
 **Parameters:**
 
 - `index` (int, optional): Position to pop from. Default: `-1` (last item)
-- `default` (Any, optional): Value to return if index not found. If not provided, raises `NotFoundError`
+- `default` (Any, optional): Value to return if index not found. If not provided, raises
+  `NotFoundError`
 
 **Raises:**
 
-- **`NotFoundError`**: If progression is empty or index out of range **and no default provided** (Changed from `IndexError` in PR #156)
+- **`NotFoundError`**: If progression is empty or index out of range **and no default
+  provided** (Changed from `IndexError` in PR #156)
 
 **Returns:** UUID | Any - Removed item, or default value if index not found
 
-**⚠️ BREAKING CHANGE (PR #156):** Exception changed from `IndexError` to `NotFoundError` for semantic consistency with Pile/Graph/Flow.
+**⚠️ BREAKING CHANGE (PR #156):** Exception changed from `IndexError` to `NotFoundError`
+for semantic consistency with Pile/Graph/Flow.
 
 **Example:**
 
@@ -309,7 +318,8 @@ def popleft(self) -> UUID
 
 **Returns:** UUID - First item
 
-**⚠️ BREAKING CHANGE (PR #156):** Exception changed from `IndexError` to `NotFoundError` for semantic consistency.
+**⚠️ BREAKING CHANGE (PR #156):** Exception changed from `IndexError` to `NotFoundError`
+for semantic consistency.
 
 **Example:**
 
@@ -731,7 +741,8 @@ for task_id in prog:
 
 ### Serialization
 
-Progression inherits Element serialization with UUID string conversion for JSON compatibility.
+Progression inherits Element serialization with UUID string conversion for JSON
+compatibility.
 
 #### `to_dict()`
 
@@ -852,7 +863,8 @@ prog.exclude(task_id)  # Returns False if not present, no error
 
 #### 3. Workflow Operations (move/swap/reverse)
 
-**Decision**: Provide dedicated reordering methods instead of expecting users to manipulate `.order` directly
+**Decision**: Provide dedicated reordering methods instead of expecting users to
+manipulate `.order` directly
 
 **Rationale**:
 

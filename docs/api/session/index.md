@@ -4,47 +4,61 @@
 
 ## Overview
 
-The `session` module provides the core conversation and state management infrastructure for lionpride. It orchestrates how messages flow through the system, how conversations branch and merge, and how interaction history is persisted.
+The `session` module provides the core conversation and state management infrastructure
+for lionpride. It orchestrates how messages flow through the system, how conversations
+branch and merge, and how interaction history is persisted.
 
 **Key Capabilities:**
 
 - **Session**: Central orchestrator managing branches, services, and operations
-- **Branch**: Named progression of messages with access control (capabilities and resources)
+- **Branch**: Named progression of messages with access control (capabilities and
+  resources)
 - **Message**: Polymorphic container with auto-derived role from content type
-- **Log System**: Persistent logging with adapters (SQLite, PostgreSQL) and broadcasters (S3, webhooks)
+- **Mail/Exchange**: Multi-entity communication for groupchat and gossip patterns
+- **Log System**: Persistent logging with adapters (SQLite, PostgreSQL) and broadcasters
+  (S3, webhooks)
 
-The session module follows a **discriminated union** pattern for message content, where dict keys determine which `MessageContent` subclass is instantiated. This enables flexible input while maintaining type safety and automatic role derivation.
+The session module follows a **discriminated union** pattern for message content, where
+dict keys determine which `MessageContent` subclass is instantiated. This enables
+flexible input while maintaining type safety and automatic role derivation.
 
 ## Classes
 
-| Class | Description |
-|-------|-------------|
-| [Session](session.md) | Central orchestrator for branches, services, and operations |
-| [Branch](branch.md) | Named progression of messages with capabilities and resources |
-| [Message](message.md) | Universal message container with auto-derived role |
+| Class                 | Description                                                   |
+| --------------------- | ------------------------------------------------------------- |
+| [Session](session.md) | Central orchestrator for branches, services, and operations   |
+| [Branch](branch.md)   | Named progression of messages with capabilities and resources |
+| [Message](message.md) | Universal message container with auto-derived role            |
+
+### Multi-Entity Communication
+
+| Class                        | Description                                               |
+| ---------------------------- | --------------------------------------------------------- |
+| [Mail](mail.md)              | Message envelope for entity-to-entity communication       |
+| [Exchange](mail.md#exchange) | Routes mail between entity mailboxes with async-safe sync |
 
 ### Message Content Types
 
-| Class | Description |
-|-------|-------------|
-| `SystemContent` | System/developer instructions (role: SYSTEM) |
-| `InstructionContent` | User instructions with structured output support (role: USER) |
-| `AssistantResponseContent` | Assistant text responses (role: ASSISTANT) |
-| `ActionRequestContent` | Tool/function call requests (role: ASSISTANT) |
-| `ActionResponseContent` | Tool execution results (role: TOOL) |
+| Class                      | Description                                                   |
+| -------------------------- | ------------------------------------------------------------- |
+| `SystemContent`            | System/developer instructions (role: SYSTEM)                  |
+| `InstructionContent`       | User instructions with structured output support (role: USER) |
+| `AssistantResponseContent` | Assistant text responses (role: ASSISTANT)                    |
+| `ActionRequestContent`     | Tool/function call requests (role: ASSISTANT)                 |
+| `ActionResponseContent`    | Tool execution results (role: TOOL)                           |
 
 ### Log System
 
-| Class | Description |
-|-------|-------------|
-| `Log` | Individual log entry with type and content |
-| `LogStore` | In-memory log storage with optional persistence |
-| `LogAdapter` | Base class for log persistence adapters |
-| `LogBroadcaster` | Distributes logs to multiple subscribers |
-| `SQLiteWALLogAdapter` | SQLite adapter with WAL mode |
-| `PostgresLogAdapter` | PostgreSQL adapter |
-| `S3LogSubscriber` | S3 log subscriber |
-| `WebhookLogSubscriber` | Webhook log subscriber |
+| Class                  | Description                                     |
+| ---------------------- | ----------------------------------------------- |
+| `Log`                  | Individual log entry with type and content      |
+| `LogStore`             | In-memory log storage with optional persistence |
+| `LogAdapter`           | Base class for log persistence adapters         |
+| `LogBroadcaster`       | Distributes logs to multiple subscribers        |
+| `SQLiteWALLogAdapter`  | SQLite adapter with WAL mode                    |
+| `PostgresLogAdapter`   | PostgreSQL adapter                              |
+| `S3LogSubscriber`      | S3 log subscriber                               |
+| `WebhookLogSubscriber` | Webhook log subscriber                          |
 
 ## Quick Start
 

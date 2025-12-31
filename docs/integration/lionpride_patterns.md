@@ -2,7 +2,8 @@
 
 **Purpose**: Document production-proven patterns for building with lionpride primitives
 
-**Audience**: Developers building on lionpride (including lionpride, khive, and custom frameworks)
+**Audience**: Developers building on lionpride (including lionpride, khive, and custom
+frameworks)
 
 **Source**: Extracted from lionpride alpha1 codebase (2024-2025)
 
@@ -23,7 +24,8 @@
 
 **Pattern**: Session = Flow[Message, Branch] + ServiceRegistry + metadata
 
-**Why Flow**: Enables O(1) message lookup by UUID while preserving multiple conversation branches (Progressions).
+**Why Flow**: Enables O(1) message lookup by UUID while preserving multiple conversation
+branches (Progressions).
 
 ### Core Architecture
 
@@ -77,7 +79,8 @@ session.conversations.add_item(message, progressions=["main", "experiment"])
 
 1. **Flow composition**: `conversations.items` (Pile[Message]) stores all messages once
 2. **Progression tracking**: Each Branch (Progression) tracks message order by UUID
-3. **No duplication**: Message shared across multiple branches = single storage, multiple references
+3. **No duplication**: Message shared across multiple branches = single storage,
+   multiple references
 4. **Thread-safe**: Pile's built-in RLock protects concurrent access
 
 ---
@@ -86,7 +89,8 @@ session.conversations.add_item(message, progressions=["main", "experiment"])
 
 **Pattern**: ServiceRegistry = Pile[iModel] + name index (dict[str, UUID])
 
-**Why Pile**: Type-safe storage with O(1) UUID lookup. Name index provides O(1) name-based access.
+**Why Pile**: Type-safe storage with O(1) UUID lookup. Name index provides O(1)
+name-based access.
 
 ### Core Architecture
 
@@ -149,7 +153,8 @@ class ServiceRegistry:
 
 **Pattern**: Branch = Progression + metadata (system message, capabilities)
 
-**Why Progression**: Ordered UUID sequence tracks message order. Element identity enables branching/cloning.
+**Why Progression**: Ordered UUID sequence tracks message order. Element identity
+enables branching/cloning.
 
 ### Core Architecture
 
@@ -508,13 +513,13 @@ session.conversations.items[uuid]  # O(1) access
 
 ### When to Use What
 
-| Use Case | Primitive | Why |
-|----------|-----------|-----|
-| Store items with UUID lookup | Pile[T] | O(1) UUID access, thread-safe |
-| Track ordered sequences | Progression | Ordered UUIDs, serializable |
-| Manage multiple orderings | Flow | Pile + Progressions composition |
-| Validate dependencies | Graph | DAG detection, topological sort |
-| Async execution tracking | Event | Status tracking, retry support |
+| Use Case                     | Primitive   | Why                             |
+| ---------------------------- | ----------- | ------------------------------- |
+| Store items with UUID lookup | Pile[T]     | O(1) UUID access, thread-safe   |
+| Track ordered sequences      | Progression | Ordered UUIDs, serializable     |
+| Manage multiple orderings    | Flow        | Pile + Progressions composition |
+| Validate dependencies        | Graph       | DAG detection, topological sort |
+| Async execution tracking     | Event       | Status tracking, retry support  |
 
 ### Complexity Reference
 
@@ -542,10 +547,13 @@ graph.topological_sort()# O(V + E) - Kahn's algorithm
 
 **Key Takeaways**:
 
-1. **Session = Flow[Message, Branch]**: Messages stored once in Pile, referenced by Branches (Progressions)
+1. **Session = Flow[Message, Branch]**: Messages stored once in Pile, referenced by
+   Branches (Progressions)
 2. **ServiceRegistry = Pile + name index**: Type-safe storage + O(1) name lookup
-3. **Branch = Progression + metadata**: Ordered message references + conversation context
-4. **Pile queries are expressive**: `pile[uuid]`, `pile[0:10]`, `pile[lambda x: ...]` - single interface
+3. **Branch = Progression + metadata**: Ordered message references + conversation
+   context
+4. **Pile queries are expressive**: `pile[uuid]`, `pile[0:10]`, `pile[lambda x: ...]` -
+   single interface
 5. **Event for async lifecycle**: Built-in status tracking + retry support
 6. **Graph for structure, Flow for state**: Separate concerns for clarity
 
@@ -557,6 +565,4 @@ graph.topological_sort()# O(V + E) - Kahn's algorithm
 
 ---
 
-**Version**: 1.0 (2025-11-21)
-**Status**: Production
-**Source**: lionpride alpha1
+**Version**: 1.0 (2025-11-21) **Status**: Production **Source**: lionpride alpha1

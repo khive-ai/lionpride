@@ -1,14 +1,19 @@
 # String Similarity
 
-> Flexible string similarity algorithms for fuzzy matching, spell correction, and string comparison
+> Flexible string similarity algorithms for fuzzy matching, spell correction, and string
+> comparison
 
 ## Overview
 
-The `string_similarity` module provides a comprehensive suite of string similarity algorithms for comparing and matching text. It offers multiple algorithms (Jaro-Winkler, Levenshtein, Cosine, Hamming, SequenceMatcher) with a unified interface for fuzzy string matching, spell correction, and similarity scoring.
+The `string_similarity` module provides a comprehensive suite of string similarity
+algorithms for comparing and matching text. It offers multiple algorithms (Jaro-Winkler,
+Levenshtein, Cosine, Hamming, SequenceMatcher) with a unified interface for fuzzy string
+matching, spell correction, and similarity scoring.
 
 **Key Capabilities:**
 
-- **Multiple Algorithms**: 5 built-in similarity algorithms optimized for different use cases
+- **Multiple Algorithms**: 5 built-in similarity algorithms optimized for different use
+  cases
 - **Unified Interface**: Single `string_similarity()` function supporting all algorithms
 - **Flexible Matching**: Find single best match or all matches above threshold
 - **Case-Insensitive**: Optional case-sensitive/insensitive comparison
@@ -27,9 +32,11 @@ The `string_similarity` module provides a comprehensive suite of string similari
 
 **Algorithm Selection Guide:**
 
-- **Jaro-Winkler** (default): Best for short strings, names, and typos with common prefixes
+- **Jaro-Winkler** (default): Best for short strings, names, and typos with common
+  prefixes
 - **Levenshtein**: Edit distance, good for general typo detection and spell correction
-- **SequenceMatcher**: Python's difflib ratio, useful for longer text and sequence comparison
+- **SequenceMatcher**: Python's difflib ratio, useful for longer text and sequence
+  comparison
 - **Hamming**: Same-length strings only, fast for fixed-width codes/identifiers
 - **Cosine**: Character set similarity, useful for bag-of-characters comparison
 
@@ -142,23 +149,27 @@ def string_similarity(
 
 **word** : str
 
-The input string to find matches for. Automatically converted to string if other type provided.
+The input string to find matches for. Automatically converted to string if other type
+provided.
 
 **correct_words** : Sequence of str
 
-List of candidate strings to compare against. Must not be empty. Elements automatically converted to strings.
+List of candidate strings to compare against. Must not be empty. Elements automatically
+converted to strings.
 
 **algorithm** : str or SimilarityAlgo or callable, default "jaro_winkler"
 
 Similarity algorithm to use. Options:
 
-- String literal: `"jaro_winkler"`, `"levenshtein"`, `"sequence_matcher"`, `"hamming"`, `"cosine"`
+- String literal: `"jaro_winkler"`, `"levenshtein"`, `"sequence_matcher"`, `"hamming"`,
+  `"cosine"`
 - Enum value: `SimilarityAlgo.JARO_WINKLER`, etc.
 - Custom callable: Function taking two strings and returning float score (0.0-1.0)
 
 **threshold** : float, default 0.0
 
-Minimum similarity score for inclusion in results (0.0 to 1.0). Scores below threshold are filtered out.
+Minimum similarity score for inclusion in results (0.0 to 1.0). Scores below threshold
+are filtered out.
 
 - 0.0: Return all matches
 - 0.5: Return moderately similar matches
@@ -283,7 +294,8 @@ def jaro_winkler_similarity(s: str, t: str, scaling: float = 0.1) -> float: ...
 
 - `s` (str): First input string
 - `t` (str): Second input string
-- `scaling` (float, default 0.1): Scaling factor for common prefix adjustment (must be 0.0-0.25)
+- `scaling` (float, default 0.1): Scaling factor for common prefix adjustment (must be
+  0.0-0.25)
 
 **Returns:**
 
@@ -413,7 +425,8 @@ def levenshtein_distance(a: str, b: str) -> int: ...
 
 **Returns:**
 
-- int: Minimum number of single-character edits (insertions, deletions, substitutions) needed to transform `a` into `b`
+- int: Minimum number of single-character edits (insertions, deletions, substitutions)
+  needed to transform `a` into `b`
 
 **Algorithm:**
 
@@ -918,7 +931,8 @@ Different similarity algorithms optimize for different use cases:
 4. **Cosine**: Character set overlap, order-independent
 5. **SequenceMatcher**: Python stdlib compatibility, longer text
 
-Providing multiple algorithms lets users choose the best fit for their data characteristics.
+Providing multiple algorithms lets users choose the best fit for their data
+characteristics.
 
 ### Why Unified Interface?
 
@@ -940,7 +954,8 @@ Threshold filtering (0.0-1.0) enables:
 
 ### Why Case-Insensitive Default?
 
-Most fuzzy matching use cases (CLI suggestions, spell correction, user input validation) benefit from case-insensitive comparison:
+Most fuzzy matching use cases (CLI suggestions, spell correction, user input validation)
+benefit from case-insensitive comparison:
 
 1. **User Input**: Humans inconsistent with capitalization
 2. **Typo Tolerance**: Case errors common in quick typing
@@ -970,19 +985,26 @@ Both patterns common enough to warrant first-class support.
 
 ## Examples
 
-> **Note**: For production-level examples demonstrating advanced integration patterns, see the tutorials linked below.
+> **Note**: For production-level examples demonstrating advanced integration patterns,
+> see the tutorials linked below.
 
 ### Tutorial: CLI Command Suggestion System
 
-**See [Tutorial #90](https://github.com/khive-ai/lionpride/issues/90)** for a complete production example of building a CLI command parser with intelligent fuzzy matching, auto-correction, and multi-suggestion UX (~55 lines).
+**See [Tutorial #90](https://github.com/khive-ai/lionpride/issues/90)** for a complete
+production example of building a CLI command parser with intelligent fuzzy matching,
+auto-correction, and multi-suggestion UX (~55 lines).
 
 ### Tutorial: Fuzzy Data Deduplication
 
-**See [Tutorial #91](https://github.com/khive-ai/lionpride/issues/91)** for a production-grade data deduplication system using fuzzy matching with Levenshtein algorithm for CRM/data cleaning use cases (~80 lines).
+**See [Tutorial #91](https://github.com/khive-ai/lionpride/issues/91)** for a
+production-grade data deduplication system using fuzzy matching with Levenshtein
+algorithm for CRM/data cleaning use cases (~80 lines).
 
 ### Tutorial: Multi-Algorithm Consensus Matching
 
-**See [Tutorial #92](https://github.com/khive-ai/lionpride/issues/92)** for an advanced matching pattern using multiple similarity algorithms with voting/consensus for high-confidence results (~45 lines).
+**See [Tutorial #92](https://github.com/khive-ai/lionpride/issues/92)** for an advanced
+matching pattern using multiple similarity algorithms with voting/consensus for
+high-confidence results (~45 lines).
 
 ### Example 1: Progressive Threshold Search
 
@@ -1024,4 +1046,6 @@ print(f"Matches at {confidence:.0%} confidence: {matches}")
 
 ### Tutorial: Custom Similarity Algorithms (Phonetic Matching)
 
-**See [Tutorial #93](https://github.com/khive-ai/lionpride/issues/93)** for a complete example implementing custom similarity algorithms with string_similarity(), demonstrating Soundex phonetic matching for name variations (~55 lines).
+**See [Tutorial #93](https://github.com/khive-ai/lionpride/issues/93)** for a complete
+example implementing custom similarity algorithms with string_similarity(),
+demonstrating Soundex phonetic matching for name variations (~55 lines).

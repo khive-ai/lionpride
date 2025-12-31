@@ -4,26 +4,33 @@
 
 ## Overview
 
-The `errors` module provides **backend-agnostic utilities** for handling cancellation exceptions and ExceptionGroup filtering in async workflows. Built on top of `anyio`, these functions abstract away async backend differences (asyncio, trio) and provide consistent cancellation semantics.
+The `errors` module provides **backend-agnostic utilities** for handling cancellation
+exceptions and ExceptionGroup filtering in async workflows. Built on top of `anyio`,
+these functions abstract away async backend differences (asyncio, trio) and provide
+consistent cancellation semantics.
 
 **Key Capabilities:**
 
 - **Backend Detection**: Dynamically retrieve the native cancellation exception class
 - **Cancellation Testing**: Check if exceptions are cancellation-related
 - **Shielding**: Run critical operations immune to outer cancellation
-- **ExceptionGroup Filtering**: Split and filter ExceptionGroups by cancellation type (Python 3.11+)
+- **ExceptionGroup Filtering**: Split and filter ExceptionGroups by cancellation type
+  (Python 3.11+)
 
 **When to Use:**
 
 - **Graceful Shutdown**: Distinguish cancellation from errors during cleanup
-- **Critical Sections**: Shield database commits, file writes, or API calls from cancellation
+- **Critical Sections**: Shield database commits, file writes, or API calls from
+  cancellation
 - **Error Reporting**: Filter out cancellations to report only actionable errors
-- **Multi-Task Coordination**: Process ExceptionGroups from task groups, separating cancellations from failures
+- **Multi-Task Coordination**: Process ExceptionGroups from task groups, separating
+  cancellations from failures
 
 **When NOT to Use:**
 
 - **Simple async/await**: Basic async code doesn't need explicit cancellation handling
-- **Synchronous Code**: These utilities are async-specific (use standard exception handling)
+- **Synchronous Code**: These utilities are async-specific (use standard exception
+  handling)
 - **Direct anyio Usage**: If you're already using anyio directly, use its APIs instead
 
 ## Module Exports
@@ -75,7 +82,8 @@ def get_cancelled_exc_class() -> type[BaseException]: ...
 
 **Notes:**
 
-Wraps `anyio.get_cancelled_exc_class()` for consistent backend-agnostic cancellation detection. The returned class varies by backend but behaves equivalently.
+Wraps `anyio.get_cancelled_exc_class()` for consistent backend-agnostic cancellation
+detection. The returned class varies by backend but behaves equivalently.
 
 **See Also:**
 
@@ -99,7 +107,8 @@ def is_cancelled(exc: BaseException) -> bool: ...
 
 **Returns:**
 
-- **bool**: True if `exc` is a cancellation exception for the current backend, False otherwise
+- **bool**: True if `exc` is a cancellation exception for the current backend, False
+  otherwise
 
 **Examples:**
 
@@ -130,7 +139,8 @@ False
 
 **Notes:**
 
-Uses `isinstance()` check against `anyio.get_cancelled_exc_class()`, ensuring correct detection across async backends without hardcoding exception types.
+Uses `isinstance()` check against `anyio.get_cancelled_exc_class()`, ensuring correct
+detection across async backends without hardcoding exception types.
 
 **See Also:**
 
@@ -155,7 +165,8 @@ async def shield(
 
 **Parameters:**
 
-- **func** (Callable[P, Awaitable[T]]): Async function to execute with cancellation shielding
+- **func** (Callable[P, Awaitable[T]]): Async function to execute with cancellation
+  shielding
 - **\*args** (P.args): Positional arguments passed to `func`
 - **\*\*kwargs** (P.kwargs): Keyword arguments passed to `func`
 
@@ -205,11 +216,15 @@ async def shield(
 
 **Notes:**
 
-Uses `anyio.CancelScope(shield=True)` to create a cancellation barrier. The shielded function completes normally even if the outer scope is cancelled. Cancellation is **deferred** until the shield exits.
+Uses `anyio.CancelScope(shield=True)` to create a cancellation barrier. The shielded
+function completes normally even if the outer scope is cancelled. Cancellation is
+**deferred** until the shield exits.
 
 **Warning:**
 
-Overuse of shielding can prevent graceful shutdown. Only shield **critical operations** that must complete (commits, cleanup, resource release). Long-running operations should remain cancellable.
+Overuse of shielding can prevent graceful shutdown. Only shield **critical operations**
+that must complete (commits, cleanup, resource release). Long-running operations should
+remain cancellable.
 
 **See Also:**
 
@@ -233,7 +248,8 @@ def non_cancel_subgroup(eg: BaseExceptionGroup) -> BaseExceptionGroup | None: ..
 
 **Returns:**
 
-- **BaseExceptionGroup | None**: Subgroup containing only non-cancellation exceptions, or None if all were cancellations
+- **BaseExceptionGroup | None**: Subgroup containing only non-cancellation exceptions,
+  or None if all were cancellations
 
 **Examples:**
 
@@ -271,11 +287,14 @@ def non_cancel_subgroup(eg: BaseExceptionGroup) -> BaseExceptionGroup | None: ..
 
 **Notes:**
 
-Uses `BaseExceptionGroup.split()` internally to filter out cancellation exceptions, returning only the subgroup with actionable errors. Returns `None` if all exceptions were cancellations.
+Uses `BaseExceptionGroup.split()` internally to filter out cancellation exceptions,
+returning only the subgroup with actionable errors. Returns `None` if all exceptions
+were cancellations.
 
 **Use Case:**
 
-Simplifies error handling when you only care about actionable errors and want to ignore cancellations. Common pattern: graceful shutdown on cancellation, log/retry on errors.
+Simplifies error handling when you only care about actionable errors and want to ignore
+cancellations. Common pattern: graceful shutdown on cancellation, log/retry on errors.
 
 ---
 
@@ -527,13 +546,16 @@ except Exception as e:
 
 ### Why Backend Abstraction?
 
-Python has multiple async backends (asyncio, trio, curio) with different cancellation exception types:
+Python has multiple async backends (asyncio, trio, curio) with different cancellation
+exception types:
 
 - **asyncio**: `asyncio.CancelledError`
 - **trio**: `trio.Cancelled`
 - **curio**: `curio.CancelledError`
 
-Hardcoding exception types breaks portability. These utilities use `anyio`'s backend detection to provide **backend-agnostic** cancellation handling, enabling library code to work across async frameworks.
+Hardcoding exception types breaks portability. These utilities use `anyio`'s backend
+detection to provide **backend-agnostic** cancellation handling, enabling library code
+to work across async frameworks.
 
 ### Why Shield Critical Sections?
 
@@ -543,17 +565,21 @@ Some operations **must complete atomically**:
 2. **Resource Cleanup**: File closes, connection releases prevent leaks
 3. **State Persistence**: Saving checkpoints ensures recovery after crashes
 
-Shielding these operations from cancellation prevents partial completion and data corruption. However, **minimal shielding** is critical - over-shielding prevents graceful shutdown.
+Shielding these operations from cancellation prevents partial completion and data
+corruption. However, **minimal shielding** is critical - over-shielding prevents
+graceful shutdown.
 
 ### Why ExceptionGroup Filtering?
 
-Python 3.11+ task groups raise `ExceptionGroup` when multiple tasks fail. Common scenarios:
+Python 3.11+ task groups raise `ExceptionGroup` when multiple tasks fail. Common
+scenarios:
 
 1. **Graceful Shutdown**: Some tasks cancelled (expected), some failed (errors)
 2. **Partial Failure**: Want to continue if only some tasks fail
 3. **Error Reporting**: Log failures, ignore cancellations
 
-Filtering cancellations from errors enables **selective error handling** - retry/log/alert on failures, gracefully shut down on cancellations.
+Filtering cancellations from errors enables **selective error handling** -
+retry/log/alert on failures, gracefully shut down on cancellations.
 
 ### Why Preserve Exception Metadata?
 
@@ -564,20 +590,26 @@ ExceptionGroups carry rich context:
 - **Cause/Context**: `__cause__` and `__context__` chains show error origins
 - **Notes**: `__notes__` provide additional debugging info
 
-Using `ExceptionGroup.split()` preserves all metadata, unlike manual filtering which loses context. This is **critical for debugging** complex multi-task failures.
+Using `ExceptionGroup.split()` preserves all metadata, unlike manual filtering which
+loses context. This is **critical for debugging** complex multi-task failures.
 
 ## See Also
 
 - **Related Modules**:
-  - [anyio documentation](https://anyio.readthedocs.io/): Underlying async backend abstraction
+  - [anyio documentation](https://anyio.readthedocs.io/): Underlying async backend
+    abstraction
 - **Related Concepts**:
-  - [Task Groups](https://anyio.readthedocs.io/en/stable/tasks.html): anyio's structured concurrency primitive
-  - [ExceptionGroup PEP 654](https://peps.python.org/pep-0654/): Python 3.11 exception groups specification
-  - [Cancellation Scopes](https://anyio.readthedocs.io/en/stable/cancellation.html): anyio's cancellation primitive
+  - [Task Groups](https://anyio.readthedocs.io/en/stable/tasks.html): anyio's structured
+    concurrency primitive
+  - [ExceptionGroup PEP 654](https://peps.python.org/pep-0654/): Python 3.11 exception
+    groups specification
+  - [Cancellation Scopes](https://anyio.readthedocs.io/en/stable/cancellation.html):
+    anyio's cancellation primitive
 
 ## Examples
 
-> **Note:** For API reference, see function documentation above. For complex production patterns, see the concurrency tutorials.
+> **Note:** For API reference, see function documentation above. For complex production
+> patterns, see the concurrency tutorials.
 
 ### Example: Retry with Cancellation Awareness
 
@@ -628,4 +660,8 @@ async def main():
 anyio.run(main)
 ```
 
-> **Note:** For complex patterns like graceful service shutdown, batch processing with partial failures, and database transactions with shielding, see the concurrency tutorials (issues [#67](https://github.com/khive-ai/lionpride/issues/67), [#68](https://github.com/khive-ai/lionpride/issues/68), [#69](https://github.com/khive-ai/lionpride/issues/69)).
+> **Note:** For complex patterns like graceful service shutdown, batch processing with
+> partial failures, and database transactions with shielding, see the concurrency
+> tutorials (issues [#67](https://github.com/khive-ai/lionpride/issues/67),
+> [#68](https://github.com/khive-ai/lionpride/issues/68),
+> [#69](https://github.com/khive-ai/lionpride/issues/69)).

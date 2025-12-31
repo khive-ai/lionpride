@@ -4,7 +4,9 @@
 
 ## Overview
 
-This document explains the "why" behind major design decisions in the ln module, covering algorithm choices, default parameters, library selections, and API design patterns.
+This document explains the "why" behind major design decisions in the ln module,
+covering algorithm choices, default parameters, library selections, and API design
+patterns.
 
 ## Fuzzy Matching
 
@@ -14,9 +16,12 @@ This document explains the "why" behind major design decisions in the ln module,
 
 **Rationale**:
 
-- **Typo tolerance**: Jaro-Winkler is specifically designed for typos and misspellings, with prefix weighting that matches common LLM output patterns (e.g., "userName" vs "user_name")
+- **Typo tolerance**: Jaro-Winkler is specifically designed for typos and misspellings,
+  with prefix weighting that matches common LLM output patterns (e.g., "userName" vs
+  "user_name")
 - **Performance**: O(n) time complexity vs Levenshtein's O(n²)
-- **Empirical validation**: In testing with LLM outputs, Jaro-Winkler achieved 95%+ correct matches vs 85% for Levenshtein
+- **Empirical validation**: In testing with LLM outputs, Jaro-Winkler achieved 95%+
+  correct matches vs 85% for Levenshtein
 - **Case variation handling**: Naturally handles camelCase ↔ snake_case conversions
 
 **Alternatives considered**:
@@ -39,7 +44,8 @@ This document explains the "why" behind major design decisions in the ln module,
   - "userName" ↔ "user_name": 0.88 similarity
   - "emailAddress" ↔ "email_address": 0.90 similarity
   - "userID" ↔ "user_id": 0.85 similarity
-- **Balance**: Tolerates single-character typos and case variations without matching unrelated fields
+- **Balance**: Tolerates single-character typos and case variations without matching
+  unrelated fields
 
 **Tuning guidance**:
 
@@ -54,7 +60,8 @@ This document explains the "why" behind major design decisions in the ln module,
 
 **Rationale**:
 
-- **Performance**: 2-3x faster than stdlib json for serialization, 5-10x faster for deserialization
+- **Performance**: 2-3x faster than stdlib json for serialization, 5-10x faster for
+  deserialization
 - **Type support**: Native handling of datetime, UUID, dataclass without custom encoders
 - **Correctness**: Strict UTF-8 handling, proper escaping, RFC 8259 compliant
 - **Memory efficiency**: Zero-copy deserialization, smaller memory footprint
@@ -73,7 +80,8 @@ ujson:        1.1s serialize, 0.4s deserialize (UTF-8 issues)
 - Binary-only wheels (no pure Python fallback)
 - Less customization than stdlib json
 
-**Why accepted**: Performance gain justifies dependency, especially for LLM pipelines processing high-volume JSON.
+**Why accepted**: Performance gain justifies dependency, especially for LLM pipelines
+processing high-volume JSON.
 
 ### Why Decimal as String by Default?
 
@@ -81,9 +89,11 @@ ujson:        1.1s serialize, 0.4s deserialize (UTF-8 issues)
 
 **Rationale**:
 
-- **Precision preservation**: Financial/scientific applications require exact decimal values
+- **Precision preservation**: Financial/scientific applications require exact decimal
+  values
 - **Reversibility**: Round-trip `Decimal("123.45")` → JSON → Decimal maintains precision
-- **Explicitness**: Forces users to acknowledge precision loss when using `decimal_as_float=True`
+- **Explicitness**: Forces users to acknowledge precision loss when using
+  `decimal_as_float=True`
 
 **Example of precision loss**:
 
@@ -126,7 +136,8 @@ json_dumps({"obj": CustomClass()}, safe_fallback=True)
 # '{"obj": "<CustomClass object at 0x...>"}'
 ```
 
-**Best practice**: Use `safe_fallback=True` only in logging/debugging, never in production serialization.
+**Best practice**: Use `safe_fallback=True` only in logging/debugging, never in
+production serialization.
 
 ## Async Operations
 
@@ -157,7 +168,8 @@ async with create_task_group() as tg:
 # Benefits: Automatic cleanup, structured error handling
 ```
 
-**Trade-off**: Requires Python 3.11+, but lionpride already targets 3.11 for performance.
+**Trade-off**: Requires Python 3.11+, but lionpride already targets 3.11 for
+performance.
 
 ### Why Retry with Exponential Backoff?
 
@@ -165,9 +177,11 @@ async with create_task_group() as tg:
 
 **Rationale**:
 
-- **API rate limits**: Exponential backoff is industry standard (AWS, Google, OpenAI SDKs)
+- **API rate limits**: Exponential backoff is industry standard (AWS, Google, OpenAI
+  SDKs)
 - **Thundering herd prevention**: Linear backoff causes synchronized retries
-- **Resource protection**: Gradually increasing delays prevent overwhelming downstream services
+- **Resource protection**: Gradually increasing delays prevent overwhelming downstream
+  services
 
 **Example**:
 
@@ -180,7 +194,8 @@ async with create_task_group() as tg:
 # Total wait: 7.0s over 4 attempts
 ```
 
-**Why backoff=1.0 default**: Allows linear backoff (1s, 1s, 1s) for predictable timing. Users opt into exponential by setting backoff=2.0.
+**Why backoff=1.0 default**: Allows linear backoff (1s, 1s, 1s) for predictable timing.
+Users opt into exponential by setting backoff=2.0.
 
 ## List Processing
 
@@ -190,7 +205,8 @@ async with create_task_group() as tg:
 
 **Rationale**:
 
-- **Type preservation**: Tuples/sets often represent semantic units (coordinates, unique values)
+- **Type preservation**: Tuples/sets often represent semantic units (coordinates, unique
+  values)
 - **Common mistake**: Flattening `{(1, 2), (3, 4)}` to `[1, 2, 3, 4]` loses structure
 - **Explicit intent**: Requiring opt-in forces users to acknowledge structural change
 
@@ -221,7 +237,8 @@ to_list(data, flatten=True, flatten_tuple_set=True)
   # Unique nested lists? Unique flattened elements?
   ```
 
-- **Performance**: Flattening before uniqueness check is O(n), uniqueness on nested is O(n²)
+- **Performance**: Flattening before uniqueness check is O(n), uniqueness on nested is
+  O(n²)
 - **Explicit intent**: Forces users to clarify desired behavior
 
 **Workaround if needed**:
@@ -235,7 +252,8 @@ unique_nested = list({hash_dict(x): x for x in nested}.values())
 
 ### Why `hash_dict` for Unhashable Types?
 
-**Decision**: Use `hash_dict()` to generate hashes for lists/dicts/sets in `to_list(..., unique=True)`.
+**Decision**: Use `hash_dict()` to generate hashes for lists/dicts/sets in
+`to_list(..., unique=True)`.
 
 **Rationale**:
 

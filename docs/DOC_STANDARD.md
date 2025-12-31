@@ -2,17 +2,14 @@
 
 > Pandas-level API documentation standard for lionpride
 
-Version: 1.0
-Date: 2025-11-08
-Status: Active
+Version: 1.0 Date: 2025-11-08 Status: Active
 
 ---
 
 ## Philosophy
 
-lionpride documentation follows **Google-style docstrings** with
-lionpride-specific adaptations for protocol-based architecture and
-async-first design.
+lionpride documentation follows **Google-style docstrings** with lionpride-specific
+adaptations for protocol-based architecture and async-first design.
 
 **Core Principles:**
 
@@ -28,10 +25,8 @@ async-first design.
 
 ### Layer 1: Inline Docstrings (Google Style)
 
-**Location**: Source code
-**Audience**: IDE users, API consumers
-**Format**: Google-style docstring convention (matching existing
-lionpride codebase)
+**Location**: Source code **Audience**: IDE users, API consumers **Format**:
+Google-style docstring convention (matching existing lionpride codebase)
 
 **Required Sections:**
 
@@ -79,7 +74,7 @@ Examples:
 - Text starts on line after opening quotes
 - Closing quotes on separate line
 - Inline code uses backticks: `` `param_name` ``
-- Cross-references use markdown links: `` [`Element`](api/base/element.md) ``
+- Cross-references use markdown links: ``[`Element`](api/base/element.md)``
 - Auto-generated API docs via mkdocstrings support docstring cross-refs
 
 **Type Documentation:**
@@ -115,8 +110,8 @@ Element  # concrete class
 **Examples Section Standards:**
 
 - **Imports**: numpy and pandas assumed pre-imported; explicitly import all else
-- **Naming**: Consistent variable names: `elem` for Element,
-  `pile` for Pile, `df` for DataFrame
+- **Naming**: Consistent variable names: `elem` for Element, `pile` for Pile, `df` for
+  DataFrame
 - **Data size**: ~4 rows of data (concise examples)
 - **Meaningful data**: Prefer semantic data over random matrices
 - **Keyword args**: Use `head(n=3)` not `head(3)`
@@ -126,13 +121,12 @@ Element  # concrete class
 
 ### Layer 2: API Reference (Markdown)
 
-**Location**: `docs/api/{module}.md`
-**Audience**: Documentation site visitors, comprehensive reference
-**Format**: Markdown with structured sections
+**Location**: `docs/api/{module}.md` **Audience**: Documentation site visitors,
+comprehensive reference **Format**: Markdown with structured sections
 
 **Required Structure:**
 
-```markdown
+````markdown
 # Class/Function Name
 
 > One-line summary
@@ -140,15 +134,14 @@ Element  # concrete class
 ## Overview
 
 2-3 paragraphs explaining:
+
 - What it is and when to use it
 - Key capabilities and design philosophy
 - How it fits in lionpride architecture
 
 ## Class Signature
 
-\```python
-class ClassName(BaseClass):
-    """Docstring first line."""
+\```python class ClassName(BaseClass): """Docstring first line."""
 
     # Constructor signature
     def __init__(
@@ -157,6 +150,7 @@ class ClassName(BaseClass):
         param2: Type2 = default,
         **kwargs: Any,
     ) -> None: ...
+
 \```
 
 ## Parameters
@@ -167,10 +161,10 @@ Detailed parameter documentation from docstring.
 
 Table format:
 
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `id` | `UUID` | Unique identifier (auto-generated, frozen) |
-| `created_at` | `datetime` | UTC timestamp (auto-generated, frozen) |
+| Attribute    | Type       | Description                                |
+| ------------ | ---------- | ------------------------------------------ |
+| `id`         | `UUID`     | Unique identifier (auto-generated, frozen) |
+| `created_at` | `datetime` | UTC timestamp (auto-generated, frozen)     |
 
 ## Methods
 
@@ -180,22 +174,19 @@ Table format:
 
 Brief description.
 
-**Signature:**
-\```python
-def method_name(self, param: Type) -> ReturnType: ...
-\```
+**Signature:** \```python def method_name(self, param: Type) -> ReturnType: ... \```
 
 **Parameters:**
+
 - `param` (Type): Description
 
 **Returns:**
+
 - ReturnType: Description
 
-**Examples:**
-\```python
->>> instance.method_name(param)
-result
-\```
+**Examples:** \```python
+
+>>> instance.method_name(param) result \```
 
 ### Category 2: Serialization
 
@@ -203,17 +194,16 @@ result
 
 ## Protocol Implementations
 
-Explicitly document which protocols are implemented
-(use `@implements()` decorator):
+Explicitly document which protocols are implemented (use `@implements()` decorator):
 
 - **Observable**: `id` property (UUID identifier for object identity)
 - **Serializable**: `to_dict()`, `to_json()` for serialization
 - **Deserializable**: `from_dict()`, `from_json()` for deserialization
 - **Hashable**: `__hash__()` based on ID (identity-based hashing)
-- **Adaptable**: `adapt_to()`, `adapt_from()` for sync format
-  conversion (TOML/YAML/JSON/SQL)
-- **AsyncAdaptable**: `adapt_to_async()`, `adapt_from_async()` for
-  async I/O format conversion
+- **Adaptable**: `adapt_to()`, `adapt_from()` for sync format conversion
+  (TOML/YAML/JSON/SQL)
+- **AsyncAdaptable**: `adapt_to_async()`, `adapt_from_async()` for async I/O format
+  conversion
 - **Invocable**: `invoke()` for async execution
 - **Containable**: `__contains__()` for membership testing (`in` operator)
 - **Allowable**: `allowed()` for defining allowed values/keys
@@ -223,13 +213,17 @@ Explicitly document which protocols are implemented
 ### Basic Usage
 
 \```python
+
 # Simplest use case
+
 \```
 
 ### Advanced Usage
 
 \```python
+
 # Complex patterns, composition with other classes
+
 \```
 
 ### Common Pitfalls
@@ -240,6 +234,7 @@ Explicitly document which protocols are implemented
 ## Design Rationale
 
 Explain architectural decisions:
+
 - Why this design?
 - What trade-offs were made?
 - How does it support the framework's goals?
@@ -253,18 +248,18 @@ Explain architectural decisions:
 ## Examples
 
 Comprehensive, real-world examples demonstrating:
+
 1. Basic instantiation
 2. Common workflows
 3. Advanced patterns
 4. Integration with other lionpride components
 
 All examples must be executable and produce shown output.
-```
+````
 
 ### Layer 3: User Guide (Tutorial/Conceptual)
 
-**Location**: `docs/user_guide/{topic}.md`
-**Audience**: New users, conceptual learners
+**Location**: `docs/user_guide/{topic}.md` **Audience**: New users, conceptual learners
 **Format**: Narrative markdown with worked examples
 
 **Structure:**
@@ -282,30 +277,27 @@ All examples must be executable and produce shown output.
 
 ### Protocol Documentation
 
-Always document protocol implementations
-(use `@implements()` decorator in class):
+Always document protocol implementations (use `@implements()` decorator in class):
 
 ```markdown
 ## Protocol Implementations
 
-This class implements the following protocols
-(declared via `@implements()`):
+This class implements the following protocols (declared via `@implements()`):
 
 - **Observable**: UUID identifier via `id` property
-- **Serializable**: Supports `to_dict(mode='python'|'json'|'db')`
-  and `to_json()`
-- **Deserializable**: Supports `from_dict()` and `from_json()` with
-  polymorphic reconstruction
+- **Serializable**: Supports `to_dict(mode='python'|'json'|'db')` and `to_json()`
+- **Deserializable**: Supports `from_dict()` and `from_json()` with polymorphic
+  reconstruction
 - **Hashable**: ID-based hashing via `__hash__()` (identity equality)
-- **Adaptable**: Sync format conversion via `adapt_to()`, `adapt_from()`
-  (if applicable)
+- **Adaptable**: Sync format conversion via `adapt_to()`, `adapt_from()` (if applicable)
 - **AsyncAdaptable**: Async format conversion via `adapt_to_async()`,
   `adapt_from_async()` (if applicable)
 - **Invocable**: Async execution via `invoke()` (if applicable)
 - **Containable**: Membership testing via `__contains__()` (if applicable)
 - **Allowable**: Allowed values via `allowed()` (if applicable)
 
-See [Protocols Guide](user_guide/protocols.md) or [Protocols Notebook](../notebooks/protocols.ipynb) for implementation patterns.
+See [Protocols Guide](user_guide/protocols.md) or
+[Protocols Notebook](../notebooks/protocols.ipynb) for implementation patterns.
 ```
 
 ### Async Documentation
@@ -319,24 +311,21 @@ For async methods, document:
 
 Example:
 
-```markdown
+````markdown
 #### `invoke()` (async)
 
-**Signature:**
-\```python
-async def invoke(self, **kwargs: Any) -> Any: ...
-\```
+**Signature:** \```python async def invoke(self, **kwargs: Any) -> Any: ... \```
 
-**Concurrency**: Thread-safe, uses internal lock for state transitions
-**Cancellation**: Gracefully handles asyncio.CancelledError
-**Timeout**: Configurable via `timeout` parameter (seconds)
-```
+**Concurrency**: Thread-safe, uses internal lock for state transitions **Cancellation**:
+Gracefully handles asyncio.CancelledError **Timeout**: Configurable via `timeout`
+parameter (seconds)
+````
 
 ### Serialization Modes
 
 Document all serialization modes (`python`, `json`, `db`) with examples:
 
-```markdown
+````markdown
 ### Serialization Modes
 
 #### Python Mode (`mode='python'`)
@@ -344,28 +333,31 @@ Document all serialization modes (`python`, `json`, `db`) with examples:
 Native Python types, suitable for in-memory operations.
 
 \```python
->>> elem.to_dict(mode='python')
-{'id': UUID('...'), 'created_at': datetime(...), 'metadata': {...}}
-\```
+
+>>> elem.to_dict(mode='python') {'id': UUID('...'), 'created_at': datetime(...),
+>>> 'metadata': {...}} \```
 
 #### JSON Mode (`mode='json'`)
 
 JSON-safe types (UUIDs → str, datetime → ISO8601).
 
 \```python
->>> elem.to_dict(mode='json')
-{'id': '123e4567-...', 'created_at': '2025-11-08T10:30:00Z', ...}
-\```
+
+>>> elem.to_dict(mode='json') {'id': '123e4567-...', 'created_at':
+>>> '2025-11-08T10:30:00Z', ...} \```
 
 #### Database Mode (`mode='db'`)
 
 Database adapter format via pydapter.
 
 \```python
+
 >>> elem.to_dict(mode='db')
+
 # Adapter-specific format
+
 \```
-```
+````
 
 ### Type Annotations
 
@@ -374,11 +366,11 @@ lionpride uses Pydantic V2. Document field types precisely:
 ```markdown
 ## Attributes
 
-| Attribute | Type | Validation | Description |
-|-----------|------|------------|-------------|
-| `id` | `UUID` | Auto-generated, frozen | Unique identifier |
-| `created_at` | `datetime` | Auto-coerced to UTC, frozen | Creation timestamp |
-| `metadata` | `dict[str, Any]` | Auto-converted to dict | Arbitrary metadata |
+| Attribute    | Type             | Validation                  | Description        |
+| ------------ | ---------------- | --------------------------- | ------------------ |
+| `id`         | `UUID`           | Auto-generated, frozen      | Unique identifier  |
+| `created_at` | `datetime`       | Auto-coerced to UTC, frozen | Creation timestamp |
+| `metadata`   | `dict[str, Any]` | Auto-converted to dict      | Arbitrary metadata |
 ```
 
 ---
@@ -580,8 +572,7 @@ Example deprecation notice:
 
 ## mkdocs Configuration
 
-lionpride uses **mkdocs** with **mkdocstrings** for documentation
-generation.
+lionpride uses **mkdocs** with **mkdocstrings** for documentation generation.
 
 **Required `mkdocs.yml` configuration:**
 

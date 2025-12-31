@@ -4,16 +4,20 @@
 
 ## Overview
 
-The `lionpride.libs.concurrency._task` module provides **structured concurrency** primitives for managing groups of concurrent tasks. Based on AnyIO's task group abstraction, these primitives ensure that tasks are properly coordinated and cleaned up.
+The `lionpride.libs.concurrency._task` module provides **structured concurrency**
+primitives for managing groups of concurrent tasks. Based on AnyIO's task group
+abstraction, these primitives ensure that tasks are properly coordinated and cleaned up.
 
 **Key Capabilities:**
 
 - **Structured Concurrency**: Tasks in a group cannot outlive the group's context
-- **Cross-Backend Compatibility**: Works with asyncio, trio, and other AnyIO-supported backends
+- **Cross-Backend Compatibility**: Works with asyncio, trio, and other AnyIO-supported
+  backends
 - **Automatic Cleanup**: Tasks are cancelled when group exits
 - **Cancellation Propagation**: Cancelling the group cancels all child tasks
 - **Exception Handling**: Exceptions from child tasks propagate to group context
-- **Initialization Support**: Start tasks and wait for them to initialize before proceeding
+- **Initialization Support**: Start tasks and wait for them to initialize before
+  proceeding
 
 **Core Components:**
 
@@ -579,7 +583,8 @@ async with create_task_group() as tg:
 
 ## See Also
 
-- **AnyIO Documentation**: [https://anyio.readthedocs.io/](https://anyio.readthedocs.io/)
+- **AnyIO Documentation**:
+  [https://anyio.readthedocs.io/](https://anyio.readthedocs.io/)
 - **Related Modules**:
   - `lionpride.libs.concurrency.primitives`: Lock, Semaphore, Queue, etc.
   - `lionpride.libs.concurrency.patterns`: High-level concurrency patterns

@@ -1,10 +1,13 @@
 # to_num
 
-> Convert strings and values to numbers with validation, bounds checking, and precision control
+> Convert strings and values to numbers with validation, bounds checking, and precision
+> control
 
 ## Overview
 
-`to_num()` is a robust utility function for converting various input types to numeric values (int or float) with built-in validation, bounds checking, and precision control. It provides safe type conversion with clear error messages for invalid inputs.
+`to_num()` is a robust utility function for converting various input types to numeric
+values (int or float) with built-in validation, bounds checking, and precision control.
+It provides safe type conversion with clear error messages for invalid inputs.
 
 **Key Capabilities:**
 
@@ -49,7 +52,8 @@ def to_num(
 
 **input_** : Any (positional-only)
 
-Value to convert to numeric type. Supports strings, booleans, integers, floats, and Decimal objects.
+Value to convert to numeric type. Supports strings, booleans, integers, floats, and
+Decimal objects.
 
 - **Strings**: Whitespace is automatically stripped. Empty strings raise ValueError
 - **Booleans**: Converted to 1 (True) or 0 (False)
@@ -58,7 +62,8 @@ Value to convert to numeric type. Supports strings, booleans, integers, floats, 
 
 **upper_bound** : int or float, optional
 
-Maximum allowed value (inclusive). If provided, values exceeding this bound raise ValueError.
+Maximum allowed value (inclusive). If provided, values exceeding this bound raise
+ValueError.
 
 - Validation performed after type conversion but before precision rounding
 - Works with both int and float target types
@@ -66,7 +71,8 @@ Maximum allowed value (inclusive). If provided, values exceeding this bound rais
 
 **lower_bound** : int or float, optional
 
-Minimum allowed value (inclusive). If provided, values below this bound raise ValueError.
+Minimum allowed value (inclusive). If provided, values below this bound raise
+ValueError.
 
 - Validation performed after type conversion but before precision rounding
 - Works with both int and float target types
@@ -253,16 +259,20 @@ The first parameter `input_` is positional-only (using `/` syntax) to:
 
 The `num_type` parameter defaults to `float` rather than `int` because:
 
-1. **Information preservation**: Floats preserve decimal values; converting to int loses precision
-2. **API compatibility**: Most APIs return decimal numbers (confidence scores, percentages)
-3. **User expectations**: Safer default for string inputs like "3.14" (explicit `num_type=int` required for truncation)
+1. **Information preservation**: Floats preserve decimal values; converting to int loses
+   precision
+2. **API compatibility**: Most APIs return decimal numbers (confidence scores,
+   percentages)
+3. **User expectations**: Safer default for string inputs like "3.14" (explicit
+   `num_type=int` required for truncation)
 
 ### Why Bounds Before Precision?
 
 Bounds validation occurs before precision rounding to ensure:
 
 1. **Logical ordering**: Validate raw converted value first
-2. **Prevent edge cases**: Rounding might bring out-of-bounds values into range (unintended)
+2. **Prevent edge cases**: Rounding might bring out-of-bounds values into range
+   (unintended)
 3. **Clear semantics**: Bounds apply to input value, not rounded result
 
 Example:
@@ -277,7 +287,8 @@ to_num("100.6", upper_bound=100, precision=0)  # ValueError (100.6 > 100)
 
 ### Why Banker's Rounding?
 
-Uses Python's built-in `round()` which implements banker's rounding (round half to even):
+Uses Python's built-in `round()` which implements banker's rounding (round half to
+even):
 
 1. **Statistical fairness**: Reduces cumulative rounding bias over many operations
 2. **Standard behavior**: Matches Python's rounding semantics

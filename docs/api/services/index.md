@@ -4,54 +4,69 @@
 
 ## Overview
 
-The `services` module provides a unified abstraction layer for interacting with LLM providers (OpenAI, Anthropic, Google Gemini, Claude Code) and local tools. It handles the complexity of different API formats, rate limiting, and lifecycle hooks through a consistent interface.
+The `services` module provides a unified abstraction layer for interacting with LLM
+providers (OpenAI, Anthropic, Google Gemini, Claude Code) and local tools. It handles
+the complexity of different API formats, rate limiting, and lifecycle hooks through a
+consistent interface.
 
 **Key Capabilities:**
 
 - **iModel**: Unified service interface wrapping backends with rate limiting and hooks
 - **Tool**: Wraps callable functions for LLM tool use with schema generation
-- **ServiceRegistry**: Pile-based collection with O(1) name lookup for service management
-- **ServiceBackend**: Base abstraction for Endpoint (HTTP APIs) and Tool (local functions)
+- **ServiceRegistry**: Pile-based collection with O(1) name lookup for service
+  management
+- **ServiceBackend**: Base abstraction for Endpoint (HTTP APIs) and Tool (local
+  functions)
 
-The module follows lionagi v0's proven patterns for rate limiting and event-driven processing. `iModel` provides the same `invoke()` interface regardless of whether it wraps an HTTP endpoint or a local function, enabling seamless provider switching and tool integration.
+The module follows lionagi v0's proven patterns for rate limiting and event-driven
+processing. `iModel` provides the same `invoke()` interface regardless of whether it
+wraps an HTTP endpoint or a local function, enabling seamless provider switching and
+tool integration.
 
 ## Classes
 
 ### Core
 
-| Class | Description |
-|-------|-------------|
-| [iModel](imodel.md) | Unified service interface with rate limiting and hooks |
-| [Tool](tool.md) | Function wrapper for LLM tool use |
-| [ServiceRegistry](registry.md) | Pile-based service collection with name lookup |
+| Class                          | Description                                            |
+| ------------------------------ | ------------------------------------------------------ |
+| [iModel](imodel.md)            | Unified service interface with rate limiting and hooks |
+| [Tool](tool.md)                | Function wrapper for LLM tool use                      |
+| [ServiceRegistry](registry.md) | Pile-based service collection with name lookup         |
 
 ### Backends
 
-| Class | Description |
-|-------|-------------|
-| `ServiceBackend` | Base class for all service backends |
-| `Endpoint` | HTTP API backend for LLM providers |
-| `Calling` | Base event for service invocations |
-| `APICalling` | API call event with request/response tracking |
-| `ToolCalling` | Tool execution event |
+| Class                                               | Description                                   |
+| --------------------------------------------------- | --------------------------------------------- |
+| [ServiceBackend](backend.md)                        | Base class for all service backends           |
+| [ServiceConfig](backend.md#serviceconfig)           | Configuration container for backends          |
+| [NormalizedResponse](backend.md#normalizedresponse) | Generic normalized response                   |
+| [Calling](backend.md#calling)                       | Base event for service invocations with hooks |
+| `Endpoint`                                          | HTTP API backend for LLM providers            |
+| `APICalling`                                        | API call event with request/response tracking |
+| `ToolCalling`                                       | Tool execution event                          |
 
 ### Utilities
 
-| Class | Description |
-|-------|-------------|
-| `TokenBucket` | Simple blocking rate limiter |
-| `RateLimitedExecutor` | Event-driven rate limiting processor |
-| `HookRegistry` | Lifecycle hook management (PreEventCreate, PreInvocation, PostInvocation) |
-| `TokenCalculator` | Token counting utilities |
+| Class                                             | Description                                                               |
+| ------------------------------------------------- | ------------------------------------------------------------------------- |
+| [`RateLimitConfig`](utilities.md#ratelimitconfig) | Token bucket rate limiting configuration                                  |
+| [`TokenBucket`](utilities.md#tokenbucket)         | Async token bucket rate limiter                                           |
+| [`CircuitBreaker`](utilities.md#circuitbreaker)   | Fail-fast circuit breaker for resilience                                  |
+| [`RetryConfig`](utilities.md#retryconfig)         | Exponential backoff retry configuration                                   |
+| [`TokenCalculator`](utilities.md#tokencalculator) | Tiktoken-based token counting                                             |
+| `RateLimitedExecutor`                             | Event-driven rate limiting processor                                      |
+| `HookRegistry`                                    | Lifecycle hook management (PreEventCreate, PreInvocation, PostInvocation) |
+
+See [Service Utilities](utilities.md) for detailed API documentation.
 
 ### Provider Support
 
-| Provider | Endpoint | Description |
-|----------|----------|-------------|
-| `openai` | `chat/completions` | OpenAI GPT models |
-| `anthropic` | `messages` | Anthropic Claude models |
-| `gemini` | `generateContent` | Google Gemini models |
-| `claude_code` | CLI | Claude Code with session continuation |
+| Provider      | Endpoint           | Description                           |
+| ------------- | ------------------ | ------------------------------------- |
+| `openai`      | `chat/completions` | OpenAI GPT models                     |
+| `anthropic`   | `messages`         | Anthropic Claude models               |
+| `gemini`      | `generateContent`  | Google Gemini models                  |
+| `claude_code` | CLI                | Claude Code with session continuation |
 
 ## Quick Start
 

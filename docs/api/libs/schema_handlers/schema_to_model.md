@@ -4,16 +4,22 @@
 
 ## Overview
 
-The `schema_to_model` module provides **runtime Pydantic model generation** from JSON Schema definitions. It uses `datamodel-code-generator` to create Python code from schemas, dynamically imports the generated models, and rebuilds them with proper type resolution for immediate use.
+The `schema_to_model` module provides **runtime Pydantic model generation** from JSON
+Schema definitions. It uses `datamodel-code-generator` to create Python code from
+schemas, dynamically imports the generated models, and rebuilds them with proper type
+resolution for immediate use.
 
 **Key Capabilities:**
 
-- **Dynamic Model Generation**: Convert JSON Schema to Pydantic BaseModel classes at runtime
-- **Auto-Import**: Generated code is compiled and imported automatically (no file persistence)
+- **Dynamic Model Generation**: Convert JSON Schema to Pydantic BaseModel classes at
+  runtime
+- **Auto-Import**: Generated code is compiled and imported automatically (no file
+  persistence)
 - **Type Resolution**: Models are rebuilt with proper type namespace resolution
 - **Flexible Input**: Accepts JSON Schema as string or dict
 - **Python Version Detection**: Auto-detects Python version for code generation
-- **Model Name Extraction**: Intelligently extracts model name from schema title or uses provided default
+- **Model Name Extraction**: Intelligently extracts model name from schema title or uses
+  provided default
 
 **When to Use:**
 
@@ -32,7 +38,8 @@ The `schema_to_model` module provides **runtime Pydantic model generation** from
 
 **Dependencies:**
 
-Requires optional dependency: `pip install 'lionpride[schema-gen]'` or `pip install datamodel-code-generator`
+Requires optional dependency: `pip install 'lionpride[schema-gen]'` or
+`pip install datamodel-code-generator`
 
 ## Function Signature
 
@@ -63,7 +70,8 @@ JSON Schema definition (as JSON string or Python dict).
 
 - **Type coercion**: Dicts are serialized to JSON internally
 - **Validation**: Must be valid JSON Schema format
-- **Title extraction**: If schema contains `"title"` field, it's used as model name (sanitized)
+- **Title extraction**: If schema contains `"title"` field, it's used as model name
+  (sanitized)
 - **Raises**: `ValueError` if invalid JSON string, `TypeError` if not str/dict
 
 **Examples:**
@@ -152,7 +160,8 @@ Dynamically generated Pydantic model class ready for instantiation.
 `datamodel-code-generator` not installed.
 
 - **Message**: Includes installation instructions
-- **Fix**: `pip install 'lionpride[schema-gen]'` or `pip install datamodel-code-generator`
+- **Fix**: `pip install 'lionpride[schema-gen]'` or
+  `pip install datamodel-code-generator`
 
 ### ValueError
 
@@ -432,7 +441,8 @@ Model = load_pydantic_model_from_schema(schema)
 
 ### Pitfall 3: Non-Sanitizable Model Names
 
-**Issue**: Schema title contains characters that can't be converted to Python identifier.
+**Issue**: Schema title contains characters that can't be converted to Python
+identifier.
 
 ```python
 schema = {
@@ -528,38 +538,47 @@ Model = load_pydantic_model_from_schema(schema)  # Regenerate
 
 ### Why Runtime Generation?
 
-Static Pydantic models require schemas known at development time. Runtime generation enables:
+Static Pydantic models require schemas known at development time. Runtime generation
+enables:
 
 1. **Dynamic APIs**: Handle evolving API schemas without redeployment
 2. **LLM Integration**: Create models from LLM-provided tool schemas
 3. **Schema-Driven UIs**: Generate forms and validators from backend schemas
 4. **Multi-Tenant Systems**: Different schemas per tenant without code duplication
 
-**Trade-off**: ~100-300ms generation overhead vs. development-time compilation. Cache models to amortize cost.
+**Trade-off**: ~100-300ms generation overhead vs. development-time compilation. Cache
+models to amortize cost.
 
 ### Why datamodel-code-generator?
 
 Alternatives considered:
 
-1. **`pydantic.create_model()`**: Doesn't support complex schemas (nested objects, $ref, allOf)
+1. **`pydantic.create_model()`**: Doesn't support complex schemas (nested objects, $ref,
+   allOf)
 2. **Manual parsing**: Error-prone, doesn't handle JSON Schema edge cases
-3. **datamodel-code-generator**: Battle-tested, handles full JSON Schema spec, generates idiomatic Pydantic code
+3. **datamodel-code-generator**: Battle-tested, handles full JSON Schema spec, generates
+   idiomatic Pydantic code
 
-**Trade-off**: External dependency vs. robust schema support. Optional dependency minimizes impact.
+**Trade-off**: External dependency vs. robust schema support. Optional dependency
+minimizes impact.
 
 ### Why Temporary Files?
 
 Generated code is written to temporary files, imported, then deleted because:
 
-1. **Import System**: Python's import machinery requires file-backed modules for reliable `spec_from_file_location()`
-2. **Type Resolution**: `model_rebuild()` needs proper module namespace for forward references
+1. **Import System**: Python's import machinery requires file-backed modules for
+   reliable `spec_from_file_location()`
+2. **Type Resolution**: `model_rebuild()` needs proper module namespace for forward
+   references
 3. **Clean Namespaces**: Temporary modules prevent global namespace pollution
 
-**Trade-off**: File I/O overhead (~5-10ms) vs. reliable import semantics. Negligible compared to generation time.
+**Trade-off**: File I/O overhead (~5-10ms) vs. reliable import semantics. Negligible
+compared to generation time.
 
 ### Why model_rebuild()?
 
-After importing, models are rebuilt with `model_rebuild(_types_namespace=module.__dict__, force=True)` because:
+After importing, models are rebuilt with
+`model_rebuild(_types_namespace=module.__dict__, force=True)` because:
 
 1. **Forward References**: Generic types and self-references need resolved namespace
 2. **Nested Models**: Child models must be in scope for parent validation
@@ -585,7 +604,8 @@ The module provides these internal helper functions (not intended for direct use
 
 ### `_get_python_version_enum()`
 
-Auto-detects Python version from `sys.version_info` and maps to `datamodel_code_generator.PythonVersion` enum.
+Auto-detects Python version from `sys.version_info` and maps to
+`datamodel_code_generator.PythonVersion` enum.
 
 **Mapping:**
 
@@ -606,7 +626,8 @@ Extracts valid Python identifier from string by removing non-alphanumeric charac
 
 ### `_extract_model_name_from_schema()`
 
-Attempts to extract model name from schema `"title"` field, falling back to provided default.
+Attempts to extract model name from schema `"title"` field, falling back to provided
+default.
 
 ### `_prepare_schema_input()`
 
@@ -618,11 +639,13 @@ Invokes `datamodel_code_generator.generate()` with proper configuration.
 
 ### `_load_generated_module()`
 
-Dynamically imports Python module from generated file using `importlib.util.spec_from_file_location()`.
+Dynamically imports Python module from generated file using
+`importlib.util.spec_from_file_location()`.
 
 ### `_extract_model_class()`
 
-Finds Pydantic BaseModel class in generated module by name, falling back to `"Model"` if not found.
+Finds Pydantic BaseModel class in generated module by name, falling back to `"Model"` if
+not found.
 
 ### `_rebuild_model()`
 
@@ -637,7 +660,8 @@ Rebuilds model with proper type namespace resolution using `model_rebuild()`.
 - **Related Guides**:
   - [Pydantic Documentation](https://docs.pydantic.dev/): Pydantic model usage
   - [JSON Schema](https://json-schema.org/): JSON Schema specification
-  - [datamodel-code-generator](https://github.com/koxudaxi/datamodel-code-generator): Code generator documentation
+  - [datamodel-code-generator](https://github.com/koxudaxi/datamodel-code-generator):
+    Code generator documentation
 - **Related Patterns**:
   - Caching generated models with `functools.lru_cache`
   - Schema versioning and migration strategies

@@ -4,7 +4,10 @@
 
 ## Overview
 
-`Form` declares data dependencies through an assignment DSL, enabling automatic dependency resolution and parallel execution. Forms are **pure data contracts** - they specify inputs/outputs while schemas live on the parent `Report`. Execution order derives from field dependencies, not explicit edges.
+`Form` declares data dependencies through an assignment DSL, enabling automatic
+dependency resolution and parallel execution. Forms are **pure data contracts** - they
+specify inputs/outputs while schemas live on the parent `Report`. Execution order
+derives from field dependencies, not explicit edges.
 
 ## Class Signature
 
@@ -29,34 +32,36 @@ class Form(Element):
 
 ## Parameters
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `assignment` | `str` | **required** | Assignment DSL string specifying dataflow and resources |
-| `branch_name` | `str or None` | `None` | Derived from assignment; optional branch prefix |
-| `operation` | `str` | `"operate"` | Derived from assignment; operation type |
-| `input_fields` | `list[str]` | `[]` | Derived from assignment; input field names |
-| `output_fields` | `list[str]` | `[]` | Derived from assignment; output field names |
-| `resources` | `FormResources` | `FormResources()` | Derived from assignment; resource declarations |
-| `output` | `Any` | `None` | Runtime: populated after execution |
-| `filled` | `bool` | `False` | Runtime: True after execution completes |
+| Parameter       | Type            | Default           | Description                                             |
+| --------------- | --------------- | ----------------- | ------------------------------------------------------- |
+| `assignment`    | `str`           | **required**      | Assignment DSL string specifying dataflow and resources |
+| `branch_name`   | `str or None`   | `None`            | Derived from assignment; optional branch prefix         |
+| `operation`     | `str`           | `"operate"`       | Derived from assignment; operation type                 |
+| `input_fields`  | `list[str]`     | `[]`              | Derived from assignment; input field names              |
+| `output_fields` | `list[str]`     | `[]`              | Derived from assignment; output field names             |
+| `resources`     | `FormResources` | `FormResources()` | Derived from assignment; resource declarations          |
+| `output`        | `Any`           | `None`            | Runtime: populated after execution                      |
+| `filled`        | `bool`          | `False`           | Runtime: True after execution completes                 |
 
-Note: While `branch_name`, `operation`, `input_fields`, `output_fields`, and `resources` can be provided explicitly, they are typically derived automatically from the `assignment` string via `model_post_init()`.
+Note: While `branch_name`, `operation`, `input_fields`, `output_fields`, and `resources`
+can be provided explicitly, they are typically derived automatically from the
+`assignment` string via `model_post_init()`.
 
 ## Attributes
 
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `id` | `UUID` | Unique identifier (inherited from Element, auto-generated, frozen) |
-| `created_at` | `datetime` | UTC timestamp (inherited from Element, auto-generated, frozen) |
-| `metadata` | `dict[str, Any]` | Arbitrary metadata (inherited from Element) |
-| `assignment` | `str` | Full DSL string with operation, dataflow, and resources |
-| `branch_name` | `str or None` | Optional branch prefix from DSL (e.g., `"orchestrator"`) |
-| `operation` | `str` | Operation type: `"generate"`, `"parse"`, `"communicate"`, `"operate"`, or `"react"` |
-| `input_fields` | `list[str]` | Field names required as input |
-| `output_fields` | `list[str]` | Field names produced as output |
-| `resources` | `FormResources` | Parsed resource declarations (APIs, tools) |
-| `output` | `Any` | Structured output after execution |
-| `filled` | `bool` | Whether this form has been executed |
+| Attribute       | Type             | Description                                                                         |
+| --------------- | ---------------- | ----------------------------------------------------------------------------------- |
+| `id`            | `UUID`           | Unique identifier (inherited from Element, auto-generated, frozen)                  |
+| `created_at`    | `datetime`       | UTC timestamp (inherited from Element, auto-generated, frozen)                      |
+| `metadata`      | `dict[str, Any]` | Arbitrary metadata (inherited from Element)                                         |
+| `assignment`    | `str`            | Full DSL string with operation, dataflow, and resources                             |
+| `branch_name`   | `str or None`    | Optional branch prefix from DSL (e.g., `"orchestrator"`)                            |
+| `operation`     | `str`            | Operation type: `"generate"`, `"parse"`, `"communicate"`, `"operate"`, or `"react"` |
+| `input_fields`  | `list[str]`      | Field names required as input                                                       |
+| `output_fields` | `list[str]`      | Field names produced as output                                                      |
+| `resources`     | `FormResources`  | Parsed resource declarations (APIs, tools)                                          |
+| `output`        | `Any`            | Structured output after execution                                                   |
+| `filled`        | `bool`           | Whether this form has been executed                                                 |
 
 ## Assignment DSL
 
@@ -69,7 +74,8 @@ Note: While `branch_name`, `operation`, `input_fields`, `output_fields`, and `re
 - `"topic -> analysis"` - Simple dataflow
 - `"planner: react(context -> plan) | api:gpt4o, tool:*"` - Full specification
 
-**Resource types:** `api` (default) | `api_gen` | `api_parse` | `api_interpret` | `tool` (or `tool:*` for all)
+**Resource types:** `api` (default) | `api_gen` | `api_parse` | `api_interpret` | `tool`
+(or `tool:*` for all)
 
 ## Methods
 
@@ -285,13 +291,16 @@ form.resources.tools       # frozenset({'search'})
 ## Common Pitfalls
 
 - **Double fill**: Check `form.filled` or use `is_workable()` before execution
-- **None as missing**: `is_workable()` treats `None` as unavailable; use sentinel values if needed
+- **None as missing**: `is_workable()` treats `None` as unavailable; use sentinel values
+  if needed
 
 ## Design Rationale
 
-**Separation of Concerns**: Forms declare dataflow; schemas live on Report. Enables reusability and testability.
+**Separation of Concerns**: Forms declare dataflow; schemas live on Report. Enables
+reusability and testability.
 
-**DSL over Graphs**: `"a -> b"` is clearer than edge objects; workflow engine infers parallelization automatically.
+**DSL over Graphs**: `"a -> b"` is clearer than edge objects; workflow engine infers
+parallelization automatically.
 
 ## See Also
 

@@ -4,14 +4,19 @@
 
 ## Overview
 
-`extract_json()` is a robust JSON extraction utility that handles multiple input formats, including raw JSON strings, markdown code blocks, and lists of strings. It provides intelligent fallback parsing with optional fuzzy JSON support for malformed input.
+`extract_json()` is a robust JSON extraction utility that handles multiple input
+formats, including raw JSON strings, markdown code blocks, and lists of strings. It
+provides intelligent fallback parsing with optional fuzzy JSON support for malformed
+input.
 
 **Key Capabilities:**
 
-- **Multi-Format Parsing**: Handles raw JSON strings, markdown ```json blocks, and string lists
+- **Multi-Format Parsing**: Handles raw JSON strings, markdown ```json blocks, and
+  string lists
 - **Automatic Fallback**: Attempts direct parsing before extracting from markdown blocks
 - **Fuzzy JSON Support**: Optional lenient parsing for malformed JSON via `fuzzy_json()`
-- **Flexible Return Types**: Returns single dict or list based on content and configuration
+- **Flexible Return Types**: Returns single dict or list based on content and
+  configuration
 - **Precompiled Regex**: Optimized markdown extraction with compiled pattern
 
 **When to Use extract_json():**
@@ -49,7 +54,8 @@ def extract_json(
 
 **input_data** : str or list of str
 
-Input string(s) to parse for JSON content. If list provided, strings are joined with newlines before processing.
+Input string(s) to parse for JSON content. If list provided, strings are joined with
+newlines before processing.
 
 - Type coercion: Lists automatically joined with `"\n".join()`
 - Processing order: Direct JSON parsing → Markdown block extraction
@@ -59,7 +65,8 @@ Input string(s) to parse for JSON content. If list provided, strings are joined 
 
 **fuzzy_parse** : bool, default False
 
-Enable fuzzy JSON parsing for malformed input. When True, uses `fuzzy_json()` for lenient parsing that handles common JSON errors (trailing commas, single quotes, etc.).
+Enable fuzzy JSON parsing for malformed input. When True, uses `fuzzy_json()` for
+lenient parsing that handles common JSON errors (trailing commas, single quotes, etc.).
 
 - Use when: Input may have JSON syntax errors (LLM-generated content)
 - Performance: Slower than strict parsing due to additional processing
@@ -67,7 +74,8 @@ Enable fuzzy JSON parsing for malformed input. When True, uses `fuzzy_json()` fo
 
 **return_one_if_single** : bool, default True
 
-Control return type when exactly one JSON object is found. When True, returns the single dict/value directly instead of wrapping in a list.
+Control return type when exactly one JSON object is found. When True, returns the single
+dict/value directly instead of wrapping in a list.
 
 - True: Single object → `dict`, multiple → `list[dict]`
 - False: Always returns `list` (even for single object)
@@ -105,11 +113,11 @@ If successful, returns immediately. If parsing fails, proceeds to Stage 2.
 
 Searches for JSON code blocks using precompiled regex:
 
-```python
+````python
 # Pattern: ```json ... ```
 _JSON_BLOCK_PATTERN = re.compile(r"```json\s*(.*?)\s*```", re.DOTALL)
 matches = _JSON_BLOCK_PATTERN.findall(input_str)
-```
+````
 
 If no matches found, returns `[]`.
 
@@ -168,7 +176,6 @@ Hope that helps!
 result = extract_json(llm_response)
 
 # Output: {'id': '123', 'name': 'Bob', 'active': True}
-
 ````
 
 ### Example 3: Multiple JSON Blocks
@@ -207,12 +214,11 @@ single_block = '```json\n{"key": "value"}\n```'
 result = extract_json(single_block, return_one_if_single=False)
 
 # Output: [{'key': 'value'}]  (wrapped in list)
-
 ````
 
 ### Example 4: Fuzzy JSON Parsing
 
-````python
+```python
 from lionpride.libs.string_handlers import extract_json
 
 # Malformed JSON (trailing commas, single quotes)
@@ -230,7 +236,7 @@ result = extract_json(malformed)
 # Fuzzy parsing succeeds
 result = extract_json(malformed, fuzzy_parse=True)
 # {'name': 'Charlie', 'tags': ['python', 'ai']}
-````
+```
 
 ### Example 5: List Input
 
@@ -261,7 +267,7 @@ result = extract_json(mixed_lines)
 
 ### Example 6: Empty and Invalid Input
 
-```python
+````python
 from lionpride.libs.string_handlers import extract_json
 
 # No JSON found
@@ -284,7 +290,7 @@ result = extract_json(invalid_block)
 # With fuzzy parsing (may succeed depending on error)
 result = extract_json(invalid_block, fuzzy_parse=True)
 # {} or [] (depends on fuzzy_json behavior)
-```
+````
 
 ## Usage Patterns
 
@@ -354,7 +360,6 @@ Some text
 all_docs = extract_all_json_objects(docs)
 
 # [{'doc': 1}, {'doc': 2}, {'doc': 3}]
-
 ````
 
 ### Pattern 3: Graceful Degradation
@@ -385,7 +390,7 @@ def safe_extract_json(data: str, *, strict: bool = True) -> dict | list | None:
 
 ### Pattern 4: Batch Processing
 
-```python
+````python
 from lionpride.libs.string_handlers import extract_json
 
 def batch_extract_json(
@@ -410,7 +415,7 @@ responses = [
 
 extracted = batch_extract_json(responses)
 # [{'id': 1}, None, {'id': 2}]
-```
+````
 
 ## Common Pitfalls
 
@@ -447,7 +452,8 @@ result = extract_json(text)
 print(result["key"])  # TypeError if result is list
 ```
 
-**Solution**: Use `return_one_if_single=False` for consistent list return, or check type:
+**Solution**: Use `return_one_if_single=False` for consistent list return, or check
+type:
 
 ```python
 # Force list return
@@ -496,14 +502,14 @@ result = extract_json(lines)
 
 **Solution**: Join with markdown blocks if expecting multiple objects:
 
-```python
+````python
 lines = [
     '```json\n{"a": 1}\n```',
     '```json\n{"b": 2}\n```'
 ]
 result = extract_json(lines)
 # [{'a': 1}, {'b': 2}]  (both extracted)
-```
+````
 
 ### Pitfall 5: Performance with Large Inputs
 
@@ -532,11 +538,11 @@ result = extract_json(text)
 
 The markdown extraction uses a precompiled regex for performance:
 
-```python
+````python
 _JSON_BLOCK_PATTERN = re.compile(r"```json\s*(.*?)\s*```", re.DOTALL)
-```
+````
 
-- **Pattern**: Captures content between ```json and``` markers
+- **Pattern**: Captures content between `json and` markers
 - **Flags**: `re.DOTALL` allows `.` to match newlines (multiline JSON)
 - **Non-greedy**: `.*?` ensures minimal matching (stops at first closing ```)
 - **Whitespace**: `\s*` strips leading/trailing whitespace from captured content
@@ -550,31 +556,38 @@ with contextlib.suppress(Exception):
     return orjson.loads(input_str)
 ```
 
-**Rationale**: Allows graceful fallback through parsing stages without exception handling overhead.
+**Rationale**: Allows graceful fallback through parsing stages without exception
+handling overhead.
 
-**Trade-off**: Silent failures may hide genuine errors. Consider logging in production use.
+**Trade-off**: Silent failures may hide genuine errors. Consider logging in production
+use.
 
 ### Performance Characteristics
 
-| Operation | Time Complexity | Notes |
-|-----------|----------------|-------|
-| Direct JSON parse | O(n) | Where n = input string length (orjson) |
-| Markdown extraction | O(n*m) | Where m = average block size (regex) |
-| Fuzzy parsing | O(n*k) | Where k = repair iterations (varies) |
+| Operation           | Time Complexity | Notes                                  |
+| ------------------- | --------------- | -------------------------------------- |
+| Direct JSON parse   | O(n)            | Where n = input string length (orjson) |
+| Markdown extraction | O(n*m)          | Where m = average block size (regex)   |
+| Fuzzy parsing       | O(n*k)          | Where k = repair iterations (varies)   |
 
-**Optimization**: Direct parsing attempt (`O(n)`) avoids regex overhead for well-formed JSON.
+**Optimization**: Direct parsing attempt (`O(n)`) avoids regex overhead for well-formed
+JSON.
 
 ## Design Rationale
 
 ### Why Silent Error Suppression?
 
-The function uses `contextlib.suppress(Exception)` instead of explicit try/except blocks for:
+The function uses `contextlib.suppress(Exception)` instead of explicit try/except blocks
+for:
 
-1. **Concise Fallback Logic**: Enables clean three-stage parsing without nested error handling
+1. **Concise Fallback Logic**: Enables clean three-stage parsing without nested error
+   handling
 2. **Performance**: Avoids exception handling overhead in success cases
-3. **Flexibility**: Works with any JSON parsing error type (not tied to specific exceptions)
+3. **Flexibility**: Works with any JSON parsing error type (not tied to specific
+   exceptions)
 
-**Trade-off**: Debugging is harder without error visibility. Production code may want logging.
+**Trade-off**: Debugging is harder without error visibility. Production code may want
+logging.
 
 ### Why Precompiled Regex?
 
@@ -588,27 +601,29 @@ The `_JSON_BLOCK_PATTERN` is compiled at module import for:
 
 Most use cases involve extracting single JSON objects from LLM responses:
 
-```python
+````python
 # Common pattern (single object expected)
 response = 'Here it is: ```json\n{"key": "value"}\n```'
 data = extract_json(response)  # dict, not [dict]
 value = data["key"]  # No list unwrapping needed
-```
+````
 
-Defaulting to True reduces boilerplate. Users needing consistent list returns can set `return_one_if_single=False`.
+Defaulting to True reduces boilerplate. Users needing consistent list returns can set
+`return_one_if_single=False`.
 
 ### Why Support List Input?
 
-LLM responses are often received as lists of message chunks or lines. Supporting `list[str]` input eliminates manual joining:
+LLM responses are often received as lists of message chunks or lines. Supporting
+`list[str]` input eliminates manual joining:
 
-```python
+````python
 # Without list support
 chunks = ["Line 1", "```json", '{"key": "value"}', "```"]
 result = extract_json("\n".join(chunks))  # Manual join
 
 # With list support
 result = extract_json(chunks)  # Automatic join
-```
+````
 
 ## See Also
 
@@ -622,14 +637,15 @@ result = extract_json(chunks)  # Automatic join
 
 ### Optimization Tips
 
-1. **Skip Markdown Extraction**: If input is always valid JSON, use `orjson.loads()` directly
+1. **Skip Markdown Extraction**: If input is always valid JSON, use `orjson.loads()`
+   directly
 2. **Limit Fuzzy Parsing**: Only enable `fuzzy_parse=True` when necessary (slower)
 3. **Pre-validate Input**: Check for markdown blocks before calling function
 4. **Batch Processing**: Process multiple strings in parallel for large datasets
 
 ### Benchmarks (Approximate)
 
-```python
+````python
 import timeit
 
 # Direct JSON parsing (best case)
@@ -643,6 +659,7 @@ timeit.timeit(lambda: extract_json('```json\n{"key": "value"}\n```'), number=100
 # Fuzzy parsing (worst case)
 timeit.timeit(lambda: extract_json('{key: "value"}', fuzzy_parse=True), number=10000)
 # ~0.50s (50μs per call)
-```
+````
 
-**Takeaway**: Direct JSON is ~7x faster than markdown extraction, ~25x faster than fuzzy parsing.
+**Takeaway**: Direct JSON is ~7x faster than markdown extraction, ~25x faster than fuzzy
+parsing.

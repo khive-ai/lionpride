@@ -9,6 +9,10 @@ from typing import TYPE_CHECKING
 
 # Lazy import mapping
 _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
+    # mail
+    "Exchange": ("lionpride.session.mail", "Exchange"),
+    "Mail": ("lionpride.session.mail", "Mail"),
+    "OUTBOX": ("lionpride.session.mail", "OUTBOX"),
     # log_adapter
     "LogAdapter": ("lionpride.session.log_adapter", "LogAdapter"),
     "LogAdapterConfig": ("lionpride.session.log_adapter", "LogAdapterConfig"),
@@ -84,6 +88,7 @@ if TYPE_CHECKING:
         WebhookLogSubscriber,
     )
     from .logs import Log, LogStore, LogStoreConfig, LogType
+    from .mail import OUTBOX, Exchange, Mail
     from .messages import (
         ActionRequestContent,
         ActionResponseContent,
@@ -99,10 +104,12 @@ if TYPE_CHECKING:
     from .session import Branch, Session
 
 __all__ = (
+    "OUTBOX",
     "ActionRequestContent",
     "ActionResponseContent",
     "AssistantResponseContent",
     "Branch",
+    "Exchange",
     "InstructionContent",
     "Log",
     "LogAdapter",
@@ -113,6 +120,7 @@ __all__ = (
     "LogStoreConfig",
     "LogSubscriber",
     "LogType",
+    "Mail",
     "Message",
     "MessageContent",
     "MessageRole",

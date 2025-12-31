@@ -1,6 +1,7 @@
 # Processor and Executor: Event Processing Architecture
 
-**Purpose**: Comprehensive guide to the Processor/Executor pattern - background event processing with Flow-based state tracking.
+**Purpose**: Comprehensive guide to the Processor/Executor pattern - background event
+processing with Flow-based state tracking.
 
 **Audience**: Developers building event-driven systems with lionpride.
 
@@ -21,14 +22,16 @@
 
 ### What is the Processor/Executor Pattern?
 
-The Processor/Executor pattern provides a complete event processing architecture with two complementary components:
+The Processor/Executor pattern provides a complete event processing architecture with
+two complementary components:
 
 - **Executor**: Flow-based state tracker with O(1) status queries
 - **Processor**: Background event processor with priority queue and capacity control
 
 **Key Benefits**:
 
-- **Separation of Concerns**: State tracking (Executor) vs background processing (Processor)
+- **Separation of Concerns**: State tracking (Executor) vs background processing
+  (Processor)
 - **O(1) Performance**: Status queries via Flow progressions (not O(n) pile scans)
 - **Capacity Control**: Batch processing with configurable limits
 - **Priority Support**: Custom priority-based event ordering
@@ -85,7 +88,9 @@ The Processor/Executor pattern provides a complete event processing architecture
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Key Insight**: Executor owns event storage (Flow.items) and passes it to Processor as a pile reference. Processor queue stores lightweight (priority, UUID) tuples. Status updates flow back via executor reference.
+**Key Insight**: Executor owns event storage (Flow.items) and passes it to Processor as
+a pile reference. Processor queue stores lightweight (priority, UUID) tuples. Status
+updates flow back via executor reference.
 
 ---
 
@@ -167,7 +172,9 @@ User code → executor.get_events_by_status(EventStatus.COMPLETED)
 
 ## Core Patterns
 
-This section documents the 12 shared architectural patterns between Processor and Executor. These patterns are the **canonical reference** - all other documentation links here.
+This section documents the 12 shared architectural patterns between Processor and
+Executor. These patterns are the **canonical reference** - all other documentation links
+here.
 
 ### Pattern 1: UUID-Based Event References
 
@@ -217,13 +224,15 @@ await processor.enqueue(event.id, priority=1.0)
 next_event = processor.pile[event.id]
 ```
 
-**API Reference**: [Processor.enqueue()](../api/base/processor.md#enqueue), [Executor.get_events_by_status()](../api/base/executor.md#get_events_by_status)
+**API Reference**: [Processor.enqueue()](../api/base/processor.md#enqueue),
+[Executor.get_events_by_status()](../api/base/executor.md#get_events_by_status)
 
 ---
 
 ### Pattern 2: Flow-Based State Tracking
 
-**What**: Executor uses Flow for storage, Processor receives Flow.items as pile reference.
+**What**: Executor uses Flow for storage, Processor receives Flow.items as pile
+reference.
 
 **Flow Structure**:
 
@@ -364,7 +373,8 @@ await executor._update_progression(event)
 assert event.id in executor.states.get_progression("completed")
 ```
 
-**API Reference**: [EventStatus](../api/base/event.md#eventstatus), [Executor._update_progression()](../api/base/executor.md#_update_progression)
+**API Reference**: [EventStatus](../api/base/event.md#eventstatus),
+[Executor._update_progression()](../api/base/executor.md#_update_progression)
 
 ---
 
@@ -429,7 +439,8 @@ await executor.append(event, priority=float('inf'))  # Raises ValueError
 await executor.append(event, priority=float('nan'))  # Raises ValueError
 ```
 
-**API Reference**: [Processor.enqueue()](../api/base/processor.md#enqueue), [Executor.append()](../api/base/executor.md#append)
+**API Reference**: [Processor.enqueue()](../api/base/processor.md#enqueue),
+[Executor.append()](../api/base/executor.md#append)
 
 ---
 
@@ -478,11 +489,11 @@ if events_processed > 0:
 
 **Trade-offs**:
 
-| Configuration | Latency | Throughput | CPU Usage |
-|---------------|---------|------------|-----------|
-| capacity=10, refresh=0.1s | Low (100ms) | Low (100 events/sec max) | High (10 batches/sec) |
-| capacity=100, refresh=1.0s | Medium (1s) | Medium (100 events/sec max) | Medium (1 batch/sec) |
-| capacity=500, refresh=5.0s | High (5s) | High (100 events/sec max) | Low (0.2 batches/sec) |
+| Configuration              | Latency     | Throughput                  | CPU Usage             |
+| -------------------------- | ----------- | --------------------------- | --------------------- |
+| capacity=10, refresh=0.1s  | Low (100ms) | Low (100 events/sec max)    | High (10 batches/sec) |
+| capacity=100, refresh=1.0s | Medium (1s) | Medium (100 events/sec max) | Medium (1 batch/sec)  |
+| capacity=500, refresh=5.0s | High (5s)   | High (100 events/sec max)   | Low (0.2 batches/sec) |
 
 **Tuning Guidelines**:
 
@@ -523,7 +534,8 @@ if capacity_refresh_time < 0.01:
     raise ValueError("Refresh time must be >= 0.01s (prevent CPU hot loop)")
 ```
 
-**API Reference**: [Processor.**init**()](../api/base/processor.md#__init__), [Processor.process()](../api/base/processor.md#process)
+**API Reference**: [Processor.**init**()](../api/base/processor.md#__init__),
+[Processor.process()](../api/base/processor.md#process)
 
 ---
 
@@ -704,7 +716,9 @@ assert len(processor._denial_counts) == 0
 await processor.start()  # Fresh state
 ```
 
-**API Reference**: [Executor.start()](../api/base/executor.md#start), [Executor.stop()](../api/base/executor.md#stop), [Processor.execute()](../api/base/processor.md#execute)
+**API Reference**: [Executor.start()](../api/base/executor.md#start),
+[Executor.stop()](../api/base/executor.md#stop),
+[Processor.execute()](../api/base/processor.md#execute)
 
 ---
 
@@ -750,7 +764,7 @@ completed = executor.get_events_by_status(EventStatus.COMPLETED)
 **Performance Analysis**:
 
 | Total Events | Completed | O(n) Scan Time | O(1) Query Time | Speedup |
-|--------------|-----------|----------------|-----------------|---------|
+| ------------ | --------- | -------------- | --------------- | ------- |
 | 1,000        | 100       | ~0.5ms         | ~0.05ms         | 10x     |
 | 10,000       | 1,000     | ~5ms           | ~0.5ms          | 10x     |
 | 100,000      | 10,000    | ~50ms          | ~5ms            | 10x     |
@@ -791,7 +805,9 @@ print(f"Completed: {len(completed)}")
 print(f"Failed: {len(failed)}")
 ```
 
-**API Reference**: [Executor.get_events_by_status()](../api/base/executor.md#get_events_by_status), [Executor.status_counts()](../api/base/executor.md#status_counts)
+**API Reference**:
+[Executor.get_events_by_status()](../api/base/executor.md#get_events_by_status),
+[Executor.status_counts()](../api/base/executor.md#status_counts)
 
 ---
 
@@ -872,13 +888,15 @@ async def main():
 - Streaming event: 1 capacity (regardless of yield count)
 - Rationale: Capacity limits concurrent tasks, not operations per task
 
-**API Reference**: [Event.streaming](../api/base/event.md#streaming), [Event.stream()](../api/base/event.md#stream)
+**API Reference**: [Event.streaming](../api/base/event.md#streaming),
+[Event.stream()](../api/base/event.md#stream)
 
 ---
 
 ### Pattern 10: Permission Checks and Rate Limiting
 
-**What**: Processor supports custom permission checks via `request_permission()` override.
+**What**: Processor supports custom permission checks via `request_permission()`
+override.
 
 **Base Implementation**:
 
@@ -970,7 +988,8 @@ class AuthProcessor(Processor):
 - Permission denied → **doesn't consume capacity** (allows retries)
 - Aborted events → removed from queue (capacity not consumed)
 
-**API Reference**: [Processor.request_permission()](../api/base/processor.md#request_permission)
+**API Reference**:
+[Processor.request_permission()](../api/base/processor.md#request_permission)
 
 ---
 
@@ -1132,7 +1151,8 @@ executor.states = Flow(
 await executor.append(OtherEvent())  # Raises ValidationError if strict_type=True
 ```
 
-**API Reference**: [Processor.event_type](../api/base/processor.md#event_type), [Executor.processor_type](../api/base/executor.md#processor_type)
+**API Reference**: [Processor.event_type](../api/base/processor.md#event_type),
+[Executor.processor_type](../api/base/executor.md#processor_type)
 
 ---
 
@@ -1546,7 +1566,8 @@ Capacity: 20
 
 ### Custom Progressions
 
-Beyond the 7 default EventStatus progressions, you can add custom progressions for business logic:
+Beyond the 7 default EventStatus progressions, you can add custom progressions for
+business logic:
 
 ```python
 # Add custom progression after executor creation

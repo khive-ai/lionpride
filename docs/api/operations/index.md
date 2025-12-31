@@ -4,7 +4,9 @@
 
 ## Overview
 
-The `operations` module provides a layered system of composable operations for LLM interactions. Each operation builds on lower-level ones, enabling both fine-grained control and high-level convenience.
+The `operations` module provides a layered system of composable operations for LLM
+interactions. Each operation builds on lower-level ones, enabling both fine-grained
+control and high-level convenience.
 
 **Operation Hierarchy:**
 
@@ -27,57 +29,59 @@ operate ───────────────┴─► react
 - **react**: Multi-turn operation loop (ReAct pattern)
 - **flow**: Dependency-aware execution of operation graphs
 
-The module follows lionagi v0's proven patterns for structured output extraction, validation, and tool use orchestration. Each operation is parameterized via a dedicated `*Params` class for type safety and IDE support.
+The module follows lionagi v0's proven patterns for structured output extraction,
+validation, and tool use orchestration. Each operation is parameterized via a dedicated
+`*Params` class for type safety and IDE support.
 
 ## Functions
 
 ### Core Operations
 
-| Function | Description |
-|----------|-------------|
-| `generate` | Low-level LLM call without message persistence |
-| `parse` | Extract structured data from text using Pydantic models |
-| `communicate` | Generate + parse in one operation |
-| `operate` | Full structured output with validation and tool use |
-| `react` | Multi-turn reasoning loop (ReAct pattern) |
-| `interpret` | Interpret unmatched content against expected schema |
+| Function      | Description                                             |
+| ------------- | ------------------------------------------------------- |
+| `generate`    | Low-level LLM call without message persistence          |
+| `parse`       | Extract structured data from text using Pydantic models |
+| `communicate` | Generate + parse in one operation                       |
+| `operate`     | Full structured output with validation and tool use     |
+| `react`       | Multi-turn reasoning loop (ReAct pattern)               |
+| `interpret`   | Interpret unmatched content against expected schema     |
 
 ### Flow Execution
 
-| Function | Description |
-|----------|-------------|
-| `flow` | Execute operation graph with dependency resolution |
-| `flow_stream` | Streaming version of flow execution |
+| Function      | Description                                        |
+| ------------- | -------------------------------------------------- |
+| `flow`        | Execute operation graph with dependency resolution |
+| `flow_stream` | Streaming version of flow execution                |
 
 ## Parameter Classes
 
-| Class | Used By | Description |
-|-------|---------|-------------|
-| `GenerateParams` | `generate`, `communicate`, `operate` | LLM generation parameters |
-| `ParseParams` | `parse`, `communicate`, `operate` | Structured output parsing parameters |
-| `CommunicateParams` | `communicate`, `operate` | Combined generate + parse parameters |
-| `ActParams` | `operate` | Tool use parameters |
-| `OperateParams` | `operate`, `react` | Full operation parameters |
-| `ReactParams` | `react` | Multi-turn loop parameters |
-| `InterpretParams` | `interpret` | Unmatched content interpretation parameters |
+| Class               | Used By                              | Description                                 |
+| ------------------- | ------------------------------------ | ------------------------------------------- |
+| `GenerateParams`    | `generate`, `communicate`, `operate` | LLM generation parameters                   |
+| `ParseParams`       | `parse`, `communicate`, `operate`    | Structured output parsing parameters        |
+| `CommunicateParams` | `communicate`, `operate`             | Combined generate + parse parameters        |
+| `ActParams`         | `operate`                            | Tool use parameters                         |
+| `OperateParams`     | `operate`, `react`                   | Full operation parameters                   |
+| `ReactParams`       | `react`                              | Multi-turn loop parameters                  |
+| `InterpretParams`   | `interpret`                          | Unmatched content interpretation parameters |
 
 ## Result Classes
 
-| Class | Description |
-|-------|-------------|
-| `ReactResult` | Final result of react loop |
-| `ReactStep` | Single step in react loop |
+| Class               | Description                |
+| ------------------- | -------------------------- |
+| `ReactResult`       | Final result of react loop |
+| `ReactStep`         | Single step in react loop  |
 | `ReactStepResponse` | Response from a react step |
 
 ## Builder Classes
 
-| Class | Description |
-|-------|-------------|
-| `Operation` | Node in operation graph |
-| `OperationType` | Enum of operation types |
-| `Builder` | Fluent builder for operation graphs |
-| `OperationGraphBuilder` | Low-level graph construction |
-| `OperationRegistry` | Registry of available operations |
+| Class                     | Description                             |
+| ------------------------- | --------------------------------------- |
+| `Operation`               | Node in operation graph                 |
+| `OperationType`           | Enum of operation types                 |
+| `Builder`                 | Fluent builder for operation graphs     |
+| `OperationGraphBuilder`   | Low-level graph construction            |
+| `OperationRegistry`       | Registry of available operations        |
 | `DependencyAwareExecutor` | Executes graphs respecting dependencies |
 
 ## Quick Start

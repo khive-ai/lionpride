@@ -4,7 +4,10 @@
 
 ## Overview
 
-The `concurrency.patterns` module provides production-ready concurrency patterns for common async workflows. Built on lionpride's structured concurrency primitives (task groups, cancel scopes), these utilities offer safe, composable abstractions for parallel execution, racing, retries, and streaming completions.
+The `concurrency.patterns` module provides production-ready concurrency patterns for
+common async workflows. Built on lionpride's structured concurrency primitives (task
+groups, cancel scopes), these utilities offer safe, composable abstractions for parallel
+execution, racing, retries, and streaming completions.
 
 **Key Capabilities:**
 
@@ -46,15 +49,19 @@ async def gather(
 **Parameters:**
 
 - `*aws` (Awaitable[T]): Awaitables to execute concurrently
-- `return_exceptions` (bool, default False): If True, return exceptions as results instead of raising
+- `return_exceptions` (bool, default False): If True, return exceptions as results
+  instead of raising
 
 **Returns:**
 
-- list[T | BaseException]: Results in same order as input awaitables. If `return_exceptions=True`, failed awaitables return exception objects; otherwise exceptions propagate.
+- list[T | BaseException]: Results in same order as input awaitables. If
+  `return_exceptions=True`, failed awaitables return exception objects; otherwise
+  exceptions propagate.
 
 **Raises:**
 
-- ExceptionGroup: If `return_exceptions=False` and any awaitable raises (cancellations filtered out)
+- ExceptionGroup: If `return_exceptions=False` and any awaitable raises (cancellations
+  filtered out)
 
 **Examples:**
 
@@ -119,7 +126,8 @@ async def race(*aws: Awaitable[T]) -> T: ...
 **Raises:**
 
 - ValueError: If called with no awaitables
-- Exception: If first completed awaitable raises, exception propagates outside ExceptionGroup
+- Exception: If first completed awaitable raises, exception propagates outside
+  ExceptionGroup
 
 **Examples:**
 
@@ -156,7 +164,8 @@ result = await race(
 **Notes:**
 
 - Immediately cancels remaining awaitables when first completes
-- If first completion raises, exception is re-raised outside task group context (avoids ExceptionGroup wrapping)
+- If first completion raises, exception is re-raised outside task group context (avoids
+  ExceptionGroup wrapping)
 - Uses memory stream for communication between tasks
 - All tasks run concurrently until first completion
 
@@ -188,16 +197,19 @@ async def bounded_map(
 - `func` (Callable[[T], Awaitable[R]]): Async function to apply to each item
 - `items` (Iterable[T]): Items to process
 - `limit` (int): Maximum concurrent executions (must be >= 1)
-- `return_exceptions` (bool, default False): If True, return exceptions as results instead of raising
+- `return_exceptions` (bool, default False): If True, return exceptions as results
+  instead of raising
 
 **Returns:**
 
-- list[R | BaseException]: Results in same order as input items. If `return_exceptions=True`, failed items return exception objects.
+- list[R | BaseException]: Results in same order as input items. If
+  `return_exceptions=True`, failed items return exception objects.
 
 **Raises:**
 
 - ValueError: If `limit <= 0`
-- ExceptionGroup: If `return_exceptions=False` and any execution raises (cancellations filtered out)
+- ExceptionGroup: If `return_exceptions=False` and any execution raises (cancellations
+  filtered out)
 
 **Examples:**
 
@@ -274,12 +286,15 @@ async def retry(
 
 **Parameters:**
 
-- `fn` (Callable[[], Awaitable[T]]): Async function to retry (must be nullary - no arguments)
+- `fn` (Callable[[], Awaitable[T]]): Async function to retry (must be nullary - no
+  arguments)
 - `attempts` (int, default 3): Maximum retry attempts (original + retries)
 - `base_delay` (float, default 0.1): Initial delay in seconds
 - `max_delay` (float, default 2.0): Maximum delay cap in seconds
-- `retry_on` (tuple[type[BaseException], ...], default (Exception,)): Exception types to retry
-- `jitter` (float, default 0.1): Random jitter factor (0.0 = no jitter, 0.1 = ±10% variance)
+- `retry_on` (tuple[type[BaseException], ...], default (Exception,)): Exception types to
+  retry
+- `jitter` (float, default 0.1): Random jitter factor (0.0 = no jitter, 0.1 = ±10%
+  variance)
 
 **Returns:**
 
@@ -333,16 +348,17 @@ with move_on_after(30.0):  # 30-second total timeout
 
 **Retry Schedule:**
 
-Delay calculation: `min(max_delay, base_delay * 2^(attempt-1)) * (1 + random() * jitter)`
+Delay calculation:
+`min(max_delay, base_delay * 2^(attempt-1)) * (1 + random() * jitter)`
 
-| Attempt | Base Delay | No Jitter | With 10% Jitter |
-|---------|------------|-----------|-----------------|
-| 1       | 0.1s       | 0.1s      | 0.1-0.11s       |
-| 2       | 0.1s       | 0.2s      | 0.2-0.22s       |
-| 3       | 0.1s       | 0.4s      | 0.4-0.44s       |
-| 4       | 0.1s       | 0.8s      | 0.8-0.88s       |
-| 5       | 0.1s       | 1.6s      | 1.6-1.76s       |
-| 6       | 0.1s       | 2.0s      | 2.0-2.2s (capped)|
+| Attempt | Base Delay | No Jitter | With 10% Jitter   |
+| ------- | ---------- | --------- | ----------------- |
+| 1       | 0.1s       | 0.1s      | 0.1-0.11s         |
+| 2       | 0.1s       | 0.2s      | 0.2-0.22s         |
+| 3       | 0.1s       | 0.4s      | 0.4-0.44s         |
+| 4       | 0.1s       | 0.8s      | 0.8-0.88s         |
+| 5       | 0.1s       | 1.6s      | 1.6-1.76s         |
+| 6       | 0.1s       | 2.0s      | 2.0-2.2s (capped) |
 
 **Notes:**
 
@@ -380,16 +396,17 @@ class CompletionStream:
 **Parameters:**
 
 - `aws` (Sequence[Awaitable[T]]): Awaitables to execute concurrently
-- `limit` (int, optional): Maximum concurrent executions. If None, no limit (all start immediately)
+- `limit` (int, optional): Maximum concurrent executions. If None, no limit (all start
+  immediately)
 
 **Attributes:**
 
-| Attribute           | Type                                    | Description                                      |
-|---------------------|-----------------------------------------|--------------------------------------------------|
-| `aws`               | `Sequence[Awaitable[T]]`                | Input awaitables                                 |
-| `limit`             | `int \| None`                           | Concurrency limit (None = unlimited)             |
-| `_completed_count`  | `int`                                   | Number of results yielded                        |
-| `_total_count`      | `int`                                   | Total awaitables to process                      |
+| Attribute          | Type                     | Description                          |
+| ------------------ | ------------------------ | ------------------------------------ |
+| `aws`              | `Sequence[Awaitable[T]]` | Input awaitables                     |
+| `limit`            | `int \| None`            | Concurrency limit (None = unlimited) |
+| `_completed_count` | `int`                    | Number of results yielded            |
+| `_total_count`     | `int`                    | Total awaitables to process          |
 
 **Methods:**
 
@@ -400,7 +417,8 @@ async def __aenter__(self) -> CompletionStream: ...
 async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool: ...
 ```
 
-Must be used as async context manager. Entry starts all tasks, exit cleans up resources and cancels pending tasks.
+Must be used as async context manager. Entry starts all tasks, exit cleans up resources
+and cancels pending tasks.
 
 #### Iteration
 
@@ -491,7 +509,8 @@ with move_on_after(30.0):  # 30-second deadline
 
 ### Pitfall 1: Forgetting return_exceptions
 
-**Issue**: Uncaught exceptions in `gather()` or `bounded_map()` propagate as ExceptionGroup.
+**Issue**: Uncaught exceptions in `gather()` or `bounded_map()` propagate as
+ExceptionGroup.
 
 ```python
 # First failure cancels all tasks
@@ -560,7 +579,8 @@ result = await race(
 )
 ```
 
-**Solution**: Ensure tasks clean up resources in finally blocks or use structured concurrency primitives.
+**Solution**: Ensure tasks clean up resources in finally blocks or use structured
+concurrency primitives.
 
 ---
 
@@ -603,7 +623,8 @@ This contrasts with `asyncio.create_task()` where tasks can leak if not awaited.
 - **Cancellations**: Propagated as-is (expected control flow)
 - **Real exceptions**: Re-raised without cancellation noise
 
-This prevents masking actual errors when tasks are cancelled due to timeout or explicit cancellation.
+This prevents masking actual errors when tasks are cancelled due to timeout or explicit
+cancellation.
 
 ---
 
@@ -619,7 +640,8 @@ This prevents masking actual errors when tasks are cancelled due to timeout or e
 
 ### Why CompletionStream Over AsyncIterator?
 
-`CompletionStream` requires explicit context manager usage instead of simple async iteration because:
+`CompletionStream` requires explicit context manager usage instead of simple async
+iteration because:
 
 1. **Resource safety**: Forces explicit cleanup of task group and streams
 2. **Structured concurrency**: Clear lifetime boundaries for concurrent tasks

@@ -1,10 +1,14 @@
 # API Design Guide
 
-> Best practices for designing type-safe, intuitive APIs with sentinels and optional parameters
+> Best practices for designing type-safe, intuitive APIs with sentinels and optional
+> parameters
 
 ## Overview
 
-lionpride provides **sentinel values** (Undefined, Unset) for building APIs with precise semantics around optional parameters, missing data, and partial updates. This guide covers when to use sentinels vs `Optional`, three-state logic patterns, and API design best practices.
+lionpride provides **sentinel values** (Undefined, Unset) for building APIs with precise
+semantics around optional parameters, missing data, and partial updates. This guide
+covers when to use sentinels vs `Optional`, three-state logic patterns, and API design
+best practices.
 
 **Key Topics:**
 
@@ -89,7 +93,8 @@ def set_timeout(
         self.timeout = timeout
 ```
 
-**Why sentinels?** Because `None` has a specific meaning (infinite timeout), distinct from "don't change current value".
+**Why sentinels?** Because `None` has a specific meaning (infinite timeout), distinct
+from "don't change current value".
 
 #### 2. Partial updates (PATCH semantics)
 
@@ -150,7 +155,8 @@ print(validate_required(data, ["name", "email", "age"]))
 # ["age"] - only "age" is missing (email is present but null)
 ```
 
-**Why sentinels?** Distinguishes "key missing from dict" (Undefined) from "key present with null value" (None).
+**Why sentinels?** Distinguishes "key missing from dict" (Undefined) from "key present
+with null value" (None).
 
 ---
 

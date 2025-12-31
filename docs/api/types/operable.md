@@ -4,7 +4,10 @@
 
 ## Overview
 
-`Operable` is a **framework-agnostic specification container** that manages ordered collections of `Spec` objects for dynamic model generation. It enforces **field name uniqueness**, provides **field filtering**, and enables **adapter-based model creation** for frameworks like Pydantic.
+`Operable` is a **framework-agnostic specification container** that manages ordered
+collections of `Spec` objects for dynamic model generation. It enforces **field name
+uniqueness**, provides **field filtering**, and enables **adapter-based model creation**
+for frameworks like Pydantic.
 
 **Key Capabilities:**
 
@@ -12,15 +15,19 @@
 - **Type Safety**: Validates all items are Spec instances at construction
 - **Field Filtering**: Include/exclude patterns for selective field retrieval
 - **Adapter Pattern**: Framework-agnostic model generation (currently supports Pydantic)
-- **Protocol Implementation**: Implements Hashable and Allowable for collection operations
+- **Protocol Implementation**: Implements Hashable and Allowable for collection
+  operations
 - **Immutability**: Frozen dataclass ensures specification integrity
 
 **When to Use Operable:**
 
-- **Dynamic Model Generation**: Create runtime models from specifications (LLM structured outputs, API schemas)
+- **Dynamic Model Generation**: Create runtime models from specifications (LLM
+  structured outputs, API schemas)
 - **Schema Composition**: Build complex schemas from multiple Spec components
-- **Field Validation**: Ensure field uniqueness and type correctness before model creation
-- **Framework Abstraction**: Define schemas once, generate models for multiple frameworks
+- **Field Validation**: Ensure field uniqueness and type correctness before model
+  creation
+- **Framework Abstraction**: Define schemas once, generate models for multiple
+  frameworks
 
 **When NOT to Use Operable:**
 
@@ -56,26 +63,29 @@ class Operable:
 
 **specs** : tuple[Spec, ...] or list[Spec], optional
 
-Ordered collection of Spec objects defining the model fields. Converted to tuple if provided as list.
+Ordered collection of Spec objects defining the model fields. Converted to tuple if
+provided as list.
 
 - Type coercion: Lists automatically converted to tuples (immutability)
 - Validation: All items must be Spec instances (raises TypeError otherwise)
-- Uniqueness: Field names must be unique across all Specs (raises ValueError if duplicates found)
+- Uniqueness: Field names must be unique across all Specs (raises ValueError if
+  duplicates found)
 - Default: Empty tuple `()`
 
 **name** : str, optional
 
-Optional name for the Operable collection. Used as default model name in `create_model()` if not explicitly provided.
+Optional name for the Operable collection. Used as default model name in
+`create_model()` if not explicitly provided.
 
 - Default: `None`
 - Usage: Model generation, documentation, debugging
 
 ## Attributes
 
-| Attribute       | Type             | Frozen | Description                                    |
-| --------------- | ---------------- | ------ | ---------------------------------------------- |
+| Attribute       | Type               | Frozen | Description                                      |
+| --------------- | ------------------ | ------ | ------------------------------------------------ |
 | `__op_fields__` | `tuple[Spec, ...]` | Yes    | Ordered tuple of Spec objects (internal storage) |
-| `name`          | `str \| None`     | Yes    | Optional collection name                       |
+| `name`          | `str \| None`      | Yes    | Optional collection name                         |
 
 ## Methods
 
@@ -121,7 +131,8 @@ def allowed(self) -> set[str]: ...
 
 **Notes:**
 
-Implements the `Allowable` protocol. Only Specs with non-None names are included in the allowed set.
+Implements the `Allowable` protocol. Only Specs with non-None names are included in the
+allowed set.
 
 #### `check_allowed()`
 
@@ -230,7 +241,8 @@ True
 
 **Notes:**
 
-Returns `Unset` by default for missing keys (not `None`) to distinguish "not found" from "explicitly None".
+Returns `Unset` by default for missing keys (not `None`) to distinguish "not found" from
+"explicitly None".
 
 ### Field Filtering
 
@@ -251,8 +263,10 @@ def get_specs(
 
 **Parameters:**
 
-- `include` (set[str], optional): Only include these field names. Cannot be used with `exclude`.
-- `exclude` (set[str], optional): Exclude these field names. Cannot be used with `include`.
+- `include` (set[str], optional): Only include these field names. Cannot be used with
+  `exclude`.
+- `exclude` (set[str], optional): Exclude these field names. Cannot be used with
+  `include`.
 
 **Returns:**
 
@@ -260,7 +274,8 @@ def get_specs(
 
 **Raises:**
 
-- ValueError: If both `include` and `exclude` provided, or if include contains invalid field names
+- ValueError: If both `include` and `exclude` provided, or if include contains invalid
+  field names
 
 **Examples:**
 
@@ -334,7 +349,8 @@ def create_model(
 - `adapter` ({'pydantic'}, default 'pydantic'): Framework adapter to use
   - `'pydantic'`: Generate Pydantic BaseModel subclass
   - Future: `'dataclass'`, `'msgspec'`, `'attrs'` (planned)
-- `model_name` (str, optional): Name for generated model class. Default: `self.name` or `"DynamicModel"`
+- `model_name` (str, optional): Name for generated model class. Default: `self.name` or
+  `"DynamicModel"`
 - `include` (set[str], optional): Only include these fields in model
 - `exclude` (set[str], optional): Exclude these fields from model
 - `**kw` (Any): Additional adapter-specific keyword arguments
@@ -427,13 +443,16 @@ Validation failed
 - Validation modes (strict/lenient/fuzzy) not yet exposed in API
 - Custom parser/renderer protocols available for extensible output format handling
 
-Pydantic adapter implementation is available in `src/lionpride/types/spec_adapters/pydantic_field.py`.
+Pydantic adapter implementation is available in
+`src/lionpride/types/spec_adapters/pydantic_field.py`.
 
 #### `from_model()` (classmethod)
 
 Create Operable from a Pydantic model's fields.
 
-Disassembles a Pydantic BaseModel class and returns an Operable with Specs representing each top-level field. Preserves type annotations (including nullable/listable), default values, validation constraints, and metadata.
+Disassembles a Pydantic BaseModel class and returns an Operable with Specs representing
+each top-level field. Preserves type annotations (including nullable/listable), default
+values, validation constraints, and metadata.
 
 **Signature:**
 
@@ -451,7 +470,8 @@ def from_model(
 **Parameters:**
 
 - `model` (type[BaseModel]): Pydantic BaseModel class to disassemble (not an instance)
-- `name` (str, optional): Optional operable name. Default: model's class name (`model.__name__`)
+- `name` (str, optional): Optional operable name. Default: model's class name
+  (`model.__name__`)
 - `adapter` ({'pydantic'}, default 'pydantic'): Adapter type for model generation
 
 **Returns:**
@@ -508,15 +528,15 @@ True
 
 The method preserves comprehensive field information:
 
-| Property | Example | Notes |
-|----------|---------|-------|
-| Type annotation | `str`, `int`, `MyClass` | Base type extracted |
-| Nullable | `str \| None`, `Optional[str]` | Sets `spec.nullable = True` |
-| Listable | `list[str]`, `List[int]` | Sets `spec.listable = True` |
-| Default value | `age: int = 0` | Sets `spec.default` |
-| Default factory | `tags: list = Field(default_factory=list)` | Sets `spec.default` to factory |
-| Constraints | `Field(gt=0, lt=100)` | Preserves gt, lt, ge, le, etc. |
-| Metadata | `Field(description="...")` | Preserves description, alias, title, etc. |
+| Property        | Example                                    | Notes                                     |
+| --------------- | ------------------------------------------ | ----------------------------------------- |
+| Type annotation | `str`, `int`, `MyClass`                    | Base type extracted                       |
+| Nullable        | `str \| None`, `Optional[str]`             | Sets `spec.nullable = True`               |
+| Listable        | `list[str]`, `List[int]`                   | Sets `spec.listable = True`               |
+| Default value   | `age: int = 0`                             | Sets `spec.default`                       |
+| Default factory | `tags: list = Field(default_factory=list)` | Sets `spec.default` to factory            |
+| Constraints     | `Field(gt=0, lt=100)`                      | Preserves gt, lt, ge, le, etc.            |
+| Metadata        | `Field(description="...")`                 | Preserves description, alias, title, etc. |
 
 **Notes:**
 
@@ -529,7 +549,10 @@ The method preserves comprehensive field information:
 
 **Nullable Required Fields:**
 
-When a field is nullable (`str | None`) but has no default value, the resulting Spec is marked with `required=True` to prevent automatic `default=None` injection during model regeneration. This preserves the original semantics where the field must be explicitly provided.
+When a field is nullable (`str | None`) but has no default value, the resulting Spec is
+marked with `required=True` to prevent automatic `default=None` injection during model
+regeneration. This preserves the original semantics where the field must be explicitly
+provided.
 
 ```python
 >>> class Config(BaseModel):
@@ -551,7 +574,8 @@ Operable implements two core protocols:
 
 **Method**: `__hash__()` based on frozen dataclass
 
-Operable instances are hashable because all attributes are frozen (immutable). Hash is computed from `(__op_fields__, name)` tuple.
+Operable instances are hashable because all attributes are frozen (immutable). Hash is
+computed from `(__op_fields__, name)` tuple.
 
 **Usage**: Safe for use in sets and as dict keys.
 
@@ -582,7 +606,8 @@ True
 
 **Method**: `allowed()` returns set of field names
 
-Implements the `Allowable` protocol by extracting field names from all Specs with non-None names.
+Implements the `Allowable` protocol by extracting field names from all Specs with
+non-None names.
 
 **Usage**: Field validation, schema introspection, access control.
 
@@ -1025,12 +1050,16 @@ new_schema = Operable(old_schema.__op_fields__, name="NewSchema")
 
 Operable enforces field name uniqueness because:
 
-1. **Model Generation**: Frameworks like Pydantic, dataclasses, and msgspec require unique field names
-2. **Ambiguity Prevention**: Duplicate names create undefined behavior (which field wins?)
+1. **Model Generation**: Frameworks like Pydantic, dataclasses, and msgspec require
+   unique field names
+2. **Ambiguity Prevention**: Duplicate names create undefined behavior (which field
+   wins?)
 3. **Schema Integrity**: Clear 1:1 mapping between field names and Spec objects
-4. **Error Detection**: Catch configuration errors early (construction time, not runtime)
+4. **Error Detection**: Catch configuration errors early (construction time, not
+   runtime)
 
-If you need multiple specs for the same conceptual field (e.g., validation variants), use different names or separate Operables.
+If you need multiple specs for the same conceptual field (e.g., validation variants),
+use different names or separate Operables.
 
 ### Why Immutability (Frozen)?
 
@@ -1041,14 +1070,16 @@ Freezing Operable ensures:
 3. **Thread Safety**: No synchronization needed for concurrent access
 4. **Functional Style**: Composable schemas without side effects
 
-Mutable schemas would break hashing and introduce subtle bugs in multi-threaded or caching scenarios.
+Mutable schemas would break hashing and introduce subtle bugs in multi-threaded or
+caching scenarios.
 
 ### Why Adapter Pattern?
 
 The adapter pattern (`create_model(adapter=...)`) provides:
 
 1. **Framework Agnostic**: Define specs once, target multiple validation libraries
-2. **Future Proof**: Add new adapters (dataclass, msgspec, attrs) without changing Operable
+2. **Future Proof**: Add new adapters (dataclass, msgspec, attrs) without changing
+   Operable
 3. **Testability**: Mock adapters for unit testing schema logic
 4. **Migration**: Gradually migrate between frameworks without rewriting schemas
 
@@ -1086,7 +1117,8 @@ Operable will support multiple validation modes for different use cases:
 - **Lenient Mode**: Optional fields allowed, defaults applied, warnings for issues
 - **Fuzzy Mode**: Best-effort parsing, coercion enabled, silently ignore extra fields
 
-**Current State**: Validation mode configuration not yet exposed in Operable API. Pydantic adapter uses framework defaults.
+**Current State**: Validation mode configuration not yet exposed in Operable API.
+Pydantic adapter uses framework defaults.
 
 ## Custom Parser Support
 
@@ -1095,7 +1127,8 @@ Operable will support multiple validation modes for different use cases:
 Custom parser/renderer protocols enable extensible structured output handling:
 
 - **CustomParser**: Protocol for extracting structured data from LLM text responses
-- **CustomRenderer**: Protocol for formatting request_model schema for custom output formats
+- **CustomRenderer**: Protocol for formatting request_model schema for custom output
+  formats
 
 **Usage**: Implement the protocols in `lionpride.operations.operate.types`:
 

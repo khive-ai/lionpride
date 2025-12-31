@@ -4,11 +4,14 @@
 
 ## Overview
 
-`flow_report` orchestrates Report workflows, automatically determining execution order from field dependencies and executing independent forms in parallel.
+`flow_report` orchestrates Report workflows, automatically determining execution order
+from field dependencies and executing independent forms in parallel.
 
-**Capabilities:** Automatic scheduling via `next_forms()` | Parallel execution with optional `max_concurrent` limit | Deadlock detection | Branch resolution via DSL prefix
+**Capabilities:** Automatic scheduling via `next_forms()` | Parallel execution with
+optional `max_concurrent` limit | Deadlock detection | Branch resolution via DSL prefix
 
-**Use for:** Multi-step workflows, DAG pipelines, parallel analyses. **Not for:** Single-step operations (use `operate`), simple chat (use `Session.conduct`).
+**Use for:** Multi-step workflows, DAG pipelines, parallel analyses. **Not for:**
+Single-step operations (use `operate`), simple chat (use `Session.conduct`).
 
 ## Function Signature
 
@@ -30,15 +33,15 @@ async def flow_report(
 
 ## Parameters
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `session` | `Session` | required | Session with services and branches |
-| `report` | `Report` | required | Initialized Report with `form_assignments` |
-| `branch` | `Branch \| str \| None` | `None` | Default branch (forms can override via DSL prefix) |
-| `max_concurrent` | `int \| None` | `None` | Max parallel forms (None = unlimited) |
-| `reason` | `bool` | `False` | Include reasoning in outputs |
-| `actions` | `bool` | `False` | Enable tool use |
-| `verbose` | `bool` | `False` | Print execution progress |
+| Parameter        | Type                    | Default  | Description                                        |
+| ---------------- | ----------------------- | -------- | -------------------------------------------------- |
+| `session`        | `Session`               | required | Session with services and branches                 |
+| `report`         | `Report`                | required | Initialized Report with `form_assignments`         |
+| `branch`         | `Branch \| str \| None` | `None`   | Default branch (forms can override via DSL prefix) |
+| `max_concurrent` | `int \| None`           | `None`   | Max parallel forms (None = unlimited)              |
+| `reason`         | `bool`                  | `False`  | Include reasoning in outputs                       |
+| `actions`        | `bool`                  | `False`  | Enable tool use                                    |
+| `verbose`        | `bool`                  | `False`  | Print execution progress                           |
 
 ## Returns
 
@@ -115,7 +118,8 @@ START
 ### Scheduling Algorithm
 
 1. **Loop**: Continue until `report.is_complete()` returns `True`
-2. **Get Ready Forms**: Call `report.next_forms()` to find forms with all inputs available
+2. **Get Ready Forms**: Call `report.next_forms()` to find forms with all inputs
+   available
 3. **Deadlock Check**: If no ready forms but pending forms exist, raise `RuntimeError`
 4. **Execute**:
    - Single form: Execute directly via `operate()`
@@ -205,15 +209,20 @@ result = await flow_report(session, report, branch=branch, max_concurrent=2)
 
 ## Common Pitfalls
 
-- **Uninitialized report**: Always call `report.initialize(**inputs)` before `flow_report()`
-- **Circular dependencies**: Ensure DAG structure - `"a -> b"` and `"b -> a"` causes deadlock
-- **Missing output schema**: Declare all outputs as class attributes: `analysis: Analysis | None = None`
+- **Uninitialized report**: Always call `report.initialize(**inputs)` before
+  `flow_report()`
+- **Circular dependencies**: Ensure DAG structure - `"a -> b"` and `"b -> a"` causes
+  deadlock
+- **Missing output schema**: Declare all outputs as class attributes:
+  `analysis: Analysis | None = None`
 
 ## Design Rationale
 
-**Dependency-Based Scheduling**: Users declare data dependencies, not execution order. Independent forms parallelize automatically.
+**Dependency-Based Scheduling**: Users declare data dependencies, not execution order.
+Independent forms parallelize automatically.
 
-**Loop Until Complete**: Handles any DAG without explicit topological sort; clear iteration boundaries for debugging.
+**Loop Until Complete**: Handles any DAG without explicit topological sort; clear
+iteration boundaries for debugging.
 
 **Deadlock Detection**: Fail fast on misconfiguration rather than silent hang.
 

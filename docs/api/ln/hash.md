@@ -1,18 +1,27 @@
 # hash_dict
 
-> Stable hashing for nested data structures including dicts, lists, sets, and Pydantic models
+> Stable hashing for nested data structures including dicts, lists, sets, and Pydantic
+> models
 
 ## Overview
 
-`hash_dict()` generates stable, deterministic hash values for complex Python data structures that are normally unhashable (dicts, lists, sets). It provides **order-independent hashing** for collections and **automatic Pydantic model support**, making it ideal for caching, deduplication, and comparison operations.
+`hash_dict()` generates stable, deterministic hash values for complex Python data
+structures that are normally unhashable (dicts, lists, sets). It provides
+**order-independent hashing** for collections and **automatic Pydantic model support**,
+making it ideal for caching, deduplication, and comparison operations.
 
 **Key Capabilities:**
 
-- **Order-Independent Hashing**: Dicts and sets hash identically regardless of insertion order
-- **Deep Nested Support**: Recursively handles nested structures (dict of lists of sets, etc.)
-- **Pydantic Model Support**: Automatically handles BaseModel instances via `model_dump()`
-- **Mixed Type Collections**: Stable sorting for sets/frozensets containing mixed unorderable types
-- **Fallback Handling**: Graceful handling of unhashable objects via `str()`/`repr()` or type-based IDs
+- **Order-Independent Hashing**: Dicts and sets hash identically regardless of insertion
+  order
+- **Deep Nested Support**: Recursively handles nested structures (dict of lists of sets,
+  etc.)
+- **Pydantic Model Support**: Automatically handles BaseModel instances via
+  `model_dump()`
+- **Mixed Type Collections**: Stable sorting for sets/frozensets containing mixed
+  unorderable types
+- **Fallback Handling**: Graceful handling of unhashable objects via `str()`/`repr()` or
+  type-based IDs
 
 **When to Use hash_dict:**
 
@@ -64,7 +73,8 @@ Data structure to hash. Supports:
 
 **strict** : bool, default False
 
-Deep-copy protection flag. If True, creates a deep copy of `data` before hashing to prevent potential mutation side effects during traversal.
+Deep-copy protection flag. If True, creates a deep copy of `data` before hashing to
+prevent potential mutation side effects during traversal.
 
 - **False** (default): Hash directly (faster, assumes data won't mutate during hashing)
 - **True**: Deep copy first (safer, adds overhead, prevents mutation issues)
@@ -90,41 +100,52 @@ Returns Python's built-in `hash()` of the canonical representation. Hash propert
 - **Deterministic**: Same input always produces same hash (within Python session)
 - **Order-Independent**: `{'a': 1, 'b': 2}` hashes identically to `{'b': 2, 'a': 1}`
 - **Type-Aware**: `[1, 2, 3]` hashes differently from `(1, 2, 3)` and `{1, 2, 3}`
-- **Session-Scoped**: Hashes may differ across Python interpreter restarts (hash randomization)
+- **Session-Scoped**: Hashes may differ across Python interpreter restarts (hash
+  randomization)
 
-**Cross-Session Stability**: Python's `hash()` uses process-specific randomization for security. For cross-session/cross-process stable hashing, consider alternatives like `hashlib.md5(repr(data).encode()).hexdigest()`.
+**Cross-Session Stability**: Python's `hash()` uses process-specific randomization for
+security. For cross-session/cross-process stable hashing, consider alternatives like
+`hashlib.md5(repr(data).encode()).hexdigest()`.
 
 ## Raises
 
 **TypeError** : If generated representation is not hashable
 
-Raised when the canonical representation generation fails to produce a hashable object. This is rare and typically indicates:
+Raised when the canonical representation generation fails to produce a hashable object.
+This is rare and typically indicates:
 
 - Circular references creating infinite recursion (Python stack limit)
 - Custom objects with broken `__str__`/`__repr__` implementations
 - Unexpected edge cases in type handling
 
-Error message includes input type, representation type, and original error for debugging.
+Error message includes input type, representation type, and original error for
+debugging.
 
 ## Implementation Details
 
 ### Canonical Representation Algorithm
 
-`hash_dict()` converts input data to a **canonical hashable representation** via `_generate_hashable_representation()`:
+`hash_dict()` converts input data to a **canonical hashable representation** via
+`_generate_hashable_representation()`:
 
 1. **Primitive Types**: Returned as-is (already hashable)
-2. **Pydantic Models**: Converted via `model_dump()`, then recursively processed, marked with `_TYPE_MARKER_PYDANTIC`
-3. **Dicts**: Sorted by stringified keys, values recursively processed, marked with `_TYPE_MARKER_DICT`
+2. **Pydantic Models**: Converted via `model_dump()`, then recursively processed, marked
+   with `_TYPE_MARKER_PYDANTIC`
+3. **Dicts**: Sorted by stringified keys, values recursively processed, marked with
+   `_TYPE_MARKER_DICT`
 4. **Lists**: Elements recursively processed, marked with `_TYPE_MARKER_LIST`
 5. **Tuples**: Elements recursively processed, marked with `_TYPE_MARKER_TUPLE`
-6. **Sets/Frozensets**: Sorted (with fallback for mixed types), recursively processed, marked with `_TYPE_MARKER_SET`/`_TYPE_MARKER_FROZENSET`
+6. **Sets/Frozensets**: Sorted (with fallback for mixed types), recursively processed,
+   marked with `_TYPE_MARKER_SET`/`_TYPE_MARKER_FROZENSET`
 7. **Fallback**: `str()` → `repr()` → `<unhashable:TypeName:id>`
 
-**Type Markers** distinguish collection types with identical content (e.g., `[1, 2]` vs `(1, 2)`).
+**Type Markers** distinguish collection types with identical content (e.g., `[1, 2]` vs
+`(1, 2)`).
 
 ### Mixed Type Sorting
 
-For sets/frozensets with unorderable types (e.g., `{1, 'a', True}`), fallback sorting uses `(str(type(x)), str(x))` for deterministic ordering:
+For sets/frozensets with unorderable types (e.g., `{1, 'a', True}`), fallback sorting
+uses `(str(type(x)), str(x))` for deterministic ordering:
 
 ```python
 # Handles mixed types that can't be compared directly
@@ -135,7 +156,8 @@ This ensures stable hashing even for complex mixed-type collections.
 
 ### Lazy Pydantic Import
 
-Pydantic's `BaseModel` is imported on first `hash_dict()` call (not at module import) to:
+Pydantic's `BaseModel` is imported on first `hash_dict()` call (not at module import)
+to:
 
 - Avoid circular import issues
 - Reduce import overhead if hash_dict never used
@@ -279,7 +301,8 @@ print(h2)  # 1234567890123456789 (different!)
 
 **Cause**: Python's `hash()` uses per-process randomization (PEP 456) for security.
 
-**Solution**: For persistent hashing across sessions/processes, use cryptographic hashing:
+**Solution**: For persistent hashing across sessions/processes, use cryptographic
+hashing:
 
 ```python
 import hashlib
@@ -293,7 +316,8 @@ def stable_hash(data):
 
 ### Pitfall 2: Hashing Unhashable Objects
 
-**Issue**: Custom objects without proper `__str__`/`__repr__` produce unstable fallback hashes.
+**Issue**: Custom objects without proper `__str__`/`__repr__` produce unstable fallback
+hashes.
 
 ```python
 class CustomObj:
@@ -372,17 +396,22 @@ def fast_hash(large_data):
 
 ### Why Order-Independent Hashing?
 
-Dicts and sets are inherently unordered in Python's semantics. Order-independent hashing ensures:
+Dicts and sets are inherently unordered in Python's semantics. Order-independent hashing
+ensures:
 
-1. **Semantic Equivalence**: `{'a': 1, 'b': 2}` and `{'b': 2, 'a': 1}` represent the same data
+1. **Semantic Equivalence**: `{'a': 1, 'b': 2}` and `{'b': 2, 'a': 1}` represent the
+   same data
 2. **Robustness**: Hash stability regardless of insertion order or dict implementation
-3. **Deduplication**: Content-based deduplication works correctly for configs/API responses
+3. **Deduplication**: Content-based deduplication works correctly for configs/API
+   responses
 
-Lists and tuples preserve order (order-dependent hashing) because order is semantically meaningful.
+Lists and tuples preserve order (order-dependent hashing) because order is semantically
+meaningful.
 
 ### Why Type Markers?
 
-Type markers (`_TYPE_MARKER_DICT`, `_TYPE_MARKER_LIST`, etc.) distinguish collection types with identical content:
+Type markers (`_TYPE_MARKER_DICT`, `_TYPE_MARKER_LIST`, etc.) distinguish collection
+types with identical content:
 
 ```python
 # Without markers: collisions
@@ -414,15 +443,18 @@ Global `_INITIALIZED` flag ensures one-time import on first use.
 2. **Concurrent Modification**: Data mutates during hashing in multithreaded code
 3. **Debugging**: Isolate hash inconsistencies from mutation issues
 
-Default `strict=False` favors performance (deep copy overhead avoided) since mutation during hashing is rare in practice.
+Default `strict=False` favors performance (deep copy overhead avoided) since mutation
+during hashing is rare in practice.
 
 ## See Also
 
 - **Related Utilities**:
   - [to_dict()](./to_dict.md): Universal dict conversion utility
-  - [HashableModel](../types/model.md): Pydantic model with built-in content-based hashing
+  - [HashableModel](../types/model.md): Pydantic model with built-in content-based
+    hashing
 - **Related Concepts**:
-  - [`Element.__hash__()`](../base/element.md#__hash__): Identity-based hashing (ID-based, not content-based)
+  - [`Element.__hash__()`](../base/element.md#__hash__): Identity-based hashing
+    (ID-based, not content-based)
   - Python's `hash()` built-in: Primitive hashing for hashable types
   - `hashlib` module: Cryptographic hashing for security-sensitive use cases
 

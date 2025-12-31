@@ -4,7 +4,9 @@
 
 ## Overview
 
-The `async_call` module provides high-performance utilities for applying functions to list elements asynchronously with comprehensive control over concurrency, retries, throttling, and batch processing.
+The `async_call` module provides high-performance utilities for applying functions to
+list elements asynchronously with comprehensive control over concurrency, retries,
+throttling, and batch processing.
 
 **Key Capabilities:**
 
@@ -30,7 +32,8 @@ The `async_call` module provides high-performance utilities for applying functio
 - Single-item operations (use direct `await func(item)`)
 - Simple list comprehensions without concurrency needs
 - Operations requiring complex inter-item dependencies (use task graphs)
-- Real-time streaming where order doesn't matter (use lionpride's `gather` directly from `lionpride.libs.concurrency`)
+- Real-time streaming where order doesn't matter (use lionpride's `gather` directly from
+  `lionpride.libs.concurrency`)
 
 ## Functions
 
@@ -72,7 +75,8 @@ async def alcall(
 
 **input_** : list of Any (positional-only)
 
-List of items to process. Accepts any iterable; automatically converted to list. Pydantic models are wrapped in single-item lists.
+List of items to process. Accepts any iterable; automatically converted to list.
+Pydantic models are wrapped in single-item lists.
 
 - Type coercion: Tuples/iterables converted to list, single items wrapped in `[item]`
 - Preprocessing: Apply `input_flatten`, `input_dropna`, `input_unique` before processing
@@ -189,9 +193,11 @@ Additional arguments passed to `func(item, **kwargs)` for each call.
 
 **Returns:**
 
-- **list[T | BaseException]**: Results list preserving input order. May include exceptions if `return_exceptions=True`.
+- **list[T | BaseException]**: Results list preserving input order. May include
+  exceptions if `return_exceptions=True`.
   - Order: Results at index `i` correspond to `input_[i]`
-  - Exceptions: Included if `return_exceptions=True`, otherwise raised as `ExceptionGroup`
+  - Exceptions: Included if `return_exceptions=True`, otherwise raised as
+    `ExceptionGroup`
 
 **Raises:**
 
@@ -205,7 +211,8 @@ If `retry_timeout` exceeded during function call.
 
 ### ExceptionGroup
 
-If `return_exceptions=False` and one or more tasks raise exceptions. Contains all task exceptions with preserved tracebacks.
+If `return_exceptions=False` and one or more tasks raise exceptions. Contains all task
+exceptions with preserved tracebacks.
 
 **Examples:**
 
@@ -299,7 +306,8 @@ results = await alcall(
 
 **Implementation Notes:**
 
-- **Order Preservation**: Preallocates result list and fills by index (no sorting overhead)
+- **Order Preservation**: Preallocates result list and fills by index (no sorting
+  overhead)
 - **Semaphore**: Uses `Semaphore` for concurrency control (non-blocking async)
 - **Retry Logic**: Cancellation-aware retry loop (respects `CancelledError`)
 - **Task Group**: Uses `create_task_group()` for structured concurrency
@@ -356,7 +364,8 @@ Arguments passed to `alcall()` for each batch. See `alcall()` parameters.
 
 **Yields:**
 
-- **list[T | BaseException]**: Results for each batch (batch_size items, except possibly last batch).
+- **list[T | BaseException]**: Results for each batch (batch_size items, except possibly
+  last batch).
 
 **Examples:**
 
@@ -660,10 +669,13 @@ results = await alcall(
 
 Results maintain input order regardless of completion sequence because:
 
-1. **Predictability**: Index mapping simplifies result lookup (`results[i]` ↔ `input_[i]`)
-2. **No Sorting Overhead**: Preallocated list with index-based filling avoids post-processing
+1. **Predictability**: Index mapping simplifies result lookup (`results[i]` ↔
+   `input_[i]`)
+2. **No Sorting Overhead**: Preallocated list with index-based filling avoids
+   post-processing
 3. **Debugging**: Easier to correlate inputs with outputs during troubleshooting
-4. **API Compatibility**: Matches common async patterns (lionpride's `gather()` preserves order like `asyncio.gather()`)
+4. **API Compatibility**: Matches common async patterns (lionpride's `gather()`
+   preserves order like `asyncio.gather()`)
 
 ### Why Separate alcall and bcall?
 
@@ -672,7 +684,8 @@ Results maintain input order regardless of completion sequence because:
 1. **Memory Control**: Large datasets need incremental result processing
 2. **Progress Visibility**: Streaming enables real-time progress tracking
 3. **Failure Isolation**: Batch-level retry doesn't reprocess successful batches
-4. **Different Use Cases**: `alcall()` for bounded datasets, `bcall()` for large/unbounded
+4. **Different Use Cases**: `alcall()` for bounded datasets, `bcall()` for
+   large/unbounded
 
 ### Why Support Both Sync and Async Functions?
 
@@ -689,13 +702,17 @@ Automatic sync/async detection via `is_coro_func()` enables:
 
 - **Related Functions**:
   - `to_list()`: Input/output preprocessing utility
-  - `gather()` from lionpride: Enhanced gathering with retry/concurrency control (use this instead of `asyncio.gather()`)
+  - `gather()` from lionpride: Enhanced gathering with retry/concurrency control (use
+    this instead of `asyncio.gather()`)
   - `create_task_group()`: Structured concurrency primitive
 - **Related Classes**:
   - `Params`: Base class for parameter dataclasses
   - `Semaphore`: Concurrency control primitive
 
-See [User Guides](../../user_guide/) including [API Design](../../user_guide/api_design.md), [Type Safety](../../user_guide/type_safety.md), and [Validation](../../user_guide/validation.md) for practical examples.
+See [User Guides](../../user_guide/) including
+[API Design](../../user_guide/api_design.md),
+[Type Safety](../../user_guide/type_safety.md), and
+[Validation](../../user_guide/validation.md) for practical examples.
 
 ---
 

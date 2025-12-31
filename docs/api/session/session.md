@@ -4,9 +4,12 @@
 
 ## Overview
 
-`Session` is the **primary entry point** for lionpride's conversation management. It combines message storage (`Flow[Message, Branch]`), branch management with access control, service registration, and operation execution (`conduct()`).
+`Session` is the **primary entry point** for lionpride's conversation management. It
+combines message storage (`Flow[Message, Branch]`), branch management with access
+control, service registration, and operation execution (`conduct()`).
 
-**Use Session for**: Multi-turn conversations, multi-branch exploration, multi-model workflows, custom operations.
+**Use Session for**: Multi-turn conversations, multi-branch exploration, multi-model
+workflows, custom operations.
 
 **Skip Session when**: Single stateless LLM call (use `iModel.invoke()` directly).
 
@@ -38,38 +41,38 @@ class Session(Element):
 
 ## Parameters
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `user` | `str \| UUID` | `None` | User identifier for tracking |
-| `conversations` | `Flow[Message, Branch]` | Auto-created | Pre-built Flow (rarely used directly) |
-| `services` | `ServiceRegistry` | Auto-created | Pre-built registry (rarely used directly) |
-| `default_branch` | `Branch \| UUID \| str` | `None` | Default branch for operations |
-| `default_generate_model` | `iModel \| str` | `None` | Default model for generate operations |
-| `default_parse_model` | `iModel \| str` | `None` | Default model for parse (often smaller) |
-| `default_capabilities` | `set[str]` | `None` | Capabilities for default branch |
-| `default_system` | `Message` | `None` | System message for default branch |
+| Parameter                | Type                    | Default      | Description                               |
+| ------------------------ | ----------------------- | ------------ | ----------------------------------------- |
+| `user`                   | `str \| UUID`           | `None`       | User identifier for tracking              |
+| `conversations`          | `Flow[Message, Branch]` | Auto-created | Pre-built Flow (rarely used directly)     |
+| `services`               | `ServiceRegistry`       | Auto-created | Pre-built registry (rarely used directly) |
+| `default_branch`         | `Branch \| UUID \| str` | `None`       | Default branch for operations             |
+| `default_generate_model` | `iModel \| str`         | `None`       | Default model for generate operations     |
+| `default_parse_model`    | `iModel \| str`         | `None`       | Default model for parse (often smaller)   |
+| `default_capabilities`   | `set[str]`              | `None`       | Capabilities for default branch           |
+| `default_system`         | `Message`               | `None`       | System message for default branch         |
 
 ## Attributes
 
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `id` | `UUID` | Unique identifier (inherited from Element, frozen) |
-| `created_at` | `datetime` | UTC timestamp (inherited from Element, frozen) |
-| `metadata` | `dict[str, Any]` | Arbitrary metadata (inherited from Element) |
-| `user` | `str \| None` | User identifier for this session |
-| `conversations` | `Flow[Message, Branch]` | Message storage (items) and branch progressions |
-| `services` | `ServiceRegistry` | Registered models and tools |
-| `operations` | `OperationRegistry` | Registered operation factories |
+| Attribute       | Type                    | Description                                        |
+| --------------- | ----------------------- | -------------------------------------------------- |
+| `id`            | `UUID`                  | Unique identifier (inherited from Element, frozen) |
+| `created_at`    | `datetime`              | UTC timestamp (inherited from Element, frozen)     |
+| `metadata`      | `dict[str, Any]`        | Arbitrary metadata (inherited from Element)        |
+| `user`          | `str \| None`           | User identifier for this session                   |
+| `conversations` | `Flow[Message, Branch]` | Message storage (items) and branch progressions    |
+| `services`      | `ServiceRegistry`       | Registered models and tools                        |
+| `operations`    | `OperationRegistry`     | Registered operation factories                     |
 
 ### Computed Properties
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `messages` | `Pile[Message]` | All messages in session (via `conversations.items`) |
-| `branches` | `Pile[Branch]` | All branches in session (via `conversations.progressions`) |
-| `default_branch` | `Branch \| None` | Default branch for operations |
-| `default_generate_model` | `iModel \| None` | Default model for generate operations |
-| `default_parse_model` | `iModel \| None` | Default model for parse operations |
+| Property                 | Type             | Description                                                |
+| ------------------------ | ---------------- | ---------------------------------------------------------- |
+| `messages`               | `Pile[Message]`  | All messages in session (via `conversations.items`)        |
+| `branches`               | `Pile[Branch]`   | All branches in session (via `conversations.progressions`) |
+| `default_branch`         | `Branch \| None` | Default branch for operations                              |
+| `default_generate_model` | `iModel \| None` | Default model for generate operations                      |
+| `default_parse_model`    | `iModel \| None` | Default model for parse operations                         |
 
 ## Methods
 
@@ -100,7 +103,8 @@ def create_branch(
 
 #### `get_branch()`
 
-Get branch by UUID, name, or instance. Raises `NotFoundError` if not found (unless `default` provided).
+Get branch by UUID, name, or instance. Raises `NotFoundError` if not found (unless
+`default` provided).
 
 ```python
 def get_branch(self, branch: UUID | str | Branch, default=Unset, /) -> Branch
@@ -201,7 +205,8 @@ Execute operation DAG with dependency scheduling.
 async def flow(self, graph: Graph, branch: Branch | UUID | str | None = None, *, max_concurrent: int | None = None, stop_on_error: bool = True) -> dict
 ```
 
-Returns mapping of operation names to results. No automatic context injection - use `flow_report` for context passing.
+Returns mapping of operation names to results. No automatic context injection - use
+`flow_report` for context passing.
 
 #### `request()` (async)
 
@@ -221,7 +226,9 @@ def register_operation(self, name: str, factory, *, override: bool = False) -> N
 
 ## Protocol Implementations
 
-Inherits from Element: **Observable** (`id`), **Serializable** (`to_dict()`, `to_json()`), **Deserializable** (`from_dict()`, `from_json()`), **Hashable** (`__hash__()` by ID).
+Inherits from Element: **Observable** (`id`), **Serializable** (`to_dict()`,
+`to_json()`), **Deserializable** (`from_dict()`, `from_json()`), **Hashable**
+(`__hash__()` by ID).
 
 ## Usage Patterns
 
@@ -303,16 +310,22 @@ Messages are immutable by design. Create new messages instead of mutating.
 
 ## Design Rationale
 
-**Flow[Message, Branch]**: O(1) UUID lookup via Pile-backed items. Separates storage (items) from organization (progressions) for efficient multi-branch conversations without duplication.
+**Flow[Message, Branch]**: O(1) UUID lookup via Pile-backed items. Separates storage
+(items) from organization (progressions) for efficient multi-branch conversations
+without duplication.
 
-**Branch Resources/Capabilities**: Branch-level access control for model routing, cost control, and security in multi-tenant scenarios.
+**Branch Resources/Capabilities**: Branch-level access control for model routing, cost
+control, and security in multi-tenant scenarios.
 
-**Separate Generate/Parse Models**: Cost optimization (smaller models for parsing), latency reduction, specialization per operation type.
+**Separate Generate/Parse Models**: Cost optimization (smaller models for parsing),
+latency reduction, specialization per operation type.
 
 ## See Also
 
-- [Branch](branch.md), [Message](message.md), [ServiceRegistry](../services/registry.md), [iModel](../services/imodel.md)
-- [Operations](../operations/index.md), [Flow](../base/flow.md), [Element](../base/element.md)
+- [Branch](branch.md), [Message](message.md),
+  [ServiceRegistry](../services/registry.md), [iModel](../services/imodel.md)
+- [Operations](../operations/index.md), [Flow](../base/flow.md),
+  [Element](../base/element.md)
 
 ## Examples
 

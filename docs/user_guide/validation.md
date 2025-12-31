@@ -4,7 +4,10 @@
 
 ## Overview
 
-lionpride provides **framework-agnostic field specifications** via `Spec`, enabling rich validation patterns across Pydantic, dataclasses, and attrs. This guide covers validation strategies, Pydantic integration, custom validators, and error handling patterns.
+lionpride provides **framework-agnostic field specifications** via `Spec`, enabling rich
+validation patterns across Pydantic, dataclasses, and attrs. This guide covers
+validation strategies, Pydantic integration, custom validators, and error handling
+patterns.
 
 **Key Topics:**
 

@@ -1,23 +1,34 @@
 # Validator
 
-> Orchestrates rules over Operable specs for field-by-field validation with auto-correction
+> Orchestrates rules over Operable specs for field-by-field validation with
+> auto-correction
 
 ## Overview
 
-`Validator` is the **orchestration engine** for lionpride's rule-based validation system. It bridges the gap between raw data (e.g., LLM responses) and validated, type-safe output by applying appropriate validation rules to each field defined in an `Operable` specification.
+`Validator` is the **orchestration engine** for lionpride's rule-based validation
+system. It bridges the gap between raw data (e.g., LLM responses) and validated,
+type-safe output by applying appropriate validation rules to each field defined in an
+`Operable` specification.
 
 **Key Capabilities:**
 
-- **Automatic Rule Assignment**: Resolves rules based on Spec metadata, field name, or base type
-- **Capability-Based Access Control**: Validates only fields within allowed capabilities set
-- **Auto-Correction**: Optionally fixes invalid values using rule-specific correction logic
-- **Error Tracking**: Maintains validation log with timestamps for debugging and auditing
-- **Async Support**: All validation methods are async for compatibility with async validators
+- **Automatic Rule Assignment**: Resolves rules based on Spec metadata, field name, or
+  base type
+- **Capability-Based Access Control**: Validates only fields within allowed capabilities
+  set
+- **Auto-Correction**: Optionally fixes invalid values using rule-specific correction
+  logic
+- **Error Tracking**: Maintains validation log with timestamps for debugging and
+  auditing
+- **Async Support**: All validation methods are async for compatibility with async
+  validators
 
-**Use for**: LLM output parsing, capability-filtered validation, type coercion pipelines.
-**Skip for**: Simple Pydantic validation (use `model_validate`) or single-value checks (use Rule directly).
+**Use for**: LLM output parsing, capability-filtered validation, type coercion
+pipelines. **Skip for**: Simple Pydantic validation (use `model_validate`) or
+single-value checks (use Rule directly).
 
-See [Rule](rule.md) for rule implementations and [Operable](../types/operable.md) for specifications.
+See [Rule](rule.md) for rule implementations and [Operable](../types/operable.md) for
+specifications.
 
 ## Class Signature
 
@@ -40,17 +51,18 @@ class Validator:
 
 **registry** : RuleRegistry, optional
 
-Registry for type-to-rule and name-to-rule mappings. If `None`, uses the default registry with standard rules (StringRule, NumberRule, BooleanRule, MappingRule, etc.).
+Registry for type-to-rule and name-to-rule mappings. If `None`, uses the default
+registry with standard rules (StringRule, NumberRule, BooleanRule, MappingRule, etc.).
 
 - Default: `None` (uses `get_default_registry()`)
 - Usage: Custom registries for domain-specific validation rules
 
 ## Attributes
 
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `registry` | `RuleRegistry` | Rule registry for type/name-to-rule lookup |
-| `validation_log` | `list[dict[str, Any]]` | Log of validation errors with timestamps |
+| Attribute        | Type                   | Description                                |
+| ---------------- | ---------------------- | ------------------------------------------ |
+| `registry`       | `RuleRegistry`         | Rule registry for type/name-to-rule lookup |
+| `validation_log` | `list[dict[str, Any]]` | Log of validation errors with timestamps   |
 
 ## Methods
 
@@ -110,7 +122,8 @@ async def validate_operable(
 
 **Notes:**
 
-This is a convenience wrapper around `_validate_data` that validates all fields defined in the operable. For capability-filtered validation, use `validate()` instead.
+This is a convenience wrapper around `_validate_data` that validates all fields defined
+in the operable. For capability-filtered validation, use `validate()` instead.
 
 #### `validate()`
 
@@ -171,7 +184,8 @@ async def validate(
 
 **Notes:**
 
-This is the **security microkernel** - all capability-based access control flows through these few lines. The flow is:
+This is the **security microkernel** - all capability-based access control flows through
+these few lines. The flow is:
 
 1. Validate data field-by-field with rules (respects capabilities)
 2. Create model from operable with allowed capabilities
@@ -397,19 +411,25 @@ except ValidationError:
 
 ## Common Pitfalls
 
-- **Missing await**: All validation methods are async. `validator.validate_operable(...)` returns a coroutine.
+- **Missing await**: All validation methods are async.
+  `validator.validate_operable(...)` returns a coroutine.
 
-- **Empty capabilities**: `validate(..., capabilities=set())` validates nothing. Use `validate_operable()` for all fields.
+- **Empty capabilities**: `validate(..., capabilities=set())` validates nothing. Use
+  `validate_operable()` for all fields.
 
-- **Strict mode without rules**: `strict=True` raises error if no rule exists for a type. Register custom rule or use `strict=False`.
+- **Strict mode without rules**: `strict=True` raises error if no rule exists for a
+  type. Register custom rule or use `strict=False`.
 
 ## Design Rationale
 
-1. **Spec-by-Spec validation**: Field-level granularity enables different rules per field, precise error localization, and partial success on multi-field data.
+1. **Spec-by-Spec validation**: Field-level granularity enables different rules per
+   field, precise error localization, and partial success on multi-field data.
 
-2. **Rule lookup priority (metadata > name > type)**: Specs can override defaults, named fields get domain-specific rules, types provide sensible fallback.
+2. **Rule lookup priority (metadata > name > type)**: Specs can override defaults, named
+   fields get domain-specific rules, types provide sensible fallback.
 
-3. **Capability-based access control**: Security microkernel pattern - `validate()` enforces field-level permissions at the validation layer.
+3. **Capability-based access control**: Security microkernel pattern - `validate()`
+   enforces field-level permissions at the validation layer.
 
 ## See Also
 
