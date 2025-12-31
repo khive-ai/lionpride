@@ -4,11 +4,14 @@
 
 ## Overview
 
-The resource tracker module provides **synchronous leak detection** for debugging resource management issues in lionpride applications. It uses weak references and finalizers to track live objects and detect when they're not being properly cleaned up.
+The resource tracker module provides **synchronous leak detection** for debugging
+resource management issues in lionpride applications. It uses weak references and
+finalizers to track live objects and detect when they're not being properly cleaned up.
 
 **Key Capabilities:**
 
-- **Weak Reference Tracking**: Automatically detects when tracked objects are garbage collected
+- **Weak Reference Tracking**: Automatically detects when tracked objects are garbage
+  collected
 - **Leak Detection**: Identifies resources that remain alive longer than expected
 - **Thread-Safe Operations**: Uses `threading.Lock` for safe concurrent access
 - **Metadata Capture**: Stores creation timestamp and optional classification
@@ -23,14 +26,18 @@ The resource tracker module provides **synchronous leak detection** for debuggin
 
 **When NOT to Use Resource Tracker:**
 
-- **Production hot paths**: Uses blocking locks, not suitable for performance-critical code
+- **Production hot paths**: Uses blocking locks, not suitable for performance-critical
+  code
 - **Async code**: Blocking operations will block the event loop
-- **High-frequency tracking**: Overhead of tracking every object creation may impact performance
+- **High-frequency tracking**: Overhead of tracking every object creation may impact
+  performance
 - **Thread pool contexts**: Lock contention may degrade performance
 
 **Warning:**
 
-This tracker uses `threading.Lock` and is designed for **SYNC contexts only**. Do NOT call `track()`/`untrack()` from async code as it may block the event loop. This is intentional: `weakref.finalize` callbacks must be synchronous.
+This tracker uses `threading.Lock` and is designed for **SYNC contexts only**. Do NOT
+call `track()`/`untrack()` from async code as it may block the event loop. This is
+intentional: `weakref.finalize` callbacks must be synchronous.
 
 For debugging resource leaks, this overhead is acceptable as it's not used in hot paths.
 
@@ -65,11 +72,11 @@ class LeakInfo:
 
 ### Attributes
 
-| Attribute    | Type         | Description                                    |
-| ------------ | ------------ | ---------------------------------------------- |
-| `name`       | `str`        | Human-readable identifier (auto-generated if not provided) |
+| Attribute    | Type          | Description                                                   |
+| ------------ | ------------- | ------------------------------------------------------------- |
+| `name`       | `str`         | Human-readable identifier (auto-generated if not provided)    |
 | `kind`       | `str \| None` | Optional resource classification (e.g., "connection", "file") |
-| `created_at` | `float`      | Unix timestamp when tracking started (via `time.time()`) |
+| `created_at` | `float`       | Unix timestamp when tracking started (via `time.time()`)      |
 
 ### Examples
 
@@ -115,10 +122,10 @@ class LeakTracker:
 
 ### Attributes
 
-| Attribute | Type                       | Description                                |
-| --------- | -------------------------- | ------------------------------------------ |
-| `_live`   | `dict[int, LeakInfo]`      | Internal registry mapping object IDs to metadata |
-| `_lock`   | `threading.Lock`           | Thread synchronization lock                |
+| Attribute | Type                  | Description                                      |
+| --------- | --------------------- | ------------------------------------------------ |
+| `_live`   | `dict[int, LeakInfo]` | Internal registry mapping object IDs to metadata |
+| `_lock`   | `threading.Lock`      | Thread synchronization lock                      |
 
 ### Methods
 
@@ -141,7 +148,8 @@ def track(
 **Parameters:**
 
 - `obj` (object): Object to track for leaks
-- `name` (str, optional): Human-readable identifier. If None, auto-generated as `f"obj-{id(obj)}"`
+- `name` (str, optional): Human-readable identifier. If None, auto-generated as
+  `f"obj-{id(obj)}"`
 - `kind` (str, optional): Resource classification (e.g., "connection", "file", "lock")
 
 **Returns:**
@@ -363,7 +371,8 @@ del handle
 
 **Warning:**
 
-Do not call from async code - uses blocking `threading.Lock`. For leak detection/debugging only, not production hot paths.
+Do not call from async code - uses blocking `threading.Lock`. For leak
+detection/debugging only, not production hot paths.
 
 **See Also:**
 
@@ -478,7 +487,8 @@ with TrackedFile("/tmp/data.txt") as f:
 
 ### Test Cleanup Verification
 
-For testing, create isolated `LeakTracker` instances rather than using the global tracker:
+For testing, create isolated `LeakTracker` instances rather than using the global
+tracker:
 
 ```python
 from lionpride.libs.concurrency import LeakTracker, track_resource
@@ -558,12 +568,15 @@ print(reporter.report())
 
 The tracker uses `threading.Lock` instead of async locks because:
 
-1. **Finalizer Constraint**: `weakref.finalize` callbacks must be synchronous (no async support)
-2. **Debugging Context**: Leak detection is a debugging tool, not production infrastructure
+1. **Finalizer Constraint**: `weakref.finalize` callbacks must be synchronous (no async
+   support)
+2. **Debugging Context**: Leak detection is a debugging tool, not production
+   infrastructure
 3. **Simplicity**: Synchronous locks avoid async context management complexity
 4. **Thread Safety**: Works correctly in multi-threaded environments
 
-For async code, track resources in synchronous context (e.g., `__init__`) and untrack in cleanup methods called from synchronous finalizers.
+For async code, track resources in synchronous context (e.g., `__init__`) and untrack in
+cleanup methods called from synchronous finalizers.
 
 ### Why Weak References?
 
@@ -574,7 +587,8 @@ Using `weakref.finalize` instead of manual tracking:
 3. **No Circular References**: Weak references don't prevent garbage collection
 4. **Correct Timing**: Finalizers run after object becomes unreachable
 
-This makes the tracker reliable for detecting actual leaks (objects kept alive unintentionally).
+This makes the tracker reliable for detecting actual leaks (objects kept alive
+unintentionally).
 
 ### Why Global Singleton?
 
@@ -614,7 +628,8 @@ async def bad_example():
     track_resource(obj, name="async_obj", kind="test")
 ```
 
-**Solution**: Track resources in synchronous context only (e.g., `__init__` methods, synchronous factory functions).
+**Solution**: Track resources in synchronous context only (e.g., `__init__` methods,
+synchronous factory functions).
 
 ### Pitfall 2: Forgetting Garbage Collection
 
@@ -639,7 +654,8 @@ gc.collect()
 print(len(tracker.live()))  # Now 0 (after GC)
 ```
 
-**Solution**: Always call `gc.collect()` in tests before checking tracker state, as Python's garbage collector is not deterministic.
+**Solution**: Always call `gc.collect()` in tests before checking tracker state, as
+Python's garbage collector is not deterministic.
 
 ### Pitfall 3: Circular References Prevent Cleanup
 
@@ -681,7 +697,8 @@ def hot_path_function():
         track_resource(obj, name=f"obj-{i}", kind="temp")  # Expensive!
 ```
 
-**Solution**: Only track long-lived resources or use tracking conditionally in debug builds.
+**Solution**: Only track long-lived resources or use tracking conditionally in debug
+builds.
 
 ## See Also
 
@@ -694,14 +711,20 @@ See [User Guides](../../../user_guide/) for practical patterns and best practice
 
 ## Examples
 
-The resource tracker is best learned through the **Usage Patterns** section above. For comprehensive production examples, see the planned tutorials:
+The resource tracker is best learned through the **Usage Patterns** section above. For
+comprehensive production examples, see the planned tutorials:
 
-- **Tutorial: Database Connection Pool Leak Detection** - Connection pool with automatic leak tracking and reporting
-- **Tutorial: File Handle Tracking** - File resource management with leak detection at exit
-- **Tutorial: Lock Acquisition Debugging** - Detecting deadlocks and lock contention with acquisition tracking
+- **Tutorial: Database Connection Pool Leak Detection** - Connection pool with automatic
+  leak tracking and reporting
+- **Tutorial: File Handle Tracking** - File resource management with leak detection at
+  exit
+- **Tutorial: Lock Acquisition Debugging** - Detecting deadlocks and lock contention
+  with acquisition tracking
 
-These tutorials will be created as separate guides with detailed explanations of production patterns.
+These tutorials will be created as separate guides with detailed explanations of
+production patterns.
 
 ### Quick Testing Example
 
-For testing scenarios, use isolated tracker instances as shown in the **Test Cleanup Verification** usage pattern above.
+For testing scenarios, use isolated tracker instances as shown in the **Test Cleanup
+Verification** usage pattern above.

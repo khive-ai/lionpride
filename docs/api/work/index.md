@@ -4,12 +4,15 @@
 
 ## Overview
 
-The `work` module provides declarative workflow orchestration for complex multi-step LLM tasks. It uses a **Form + Report** pattern where Forms define units of work and Reports orchestrate workflows with automatic dependency resolution.
+The `work` module provides declarative workflow orchestration for complex multi-step LLM
+tasks. It uses a **Form + Report** pattern where Forms define units of work and Reports
+orchestrate workflows with automatic dependency resolution.
 
 **Core Concepts:**
 
 - **Form**: Unit of work with assignment DSL defining inputs and outputs
-- **Report**: Workflow orchestrator - subclass to define output schemas as class attributes
+- **Report**: Workflow orchestrator - subclass to define output schemas as class
+  attributes
 - **FormResources**: Capability declarations for workflow steps (API models, tools)
 - **flow_report**: Executes report via compiled graph with parallel-capable execution
 
@@ -19,31 +22,33 @@ The `work` module provides declarative workflow orchestration for complex multi-
 "[branch:] [operation(] inputs -> outputs [)] [| resources]"
 ```
 
-The work module enables building complex multi-agent workflows without manual dependency management. Dependencies are inferred from field dataflow, and independent forms execute in parallel automatically.
+The work module enables building complex multi-agent workflows without manual dependency
+management. Dependencies are inferred from field dataflow, and independent forms execute
+in parallel automatically.
 
 ## Classes
 
 ### Core
 
-| Class | Description |
-|-------|-------------|
-| `Form` | Unit of work with assignment DSL |
-| `Report` | Workflow orchestrator base class |
-| `flow_report` | Execute report via compiled dependency graph |
-| `parse_assignment` | Parse assignment DSL strings |
+| Class              | Description                                  |
+| ------------------ | -------------------------------------------- |
+| `Form`             | Unit of work with assignment DSL             |
+| `Report`           | Workflow orchestrator base class             |
+| `flow_report`      | Execute report via compiled dependency graph |
+| `parse_assignment` | Parse assignment DSL strings                 |
 
 ### Capabilities
 
-| Class | Description |
-|-------|-------------|
-| `FormResources` | Capability declarations for workflow steps |
-| `ParsedAssignment` | Parsed assignment structure |
+| Class              | Description                                |
+| ------------------ | ------------------------------------------ |
+| `FormResources`    | Capability declarations for workflow steps |
+| `ParsedAssignment` | Parsed assignment structure                |
 
 ### Errors
 
-| Class | Description |
-|-------|-------------|
-| `CapabilityError` | Missing required capability |
+| Class                    | Description                      |
+| ------------------------ | -------------------------------- |
+| `CapabilityError`        | Missing required capability      |
 | `AmbiguousResourceError` | Ambiguous resource specification |
 
 ## Quick Start

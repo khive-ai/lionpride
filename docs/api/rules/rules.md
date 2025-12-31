@@ -4,14 +4,20 @@
 
 ## Overview
 
-The `lionpride.rules` module provides a rule-based validation system with automatic type coercion and error correction. It serves as the validation layer of the IPU pipeline, enabling structured output validation from LLM responses.
+The `lionpride.rules` module provides a rule-based validation system with automatic type
+coercion and error correction. It serves as the validation layer of the IPU pipeline,
+enabling structured output validation from LLM responses.
 
 **Key capabilities:**
 
-- **Rule-based validation**: Define validation constraints (length, range, pattern) declaratively
-- **Auto-correction**: Automatically fix invalid values when possible (string conversion, type coercion)
-- **Type-driven assignment**: Rules auto-assigned based on `Spec.base_type` via `RuleRegistry`
-- **Qualifier system**: Control when rules apply (by field name, type annotation, or custom condition)
+- **Rule-based validation**: Define validation constraints (length, range, pattern)
+  declaratively
+- **Auto-correction**: Automatically fix invalid values when possible (string
+  conversion, type coercion)
+- **Type-driven assignment**: Rules auto-assigned based on `Spec.base_type` via
+  `RuleRegistry`
+- **Qualifier system**: Control when rules apply (by field name, type annotation, or
+  custom condition)
 
 **Architecture:**
 
@@ -67,21 +73,21 @@ class Rule:
 
 ### Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `params` | `RuleParams` | Immutable configuration defining rule behavior |
-| `**kw` | `Any` | Additional validation kwargs (merged with `params.kw`) |
+| Parameter | Type         | Description                                            |
+| --------- | ------------ | ------------------------------------------------------ |
+| `params`  | `RuleParams` | Immutable configuration defining rule behavior         |
+| `**kw`    | `Any`        | Additional validation kwargs (merged with `params.kw`) |
 
 ### Attributes
 
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `params` | `RuleParams` | Rule configuration |
-| `apply_types` | `set[type]` | Types this rule applies to (e.g., `{str, int}`) |
-| `apply_fields` | `set[str]` | Field names this rule applies to |
-| `default_qualifier` | `RuleQualifier` | Preferred qualifier type |
-| `auto_fix` | `bool` | Whether auto-fixing is enabled |
-| `validation_kwargs` | `dict` | Additional validation parameters |
+| Attribute           | Type            | Description                                     |
+| ------------------- | --------------- | ----------------------------------------------- |
+| `params`            | `RuleParams`    | Rule configuration                              |
+| `apply_types`       | `set[type]`     | Types this rule applies to (e.g., `{str, int}`) |
+| `apply_fields`      | `set[str]`      | Field names this rule applies to                |
+| `default_qualifier` | `RuleQualifier` | Preferred qualifier type                        |
+| `auto_fix`          | `bool`          | Whether auto-fixing is enabled                  |
+| `validation_kwargs` | `dict`          | Additional validation parameters                |
 
 ### Methods
 
@@ -211,15 +217,16 @@ class RuleParams(Params):
 
 ### Attributes
 
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `apply_types` | `set[type]` | Types this rule applies to (e.g., `{str, int}`) |
-| `apply_fields` | `set[str]` | Field names this rule applies to |
-| `default_qualifier` | `RuleQualifier` | Preferred qualifier type |
-| `auto_fix` | `bool` | Enable automatic fixing on validation failure |
-| `kw` | `dict` | Additional validation parameters |
+| Attribute           | Type            | Description                                     |
+| ------------------- | --------------- | ----------------------------------------------- |
+| `apply_types`       | `set[type]`     | Types this rule applies to (e.g., `{str, int}`) |
+| `apply_fields`      | `set[str]`      | Field names this rule applies to                |
+| `default_qualifier` | `RuleQualifier` | Preferred qualifier type                        |
+| `auto_fix`          | `bool`          | Enable automatic fixing on validation failure   |
+| `kw`                | `dict`          | Additional validation parameters                |
 
-**Constraint:** Must set exactly one of `apply_types` or `apply_fields` (unless using `CONDITION` qualifier).
+**Constraint:** Must set exactly one of `apply_types` or `apply_fields` (unless using
+`CONDITION` qualifier).
 
 ---
 
@@ -260,12 +267,12 @@ class StringRule(Rule):
 
 **Parameters:**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `min_length` | `int`, optional | Minimum string length (inclusive) |
-| `max_length` | `int`, optional | Maximum string length (inclusive) |
-| `pattern` | `str`, optional | Regex pattern to match |
-| `params` | `RuleParams`, optional | Custom params (uses default if None) |
+| Parameter    | Type                   | Description                          |
+| ------------ | ---------------------- | ------------------------------------ |
+| `min_length` | `int`, optional        | Minimum string length (inclusive)    |
+| `max_length` | `int`, optional        | Maximum string length (inclusive)    |
+| `pattern`    | `str`, optional        | Regex pattern to match               |
+| `params`     | `RuleParams`, optional | Custom params (uses default if None) |
 
 **Auto-fix behavior:** Converts any type to string via `str()`, then re-validates.
 
@@ -312,13 +319,13 @@ class NumberRule(Rule):
 
 **Parameters:**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `ge` | `int` or `float`, optional | Greater than or equal to (>=) |
-| `gt` | `int` or `float`, optional | Greater than (>) |
-| `le` | `int` or `float`, optional | Less than or equal to (<=) |
-| `lt` | `int` or `float`, optional | Less than (<) |
-| `params` | `RuleParams`, optional | Custom params (uses default if None) |
+| Parameter | Type                       | Description                          |
+| --------- | -------------------------- | ------------------------------------ |
+| `ge`      | `int` or `float`, optional | Greater than or equal to (>=)        |
+| `gt`      | `int` or `float`, optional | Greater than (>)                     |
+| `le`      | `int` or `float`, optional | Less than or equal to (<=)           |
+| `lt`      | `int` or `float`, optional | Less than (<)                        |
+| `params`  | `RuleParams`, optional     | Custom params (uses default if None) |
 
 **Auto-fix behavior:** Converts strings to `int()` or `float()` based on target type.
 
@@ -405,12 +412,12 @@ class ChoiceRule(Rule):
 
 **Parameters:**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `choices` | `set` or `list` | Allowed values |
+| Parameter        | Type                   | Description                               |
+| ---------------- | ---------------------- | ----------------------------------------- |
+| `choices`        | `set` or `list`        | Allowed values                            |
 | `case_sensitive` | `bool`, default `True` | Whether string matching is case-sensitive |
-| `apply_fields` | `set[str]`, optional | Field names to apply to |
-| `apply_types` | `set[type]`, optional | Types to apply to |
+| `apply_fields`   | `set[str]`, optional   | Field names to apply to                   |
+| `apply_types`    | `set[type]`, optional  | Types to apply to                         |
 
 **Auto-fix behavior:** For `case_sensitive=False`, normalizes to canonical case.
 
@@ -450,11 +457,11 @@ class MappingRule(Rule):
 
 **Parameters:**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `required_keys` | `set[str]`, optional | Keys that must be present |
-| `optional_keys` | `set[str]`, optional | Keys that may be present |
-| `fuzzy_keys` | `bool`, default `False` | Enable case-insensitive key matching |
+| Parameter       | Type                    | Description                          |
+| --------------- | ----------------------- | ------------------------------------ |
+| `required_keys` | `set[str]`, optional    | Keys that must be present            |
+| `optional_keys` | `set[str]`, optional    | Keys that may be present             |
+| `fuzzy_keys`    | `bool`, default `False` | Enable case-insensitive key matching |
 
 **Auto-fix behavior:**
 
@@ -502,9 +509,9 @@ class BaseModelRule(Rule):
 
 **Parameters:**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `fuzzy_parse` | `bool`, default `True` | Enable fuzzy JSON extraction from text |
+| Parameter     | Type                    | Description                               |
+| ------------- | ----------------------- | ----------------------------------------- |
+| `fuzzy_parse` | `bool`, default `True`  | Enable fuzzy JSON extraction from text    |
 | `fuzzy_match` | `bool`, default `False` | Enable fuzzy key matching for field names |
 
 **Auto-fix behavior:**
@@ -614,13 +621,13 @@ def list_names(self) -> list[str]: ...
 
 `get_default_registry()` returns a pre-configured registry with standard mappings:
 
-| Type | Rule |
-|------|------|
-| `str` | `StringRule()` |
-| `int` | `NumberRule()` |
-| `float` | `NumberRule()` |
-| `bool` | `BooleanRule()` |
-| `dict` | `MappingRule()` |
+| Type        | Rule              |
+| ----------- | ----------------- |
+| `str`       | `StringRule()`    |
+| `int`       | `NumberRule()`    |
+| `float`     | `NumberRule()`    |
+| `bool`      | `BooleanRule()`   |
+| `dict`      | `MappingRule()`   |
 | `BaseModel` | `BaseModelRule()` |
 
 **Examples:**
@@ -654,10 +661,10 @@ class Validator:
 
 ### Attributes
 
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `registry` | `RuleRegistry` | Rule registry for type-to-rule lookup |
-| `validation_log` | `list[dict]` | Log of validation errors |
+| Attribute        | Type           | Description                           |
+| ---------------- | -------------- | ------------------------------------- |
+| `registry`       | `RuleRegistry` | Rule registry for type-to-rule lookup |
+| `validation_log` | `list[dict]`   | Log of validation errors              |
 
 ### Methods
 
@@ -819,17 +826,21 @@ result = await validator.validate_operable(
 
 - **Missing await**: All rule methods are async. Always use `await rule.invoke(...)`.
 
-- **Auto-fix default**: Rules default to `auto_fix=True`. Set `auto_fix=False` for strict validation without coercion.
+- **Auto-fix default**: Rules default to `auto_fix=True`. Set `auto_fix=False` for
+  strict validation without coercion.
 
 ---
 
 ## Design Rationale
 
-1. **Separation of concerns**: Rules define validation; Registry maps types to rules; Validator orchestrates.
+1. **Separation of concerns**: Rules define validation; Registry maps types to rules;
+   Validator orchestrates.
 
-2. **Qualifier precedence (FIELD > ANNOTATION > CONDITION)**: Field-specific rules override type-based rules.
+2. **Qualifier precedence (FIELD > ANNOTATION > CONDITION)**: Field-specific rules
+   override type-based rules.
 
-3. **Auto-fix by default**: LLM outputs are imprecise. Auto-correction provides resilience without sacrificing type safety.
+3. **Auto-fix by default**: LLM outputs are imprecise. Auto-correction provides
+   resilience without sacrificing type safety.
 
 ---
 

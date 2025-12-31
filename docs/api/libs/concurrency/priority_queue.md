@@ -4,16 +4,22 @@
 
 ## Overview
 
-`PriorityQueue` is an async-first priority queue implementation combining Python's `heapq` module with anyio's `Condition` primitive for safe concurrent access. Unlike `asyncio.PriorityQueue`, the nowait methods (`put_nowait`, `get_nowait`) are **async** to maintain proper locking semantics.
+`PriorityQueue` is an async-first priority queue implementation combining Python's
+`heapq` module with anyio's `Condition` primitive for safe concurrent access. Unlike
+`asyncio.PriorityQueue`, the nowait methods (`put_nowait`, `get_nowait`) are **async**
+to maintain proper locking semantics.
 
 **Key Capabilities:**
 
-- **Priority Ordering**: Items retrieved in priority order (lowest value first, heapq min-heap)
+- **Priority Ordering**: Items retrieved in priority order (lowest value first, heapq
+  min-heap)
 - **Async Blocking**: `put()` blocks when full, `get()` blocks when empty
-- **Async Nowait**: `put_nowait()` and `get_nowait()` are async (unlike asyncio) for consistent locking
+- **Async Nowait**: `put_nowait()` and `get_nowait()` are async (unlike asyncio) for
+  consistent locking
 - **Size Limits**: Optional `maxsize` for bounded queues (0 = unlimited)
 - **Thread-Safe**: Condition-based locking ensures safe concurrent access
-- **Race-Aware Inspection**: `qsize()`, `empty()`, `full()` are unlocked and racy (monitoring only)
+- **Race-Aware Inspection**: `qsize()`, `empty()`, `full()` are unlocked and racy
+  (monitoring only)
 
 **When to Use PriorityQueue:**
 
@@ -74,17 +80,19 @@ Items should be tuples with priority as first element for proper ordering:
 (10, "background")     # Lowest priority
 ```
 
-For equal priorities, items are ordered by remaining tuple elements (FIFO within priority level).
+For equal priorities, items are ordered by remaining tuple elements (FIFO within
+priority level).
 
 ## Attributes
 
-| Attribute    | Type            | Description                                              |
-| ------------ | --------------- | -------------------------------------------------------- |
-| `maxsize`    | `int`           | Maximum queue size (0 = unlimited)                       |
-| `_queue`     | `list[T]`       | Internal heapq storage (private, do not access directly) |
-| `_condition` | `Condition`     | Anyio condition for async locking (private)              |
+| Attribute    | Type        | Description                                              |
+| ------------ | ----------- | -------------------------------------------------------- |
+| `maxsize`    | `int`       | Maximum queue size (0 = unlimited)                       |
+| `_queue`     | `list[T]`   | Internal heapq storage (private, do not access directly) |
+| `_condition` | `Condition` | Anyio condition for async locking (private)              |
 
-**Note**: Only `maxsize` is public. Direct access to `_queue` or `_condition` breaks encapsulation and thread-safety guarantees.
+**Note**: Only `maxsize` is public. Direct access to `_queue` or `_condition` breaks
+encapsulation and thread-safety guarantees.
 
 ## Methods
 
@@ -135,7 +143,8 @@ async def put(self, item: T) -> None: ...
 
 **Notes:**
 
-Always use priority tuples `(priority, data)` for consistent ordering. Lower priority values are retrieved first.
+Always use priority tuples `(priority, data)` for consistent ordering. Lower priority
+values are retrieved first.
 
 #### `put_nowait()`
 
@@ -187,7 +196,8 @@ QueueFull: Queue is full
 
 **Notes:**
 
-Unlike `asyncio.PriorityQueue.put_nowait()` (synchronous), this method is **async** to ensure atomic lock acquisition and prevent race conditions.
+Unlike `asyncio.PriorityQueue.put_nowait()` (synchronous), this method is **async** to
+ensure atomic lock acquisition and prevent race conditions.
 
 #### `get()`
 
@@ -240,7 +250,8 @@ async def get(self) -> T: ...
 
 **Notes:**
 
-Priority ordering is **stable within same priority** (FIFO for equal priorities) due to tuple comparison.
+Priority ordering is **stable within same priority** (FIFO for equal priorities) due to
+tuple comparison.
 
 #### `get_nowait()`
 
@@ -289,7 +300,8 @@ QueueEmpty: Queue is empty
 
 **Notes:**
 
-Unlike `asyncio.PriorityQueue.get_nowait()` (synchronous), this method is **async** to ensure atomic lock acquisition and prevent race conditions.
+Unlike `asyncio.PriorityQueue.get_nowait()` (synchronous), this method is **async** to
+ensure atomic lock acquisition and prevent race conditions.
 
 ### Inspection Methods
 
@@ -337,7 +349,9 @@ def qsize(self) -> int: ...
 
 **Notes:**
 
-Do **NOT** use for control flow decisions (e.g., `if qsize() > 0: get_nowait()`). Race conditions can cause `QueueEmpty` exceptions. Use blocking `get()` or handle exceptions instead.
+Do **NOT** use for control flow decisions (e.g., `if qsize() > 0: get_nowait()`). Race
+conditions can cause `QueueEmpty` exceptions. Use blocking `get()` or handle exceptions
+instead.
 
 #### `empty()`
 
@@ -719,7 +733,8 @@ await demonstrate_stable_priority()
 
 ### Why Async Nowait Methods?
 
-Unlike `asyncio.PriorityQueue`, this implementation makes `put_nowait()` and `get_nowait()` **async** to ensure proper locking:
+Unlike `asyncio.PriorityQueue`, this implementation makes `put_nowait()` and
+`get_nowait()` **async** to ensure proper locking:
 
 **Problem with Sync Nowait (asyncio pattern):**
 
@@ -752,7 +767,8 @@ async def put_nowait(self, item):  # Async
 2. **Consistent API**: All mutating methods are async
 3. **Proper notification**: Condition.notify() under lock is reliable
 
-**Tradeoff**: Slightly more verbose (`await queue.put_nowait()` vs `queue.put_nowait()`), but eliminates subtle concurrency bugs.
+**Tradeoff**: Slightly more verbose (`await queue.put_nowait()` vs
+`queue.put_nowait()`), but eliminates subtle concurrency bugs.
 
 ### Why Unlocked Inspection Methods?
 
@@ -794,7 +810,8 @@ Uses `heapq` min-heap semantics (lowest value = highest priority):
 
 **Rationale:**
 
-1. **Standard pattern**: Matches `queue.PriorityQueue`, `asyncio.PriorityQueue`, Dijkstra's algorithm
+1. **Standard pattern**: Matches `queue.PriorityQueue`, `asyncio.PriorityQueue`,
+   Dijkstra's algorithm
 2. **Natural for costs**: Lower cost = process first (execution time, resource usage)
 3. **Enum compatibility**: `IntEnum` priority levels work naturally (CRITICAL=1, LOW=10)
 
@@ -823,7 +840,8 @@ Supports both **bounded** (backpressure) and **unbounded** (buffer) use cases:
 - **Behavior**: `put()` blocks when full, throttles producers
 - **Benefit**: Prevents memory exhaustion, natural flow control
 
-**Design choice**: Default to unbounded (maxsize=0) for ease of use, require explicit opt-in for backpressure.
+**Design choice**: Default to unbounded (maxsize=0) for ease of use, require explicit
+opt-in for backpressure.
 
 ## Common Pitfalls
 

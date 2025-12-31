@@ -1,13 +1,16 @@
 # Tool
 
-> Wraps Python callables as service backends with automatic JSON Schema generation for LLM tool calling
+> Wraps Python callables as service backends with automatic JSON Schema generation for
+> LLM tool calling
 
 ## Overview
 
-`Tool` transforms Python functions into LLM-compatible tool definitions with auto-generated JSON Schema from signatures or Pydantic models. Supports sync/async callables and TypeScript rendering for LLMs.
+`Tool` transforms Python functions into LLM-compatible tool definitions with
+auto-generated JSON Schema from signatures or Pydantic models. Supports sync/async
+callables and TypeScript rendering for LLMs.
 
-**Use for**: LLM tool calling, ReAct action handlers.
-**Skip for**: HTTP APIs (use Endpoint), serialization scenarios (callables not serializable).
+**Use for**: LLM tool calling, ReAct action handlers. **Skip for**: HTTP APIs (use
+Endpoint), serialization scenarios (callables not serializable).
 
 ## Class Signature
 
@@ -30,39 +33,39 @@ class Tool(ServiceBackend):
 
 ## Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `func_callable` | `Callable` | Required. Python function with `__name__` attribute. |
-| `config` | `ToolConfig or dict` | Optional. Auto-generated from function if not provided. |
-| `tool_schema` | `dict` | Optional. Priority: `request_options` > `tool_schema` > auto-generated. |
+| Parameter       | Type                 | Description                                                             |
+| --------------- | -------------------- | ----------------------------------------------------------------------- |
+| `func_callable` | `Callable`           | Required. Python function with `__name__` attribute.                    |
+| `config`        | `ToolConfig or dict` | Optional. Auto-generated from function if not provided.                 |
+| `tool_schema`   | `dict`               | Optional. Priority: `request_options` > `tool_schema` > auto-generated. |
 
 ## Attributes
 
-| Attribute | Type | Frozen | Description |
-|-----------|------|--------|-------------|
-| `func_callable` | `Callable[..., Any]` | Yes | The wrapped Python callable |
-| `tool_schema` | `dict[str, Any]` | No | JSON Schema for parameters (auto-generated or provided) |
-| `config` | `ToolConfig` | No | Service configuration (name, provider, request_options) |
+| Attribute       | Type                 | Frozen | Description                                             |
+| --------------- | -------------------- | ------ | ------------------------------------------------------- |
+| `func_callable` | `Callable[..., Any]` | Yes    | The wrapped Python callable                             |
+| `tool_schema`   | `dict[str, Any]`     | No     | JSON Schema for parameters (auto-generated or provided) |
+| `config`        | `ToolConfig`         | No     | Service configuration (name, provider, request_options) |
 
 ### Inherited from ServiceBackend
 
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `id` | `UUID` | Unique identifier (from Element) |
-| `created_at` | `datetime` | Creation timestamp (from Element) |
-| `metadata` | `dict[str, Any]` | Arbitrary metadata (from Element) |
+| Attribute    | Type             | Description                       |
+| ------------ | ---------------- | --------------------------------- |
+| `id`         | `UUID`           | Unique identifier (from Element)  |
+| `created_at` | `datetime`       | Creation timestamp (from Element) |
+| `metadata`   | `dict[str, Any]` | Arbitrary metadata (from Element) |
 
 ### Properties
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `name` | `str` | Tool name from config (defaults to function name) |
-| `provider` | `str` | Provider identifier (always `"tool"` for Tool) |
-| `function_name` | `str` | Original function `__name__` |
-| `rendered` | `str` | TypeScript-formatted schema for LLM consumption |
-| `required_fields` | `frozenset[str]` | Set of required parameter names |
-| `request_options` | `type[BaseModel] \| None` | Pydantic model for validation (from config) |
-| `event_type` | `type[ToolCalling]` | Event class for tool execution |
+| Property          | Type                      | Description                                       |
+| ----------------- | ------------------------- | ------------------------------------------------- |
+| `name`            | `str`                     | Tool name from config (defaults to function name) |
+| `provider`        | `str`                     | Provider identifier (always `"tool"` for Tool)    |
+| `function_name`   | `str`                     | Original function `__name__`                      |
+| `rendered`        | `str`                     | TypeScript-formatted schema for LLM consumption   |
+| `required_fields` | `frozenset[str]`          | Set of required parameter names                   |
+| `request_options` | `type[BaseModel] \| None` | Pydantic model for validation (from config)       |
+| `event_type`      | `type[ToolCalling]`       | Event class for tool execution                    |
 
 ## Methods
 
@@ -77,12 +80,12 @@ result.data  # Return value
 
 ### Properties
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `function_name` | `str` | Original `__name__` of callable |
-| `rendered` | `str` | TypeScript-formatted schema for LLMs |
-| `required_fields` | `frozenset[str]` | Parameter names without defaults |
-| `request_options` | `type[BaseModel] or None` | Pydantic validation model |
+| Property          | Type                      | Description                          |
+| ----------------- | ------------------------- | ------------------------------------ |
+| `function_name`   | `str`                     | Original `__name__` of callable      |
+| `rendered`        | `str`                     | TypeScript-formatted schema for LLMs |
+| `required_fields` | `frozenset[str]`          | Parameter names without defaults     |
+| `request_options` | `type[BaseModel] or None` | Pydantic validation model            |
 
 ### Serialization
 
@@ -90,7 +93,8 @@ result.data  # Return value
 
 ## Protocol Implementations
 
-Inherits **Observable**, **Hashable** from Element. **Serializable/Deserializable** not implemented (callables).
+Inherits **Observable**, **Hashable** from Element. **Serializable/Deserializable** not
+implemented (callables).
 
 ## Usage Patterns
 
@@ -138,19 +142,24 @@ result = await tool.call({"query": "example"})
 
 ## Common Pitfalls
 
-- **Serialization fails**: Tool raises `NotImplementedError`. Use `Endpoint` for persistence.
+- **Serialization fails**: Tool raises `NotImplementedError`. Use `Endpoint` for
+  persistence.
 
 - **Schema priority**: `request_options` always overrides `tool_schema`.
 
-- **Prefer named functions**: Lambdas work but named functions provide clearer tool identification.
+- **Prefer named functions**: Lambdas work but named functions provide clearer tool
+  identification.
 
 ## Design Rationale
 
-**Auto-generated Schema**: Extracts from signatures/Pydantic to prevent drift between code and schema.
+**Auto-generated Schema**: Extracts from signatures/Pydantic to prevent drift between
+code and schema.
 
-**TypeScript Rendering**: LLMs perform better with TypeScript-style types than verbose JSON Schema.
+**TypeScript Rendering**: LLMs perform better with TypeScript-style types than verbose
+JSON Schema.
 
-**Not Serializable**: Callables cannot serialize reliably; explicit error guides users to Endpoint.
+**Not Serializable**: Callables cannot serialize reliably; explicit error guides users
+to Endpoint.
 
 ## See Also
 

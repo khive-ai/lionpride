@@ -1,24 +1,31 @@
 # Element
 
-> Base class for identity-based objects with UUID, timestamps, and polymorphic serialization
+> Base class for identity-based objects with UUID, timestamps, and polymorphic
+> serialization
 
 ## Overview
 
-`Element` is the foundational base class in lionpride providing **identity-based equality** and **polymorphic serialization** for workflow entities. Every Element instance has a unique UUID and creation timestamp, enabling it to be tracked, serialized, and reconstructed across different contexts.
+`Element` is the foundational base class in lionpride providing **identity-based
+equality** and **polymorphic serialization** for workflow entities. Every Element
+instance has a unique UUID and creation timestamp, enabling it to be tracked,
+serialized, and reconstructed across different contexts.
 
 **Key Capabilities:**
 
 - **UUID Identity**: Auto-generated unique identifier (frozen, immutable)
 - **Timestamp Tracking**: Automatic UTC timestamp on creation (frozen, immutable)
-- **Polymorphic Serialization**: Serializes with class information for correct subclass reconstruction
-- **Protocol Implementation**: Implements Observable, Serializable, Deserializable, and Hashable protocols
+- **Polymorphic Serialization**: Serializes with class information for correct subclass
+  reconstruction
+- **Protocol Implementation**: Implements Observable, Serializable, Deserializable, and
+  Hashable protocols
 - **Flexible Metadata**: Arbitrary metadata storage with automatic dict coercion
 
 **When to Use Element:**
 
 - Workflow entities where **identity matters** (same ID = same object)
 - Objects that need to be **tracked over time** (creation timestamps)
-- Multi-class systems requiring **polymorphic deserialization** (serialize as subclass, deserialize correctly)
+- Multi-class systems requiring **polymorphic deserialization** (serialize as subclass,
+  deserialize correctly)
 - Entities that **mutate over time** but maintain stable identity
 
 **When NOT to Use Element (Use HashableModel Instead):**
@@ -56,8 +63,8 @@ class Element(BaseModel):
 
 **id** : UUID or str, optional
 
-Unique identifier for the element. If not provided, auto-generated via `uuid4()`.
-Once set, this field is **frozen** and cannot be modified.
+Unique identifier for the element. If not provided, auto-generated via `uuid4()`. Once
+set, this field is **frozen** and cannot be modified.
 
 - Type coercion: Strings are automatically converted to UUID objects
 - Validation: Must be valid UUID format
@@ -65,10 +72,11 @@ Once set, this field is **frozen** and cannot be modified.
 
 **created_at** : datetime or str or int or float, optional
 
-UTC timestamp marking element creation. If not provided, set to current UTC time.
-Once set, this field is **frozen** and cannot be modified.
+UTC timestamp marking element creation. If not provided, set to current UTC time. Once
+set, this field is **frozen** and cannot be modified.
 
-- Type coercion: Strings (ISO format), integers (Unix timestamp), floats (Unix timestamp) automatically converted to UTC datetime
+- Type coercion: Strings (ISO format), integers (Unix timestamp), floats (Unix
+  timestamp) automatically converted to UTC datetime
 - Validation: Must be valid datetime representation
 - Default: `datetime.now(dt.UTC)` captures current time
 
@@ -83,11 +91,11 @@ Arbitrary metadata storage for custom attributes not defined in the model schema
 
 ## Attributes
 
-| Attribute    | Type                | Frozen | Description                                              |
-| ------------ | ------------------- | ------ | -------------------------------------------------------- |
-| `id`         | `UUID`              | Yes    | Unique identifier (auto-generated or provided)           |
-| `created_at` | `datetime`          | Yes    | UTC creation timestamp (auto-generated or provided)      |
-| `metadata`   | `dict[str, Any]`    | No     | Arbitrary metadata with auto-dict coercion               |
+| Attribute    | Type             | Frozen | Description                                         |
+| ------------ | ---------------- | ------ | --------------------------------------------------- |
+| `id`         | `UUID`           | Yes    | Unique identifier (auto-generated or provided)      |
+| `created_at` | `datetime`       | Yes    | UTC creation timestamp (auto-generated or provided) |
+| `metadata`   | `dict[str, Any]` | No     | Arbitrary metadata with auto-dict coercion          |
 
 ## Methods
 
@@ -106,11 +114,13 @@ def class_name(cls, full: bool = False) -> str: ...
 
 **Parameters:**
 
-- `full` (bool, default False): If True, returns fully qualified name (`module.Class`); otherwise class name only
+- `full` (bool, default False): If True, returns fully qualified name (`module.Class`);
+  otherwise class name only
 
 **Returns:**
 
-- str: Class name without generic parameters (e.g., `"Flow"` instead of `"Flow[Item, Prog]"`)
+- str: Class name without generic parameters (e.g., `"Flow"` instead of
+  `"Flow[Item, Prog]"`)
 
 **Examples:**
 
@@ -124,8 +134,8 @@ def class_name(cls, full: bool = False) -> str: ...
 
 **Notes:**
 
-For Pydantic generic models, runtime classes include type parameters in `__name__`.
-This method strips them using string parsing for consistent class identification.
+For Pydantic generic models, runtime classes include type parameters in `__name__`. This
+method strips them using string parsing for consistent class identification.
 
 ### Serialization
 
@@ -151,21 +161,26 @@ def to_dict(
   - `'python'`: Native Python types (UUID objects, datetime objects)
   - `'json'`: JSON-safe types (UUIDs → str, datetime → ISO8601 string)
   - `'db'`: Database format (JSON-safe + metadata → node_metadata)
-- `created_at_format` ({'datetime', 'isoformat', 'timestamp'}, optional): Timestamp format
+- `created_at_format` ({'datetime', 'isoformat', 'timestamp'}, optional): Timestamp
+  format
   - `'datetime'`: datetime object (python/db modes only)
   - `'isoformat'`: ISO8601 string (all modes, default for json)
   - `'timestamp'`: Unix timestamp float (all modes)
   - Default: `'isoformat'` for json mode, `'datetime'` for python/db modes
-- `meta_key` (str, optional): Custom metadata key name. Default: `'metadata'` (python/json), `'node_metadata'` (db)
-- `**kwargs` (Any): Forwarded to Pydantic's `model_dump()`. Common: `include`, `exclude`, `by_alias`
+- `meta_key` (str, optional): Custom metadata key name. Default: `'metadata'`
+  (python/json), `'node_metadata'` (db)
+- `**kwargs` (Any): Forwarded to Pydantic's `model_dump()`. Common: `include`,
+  `exclude`, `by_alias`
 
 **Returns:**
 
-- dict[str, Any]: Serialized dictionary with `lion_class` injected in metadata for polymorphic deserialization
+- dict[str, Any]: Serialized dictionary with `lion_class` injected in metadata for
+  polymorphic deserialization
 
 **Raises:**
 
-- ValueError: If `mode` is invalid or `created_at_format='datetime'` used with `mode='json'`
+- ValueError: If `mode` is invalid or `created_at_format='datetime'` used with
+  `mode='json'`
 
 **Examples:**
 
@@ -228,7 +243,10 @@ def to_dict(
 
 **Notes:**
 
-The `lion_class` key in metadata enables **polymorphic deserialization** - `from_dict()` uses it to reconstruct the correct subclass automatically. This is critical for multi-class workflows where serialized objects must deserialize to their original subclass type.
+The `lion_class` key in metadata enables **polymorphic deserialization** - `from_dict()`
+uses it to reconstruct the correct subclass automatically. This is critical for
+multi-class workflows where serialized objects must deserialize to their original
+subclass type.
 
 **Mode Selection Guidelines:**
 
@@ -238,7 +256,9 @@ The `lion_class` key in metadata enables **polymorphic deserialization** - `from
 
 **Format Behavior (Updated in v1.0.0-alpha3):**
 
-The `created_at_format` parameter applies to **ALL modes** (python/json/db), providing consistent timestamp formatting across serialization contexts. Previously, this parameter only affected python mode.
+The `created_at_format` parameter applies to **ALL modes** (python/json/db), providing
+consistent timestamp formatting across serialization contexts. Previously, this
+parameter only affected python mode.
 
 #### `to_json()`
 
@@ -260,9 +280,11 @@ def to_json(
 **Parameters:**
 
 - `pretty` (bool, default False): Indent output for human readability
-- `sort_keys` (bool, default False): Sort dictionary keys alphabetically (enables deterministic output)
+- `sort_keys` (bool, default False): Sort dictionary keys alphabetically (enables
+  deterministic output)
 - `decode` (bool, default True): Return str (True) or bytes (False)
-- `**kwargs` (Any): Forwarded to `model_dump()`. Common: `include`, `exclude`, `by_alias`
+- `**kwargs` (Any): Forwarded to `model_dump()`. Common: `include`, `exclude`,
+  `by_alias`
 
 **Returns:**
 
@@ -306,7 +328,9 @@ def to_json(
 
 **Notes:**
 
-Uses `orjson` for high-performance JSON serialization with automatic handling of nested Elements and BaseModel instances. The serializer is lazily initialized on first use to avoid circular imports.
+Uses `orjson` for high-performance JSON serialization with automatic handling of nested
+Elements and BaseModel instances. The serializer is lazily initialized on first use to
+avoid circular imports.
 
 ### Deserialization
 
@@ -329,8 +353,10 @@ def from_dict(
 **Parameters:**
 
 - `data` (dict[str, Any]): Serialized element dictionary (from `to_dict()`)
-- `meta_key` (str, optional): Restore metadata from this key (for db mode compatibility). Default: `'metadata'`
-- `**kwargs` (Any): Forwarded to Pydantic's `model_validate()`. Common: `strict`, `context`
+- `meta_key` (str, optional): Restore metadata from this key (for db mode
+  compatibility). Default: `'metadata'`
+- `**kwargs` (Any): Forwarded to Pydantic's `model_validate()`. Common: `strict`,
+  `context`
 
 **Returns:**
 
@@ -400,12 +426,14 @@ UUID('123e4567-e89b-12d3-a456-426614174000')
 4. Delegates to target class's `from_dict()` or `model_validate()`
 5. Returns instance of correct subclass
 
-This enables workflows where you serialize a subclass (e.g., `Node`) and deserialize it correctly even when calling `Element.from_dict()`.
+This enables workflows where you serialize a subclass (e.g., `Node`) and deserialize it
+correctly even when calling `Element.from_dict()`.
 
 **Metadata Key Handling:**
 
 - Supports `meta_key` parameter for custom metadata keys (db mode: `node_metadata`)
-- Backward compatibility: Automatically checks for `node_metadata` if `metadata` not found
+- Backward compatibility: Automatically checks for `node_metadata` if `metadata` not
+  found
 - `lion_class` is **removed** from metadata after deserialization (serialization-only)
 
 **Safety:**
@@ -459,7 +487,8 @@ def from_json(cls, json_str: str, /, **kwargs: Any) -> Element: ...
 
 **Notes:**
 
-Internally uses `orjson.loads()` to parse JSON, then delegates to `from_dict()` for polymorphic reconstruction.
+Internally uses `orjson.loads()` to parse JSON, then delegates to `from_dict()` for
+polymorphic reconstruction.
 
 ### Special Methods
 
@@ -496,7 +525,9 @@ True  # Equality based on ID, not content
 
 **Notes:**
 
-Elements use **identity-based equality** (ID comparison), not value-based equality. Two elements with identical field values but different IDs are NOT equal. This contrasts with [HashableModel](../types/model.md), which uses content-based equality.
+Elements use **identity-based equality** (ID comparison), not value-based equality. Two
+elements with identical field values but different IDs are NOT equal. This contrasts
+with [HashableModel](../types/model.md), which uses content-based equality.
 
 #### `__hash__()`
 
@@ -533,7 +564,9 @@ def __hash__(self) -> int: ...
 
 **Notes:**
 
-Hash is based on UUID only, enabling stable hashing even if metadata changes (though metadata changes are allowed since it's not frozen). This **identity-based hashing** differs from [HashableModel's content-based hashing](../types/model.md).
+Hash is based on UUID only, enabling stable hashing even if metadata changes (though
+metadata changes are allowed since it's not frozen). This **identity-based hashing**
+differs from [HashableModel's content-based hashing](../types/model.md).
 
 #### `__bool__()`
 
@@ -563,7 +596,8 @@ Always truthy
 
 **Notes:**
 
-Elements are always truthy, even with empty metadata. This prevents accidental falsy behavior when elements are used in conditional expressions.
+Elements are always truthy, even with empty metadata. This prevents accidental falsy
+behavior when elements are used in conditional expressions.
 
 #### `__repr__()`
 
@@ -600,16 +634,20 @@ Element implements four core protocols:
 
 Register event handlers for observing element state changes.
 
-**Status**: Protocol declared but base implementation minimal. Subclasses (e.g., Event) provide full implementation.
+**Status**: Protocol declared but base implementation minimal. Subclasses (e.g., Event)
+provide full implementation.
 
 ### Serializable
 
 **Methods**:
 
-- `to_dict(mode='python'|'json'|'db', **kwargs)`: Dictionary serialization with three modes
-- `to_json(pretty=False, sort_keys=False, decode=True, **kwargs)`: JSON string serialization
+- `to_dict(mode='python'|'json'|'db', **kwargs)`: Dictionary serialization with three
+  modes
+- `to_json(pretty=False, sort_keys=False, decode=True, **kwargs)`: JSON string
+  serialization
 
-**Polymorphism**: Automatically injects `lion_class` in metadata for subclass reconstruction.
+**Polymorphism**: Automatically injects `lion_class` in metadata for subclass
+reconstruction.
 
 ### Deserializable
 
@@ -760,7 +798,8 @@ elem2 = Element(metadata={"key": "value"})
 assert elem1 != elem2  # True (different UUIDs)
 ```
 
-**Solution**: Element uses **identity equality** (ID-based). For value equality, use [HashableModel](../types/model.md).
+**Solution**: Element uses **identity equality** (ID-based). For value equality, use
+[HashableModel](../types/model.md).
 
 #### Pitfall 2: Mutating Frozen Fields
 
@@ -773,11 +812,13 @@ elem = Element()
 # elem.id = new_uuid  # ValidationError: "id" is frozen
 ```
 
-**Solution**: These fields are immutable by design. Create a new Element if you need different values.
+**Solution**: These fields are immutable by design. Create a new Element if you need
+different values.
 
 #### Pitfall 3: Forgetting `lion_class` for Polymorphism
 
-**Issue**: Manually creating dicts without `lion_class` breaks polymorphic deserialization.
+**Issue**: Manually creating dicts without `lion_class` breaks polymorphic
+deserialization.
 
 ```python
 # Missing lion_class
@@ -786,7 +827,8 @@ obj = Element.from_dict(data)
 # Deserializes as Element, not Node (class info lost)
 ```
 
-**Solution**: Always use `to_dict()` to serialize, which automatically injects `lion_class`.
+**Solution**: Always use `to_dict()` to serialize, which automatically injects
+`lion_class`.
 
 #### Pitfall 4: Using datetime Format in JSON Mode
 
@@ -798,26 +840,31 @@ elem.to_dict(mode='json', created_at_format='datetime')
 # ValueError: created_at_format='datetime' not valid for mode='json'
 ```
 
-**Solution**: Use `'isoformat'` or `'timestamp'` for JSON mode (JSON requires serializable types).
+**Solution**: Use `'isoformat'` or `'timestamp'` for JSON mode (JSON requires
+serializable types).
 
 ## Design Rationale
 
 ### Why ID-Based Identity?
 
-Element provides **identity-based equality** (same ID = same object) rather than value equality because workflow entities:
+Element provides **identity-based equality** (same ID = same object) rather than value
+equality because workflow entities:
 
 1. **Evolve over time**: An agent's state changes but it's still the same agent
-2. **Need stable references**: Caching, lookup tables, relationship graphs require stable identity
+2. **Need stable references**: Caching, lookup tables, relationship graphs require
+   stable identity
 3. **Support mutation**: Metadata can change without breaking set/dict membership
 
-For **immutable value objects** (configs, cache keys), use [HashableModel](../types/model.md) with content-based hashing.
+For **immutable value objects** (configs, cache keys), use
+[HashableModel](../types/model.md) with content-based hashing.
 
 ### Why Frozen ID and Timestamp?
 
 Freezing `id` and `created_at` ensures:
 
 1. **Hash stability**: Elements can safely be used in sets/dicts without hash corruption
-2. **Identity integrity**: ID immutability guarantees identity doesn't change unexpectedly
+2. **Identity integrity**: ID immutability guarantees identity doesn't change
+   unexpectedly
 3. **Temporal accuracy**: Creation timestamp accurately reflects instantiation time
 
 Only `metadata` is mutable, allowing workflow state updates without identity changes.
@@ -828,27 +875,39 @@ Different contexts require different serialization formats:
 
 1. **python**: In-memory operations benefit from native types (no conversion overhead)
 2. **json**: API responses and JSON storage require JSON-safe types
-3. **db**: Database adapters need specific field naming (e.g., `node_metadata` for Neo4j)
+3. **db**: Database adapters need specific field naming (e.g., `node_metadata` for
+   Neo4j)
 
 Single `to_dict()` method with `mode` parameter provides consistent API across contexts.
 
 ### Why DB Mode Uses Datetime Objects by Default?
 
-DB mode defaults to `created_at_format='datetime'` (datetime objects) instead of `'isoformat'` (strings) for database compatibility:
+DB mode defaults to `created_at_format='datetime'` (datetime objects) instead of
+`'isoformat'` (strings) for database compatibility:
 
-1. **ORM Integration**: SQLAlchemy, Django ORM, and other ORMs expect datetime columns as datetime objects, not strings. String timestamps require manual conversion and type coercion.
+1. **ORM Integration**: SQLAlchemy, Django ORM, and other ORMs expect datetime columns
+   as datetime objects, not strings. String timestamps require manual conversion and
+   type coercion.
 
-2. **Temporal Indexing**: Database engines (PostgreSQL, MySQL) optimize temporal queries on TIMESTAMP/DATETIME columns. String-based timestamps can't leverage these optimizations without casting.
+2. **Temporal Indexing**: Database engines (PostgreSQL, MySQL) optimize temporal queries
+   on TIMESTAMP/DATETIME columns. String-based timestamps can't leverage these
+   optimizations without casting.
 
-3. **Graph Database Compatibility**: Neo4j and other graph databases support native datetime types for efficient temporal queries. String timestamps require conversion overhead on every query.
+3. **Graph Database Compatibility**: Neo4j and other graph databases support native
+   datetime types for efficient temporal queries. String timestamps require conversion
+   overhead on every query.
 
-4. **Timezone Preservation**: Some database adapters lose timezone information when converting ISO strings. Native datetime objects preserve timezone metadata through the entire persistence layer.
+4. **Timezone Preservation**: Some database adapters lose timezone information when
+   converting ISO strings. Native datetime objects preserve timezone metadata through
+   the entire persistence layer.
 
-**Migration**: Existing code using `mode='db'` without explicit format can preserve string behavior with `to_dict(mode='db', created_at_format='isoformat')`.
+**Migration**: Existing code using `mode='db'` without explicit format can preserve
+string behavior with `to_dict(mode='db', created_at_format='isoformat')`.
 
 ### Why Polymorphic Serialization?
 
-Multi-class workflows need to serialize mixed collections of Element subclasses and deserialize them correctly:
+Multi-class workflows need to serialize mixed collections of Element subclasses and
+deserialize them correctly:
 
 ```python
 # Serialize mixed collection
@@ -869,7 +928,10 @@ restored = [Element.from_dict(data) for data in serialized]
   - [Event](event.md): Element subclass with async execution lifecycle
   - [HashableModel](../types/model.md): Content-based hashing alternative
 
-See [User Guides](../../user_guide/) including [API Design](../../user_guide/api_design.md), [Type Safety](../../user_guide/type_safety.md), and [Validation](../../user_guide/validation.md) for practical examples.
+See [User Guides](../../user_guide/) including
+[API Design](../../user_guide/api_design.md),
+[Type Safety](../../user_guide/type_safety.md), and
+[Validation](../../user_guide/validation.md) for practical examples.
 
 ## Examples
 

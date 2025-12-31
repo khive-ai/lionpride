@@ -12,7 +12,8 @@ queries, explainability, audit trails, and type safety.
 
 **Core Capabilities**:
 
-- **Flow-based state tracking**: Events stored in Flow.items, status tracked via progressions
+- **Flow-based state tracking**: Events stored in Flow.items, status tracked via
+  progressions
 - **O(1) status queries**: Direct progression lookup vs O(n) pile scanning
 - **Background processing**: Creates and manages Processor instance for async execution
 - **Type safety**: Optional strict event type enforcement via Flow
@@ -20,7 +21,8 @@ queries, explainability, audit trails, and type safety.
 
 **When to Use Executor:**
 
-- You need to track event status across lifecycle (pending → processing → completed/failed)
+- You need to track event status across lifecycle (pending → processing →
+  completed/failed)
 - You want O(1) performance for status queries (not O(n) scanning)
 - You need audit trail of all events by status
 - You want background event processing with priority queue
@@ -52,7 +54,8 @@ EventStatus.ABORTED     → Progression(name="aborted")
 
 **Benefits**:
 
-- **O(1) queries**: `get_events_by_status()` is direct progression lookup (not O(n) scan)
+- **O(1) queries**: `get_events_by_status()` is direct progression lookup (not O(n)
+  scan)
 - **Type safety**: EventStatus enum prevents invalid status strings
 - **Explainability**: `inspect_state()` shows all status counts at a glance
 - **Audit trail**: Flow serialization captures full state history
@@ -71,8 +74,9 @@ await executor.append(event)      # Adds to Flow + enqueues in Processor
 # Processor updates progressions via executor._update_progression()
 ```
 
-**See Also**: [Processor API](processor.md) for processor-specific details.
-For integration patterns, see [Processor/Executor Integration](../../user_guide/processor_executor.md#integration-architecture).
+**See Also**: [Processor API](processor.md) for processor-specific details. For
+integration patterns, see
+[Processor/Executor Integration](../../user_guide/processor_executor.md#integration-architecture).
 
 ---
 
@@ -113,10 +117,11 @@ def __init__(
 
 **Parameters**:
 
-- `processor_config` (dict[str, Any] | None): Configuration dict passed to `Processor.create()`.
-  Keys: `queue_capacity` (required), `capacity_refresh_time` (required), `concurrency_limit`,
-  `max_queue_size`, `max_denial_tracking`. Default: `{}`.
-  **Note**: `queue_capacity` and `capacity_refresh_time` are required if you plan to call `start()`.
+- `processor_config` (dict[str, Any] | None): Configuration dict passed to
+  `Processor.create()`. Keys: `queue_capacity` (required), `capacity_refresh_time`
+  (required), `concurrency_limit`, `max_queue_size`, `max_denial_tracking`. Default:
+  `{}`. **Note**: `queue_capacity` and `capacity_refresh_time` are required if you plan
+  to call `start()`.
 - `strict_event_type` (bool): If True, Flow enforces exact event type (no subclasses).
   Default: False (allow event subclasses)
 - `name` (str | None): Optional name for Flow. Default: "executor_states"
@@ -339,7 +344,8 @@ Adds event to Flow with PENDING status and enqueues in Processor (if started).
 **Parameters:**
 
 - `event` (Event): Event instance to add
-- `priority` (float | None): Priority value (lower = higher priority). Default: `event.created_at.timestamp()`
+- `priority` (float | None): Priority value (lower = higher priority). Default:
+  `event.created_at.timestamp()`
 
 **Async:** Yes (enqueues in Processor)
 
@@ -385,11 +391,13 @@ Removes events from Flow and cleans up processor denial tracking.
 
 **Parameters:**
 
-- `statuses` (list[EventStatus] | None): Statuses to clean up. Default: `[COMPLETED, FAILED, ABORTED]`
+- `statuses` (list[EventStatus] | None): Statuses to clean up. Default:
+  `[COMPLETED, FAILED, ABORTED]`
 
 **Returns:** int (number of events removed)
 
-**Thread Safety:** Acquires locks in consistent order (items first, progressions second) to prevent deadlock
+**Thread Safety:** Acquires locks in consistent order (items first, progressions second)
+to prevent deadlock
 
 **Async:** Yes (acquires async locks)
 
@@ -653,7 +661,8 @@ async def _update_progression(
 2. Removes event from all progressions (enforce single-ownership)
 3. Adds to target progression (based on event.execution.status or force_status)
 
-**Raises:** ConfigurationError if progression missing (shouldn't happen with correct init)
+**Raises:** ConfigurationError if progression missing (shouldn't happen with correct
+init)
 
 ### `_create_processor()`
 
@@ -664,7 +673,8 @@ async def _create_processor(self) -> None:
 
 **⚠️ Internal Use Only**: Called by `start()` on first invocation.
 
-**Behavior:** Creates processor via `await processor_type.create()` with `processor_config`
+**Behavior:** Creates processor via `await processor_type.create()` with
+`processor_config`
 
 ---
 
@@ -911,11 +921,15 @@ executor = MyExecutor(
 
 **Tuning Recommendations:**
 
-- **Low latency**: Small `capacity_refresh_time` (0.1-0.5s), high `queue_capacity` (500-1000)
-- **High throughput**: Large `queue_capacity` (1000-5000), moderate `capacity_refresh_time` (1-5s)
-- **Resource-constrained**: Low `concurrency_limit` (10-50), small `queue_capacity` (50-100)
+- **Low latency**: Small `capacity_refresh_time` (0.1-0.5s), high `queue_capacity`
+  (500-1000)
+- **High throughput**: Large `queue_capacity` (1000-5000), moderate
+  `capacity_refresh_time` (1-5s)
+- **Resource-constrained**: Low `concurrency_limit` (10-50), small `queue_capacity`
+  (50-100)
 
-**See Also:** [Processor Configuration](processor.md#configuration-guide) for detailed tuning
+**See Also:** [Processor Configuration](processor.md#configuration-guide) for detailed
+tuning
 
 ### strict_event_type Usage
 
@@ -947,7 +961,8 @@ await executor.append(MyEventSubclass()) # ✗ TypeError
 - [Event](event.md) - Async execution with lifecycle tracking
 - [Flow](flow.md) - Flow-based state management architecture
 - [EventStatus](event.md#eventstatus) - Event lifecycle states
-- [Processor/Executor Integration](../../user_guide/processor_executor.md) - Integration patterns and workflows
+- [Processor/Executor Integration](../../user_guide/processor_executor.md) - Integration
+  patterns and workflows
 
 ---
 
@@ -1061,6 +1076,5 @@ async def main():
 
 ---
 
-**Version**: 1.0
-**Status**: Production Ready
-**Copyright**: © 2025 HaiyangLi (Ocean) - Apache 2.0 License
+**Version**: 1.0 **Status**: Production Ready **Copyright**: © 2025 HaiyangLi (Ocean) -
+Apache 2.0 License

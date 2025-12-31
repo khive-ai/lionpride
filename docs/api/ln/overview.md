@@ -1,18 +1,27 @@
 # ln Module
 
-> Core utilities for async operations, data processing, fuzzy matching, and JSON serialization
+> Core utilities for async operations, data processing, fuzzy matching, and JSON
+> serialization
 
 ## Overview
 
-The `ln` module provides essential utility functions for the lionpride ecosystem, focusing on high-performance data processing, flexible type conversions, and robust async operations. These utilities power the framework's data handling, serialization, and execution patterns.
+The `ln` module provides essential utility functions for the lionpride ecosystem,
+focusing on high-performance data processing, flexible type conversions, and robust
+async operations. These utilities power the framework's data handling, serialization,
+and execution patterns.
 
 **Key Capabilities:**
 
-- **Async Execution**: Parallel function application with retry, throttling, and concurrency control
-- **Fuzzy Matching**: String similarity-based key matching and validation for robust data handling
-- **JSON Serialization**: High-performance orjson-based serialization with custom type support
-- **List Processing**: Flexible list transformations with flattening, deduplication, and filtering
-- **Type Conversion**: Universal converters for dict/list with support for nested structures
+- **Async Execution**: Parallel function application with retry, throttling, and
+  concurrency control
+- **Fuzzy Matching**: String similarity-based key matching and validation for robust
+  data handling
+- **JSON Serialization**: High-performance orjson-based serialization with custom type
+  support
+- **List Processing**: Flexible list transformations with flattening, deduplication, and
+  filtering
+- **Type Conversion**: Universal converters for dict/list with support for nested
+  structures
 - **Utility Functions**: Path creation, module importing, datetime helpers, and binning
 
 **When to Use This Module:**
@@ -66,29 +75,29 @@ from lionpride.ln import (
 
 ## Quick Reference
 
-| Function | Category | Purpose |
-|----------|----------|---------|
-| [`alcall`](#alcall) | Async | Apply function to each list element asynchronously with retry/concurrency |
-| [`bcall`](#bcall) | Async | Process input in batches using alcall |
-| [`fuzzy_match_keys`](#fuzzy_match_keys) | Fuzzy | Validate and correct dict keys using fuzzy matching |
-| [`fuzzy_validate_pydantic`](#fuzzy_validate_pydantic) | Fuzzy | Parse text/dict into Pydantic model with fuzzy parsing |
-| [`fuzzy_validate_mapping`](#fuzzy_validate_mapping) | Fuzzy | Validate any input into dict with expected keys |
-| [`FuzzyMatchKeysParams`](#fuzzymatchkeysparams) | Fuzzy | Reusable fuzzy matching configurations |
-| [`hash_dict`](#hash_dict) | Hashing | Generate stable hash for any data structure |
-| [`json_dumps`](#json_dumps) | JSON | Serialize to JSON string with custom type support |
-| [`json_dumpb`](#json_dumpb) | JSON | Serialize to bytes (fast path) |
-| [`json_lines_iter`](#json_lines_iter) | JSON | Stream iterable as NDJSON |
-| [`json_dict`](#json_dict) | JSON | Round-trip serialize to dict |
-| [`get_orjson_default`](#get_orjson_default) | JSON | Build custom serializer for orjson |
-| [`make_options`](#make_options) | JSON | Compose orjson option bit flags |
-| [`to_list`](#to_list) | List | Convert input to list with transformations |
-| [`lcall`](#lcall) | List | Apply function to each element synchronously |
-| [`to_dict`](#to_dict) | Dict | Convert various input types to dictionary |
-| [`now_utc`](#now_utc) | Utility | Get current UTC datetime |
-| [`acreate_path`](#acreate_path) | Utility | Generate file path asynchronously |
-| [`get_bins`](#get_bins) | Utility | Organize indices into bins by cumulative length |
-| [`import_module`](#import_module) | Utility | Import module by path dynamically |
-| [`is_import_installed`](#is_import_installed) | Utility | Check if package is installed |
+| Function                                              | Category | Purpose                                                                   |
+| ----------------------------------------------------- | -------- | ------------------------------------------------------------------------- |
+| [`alcall`](#alcall)                                   | Async    | Apply function to each list element asynchronously with retry/concurrency |
+| [`bcall`](#bcall)                                     | Async    | Process input in batches using alcall                                     |
+| [`fuzzy_match_keys`](#fuzzy_match_keys)               | Fuzzy    | Validate and correct dict keys using fuzzy matching                       |
+| [`fuzzy_validate_pydantic`](#fuzzy_validate_pydantic) | Fuzzy    | Parse text/dict into Pydantic model with fuzzy parsing                    |
+| [`fuzzy_validate_mapping`](#fuzzy_validate_mapping)   | Fuzzy    | Validate any input into dict with expected keys                           |
+| [`FuzzyMatchKeysParams`](#fuzzymatchkeysparams)       | Fuzzy    | Reusable fuzzy matching configurations                                    |
+| [`hash_dict`](#hash_dict)                             | Hashing  | Generate stable hash for any data structure                               |
+| [`json_dumps`](#json_dumps)                           | JSON     | Serialize to JSON string with custom type support                         |
+| [`json_dumpb`](#json_dumpb)                           | JSON     | Serialize to bytes (fast path)                                            |
+| [`json_lines_iter`](#json_lines_iter)                 | JSON     | Stream iterable as NDJSON                                                 |
+| [`json_dict`](#json_dict)                             | JSON     | Round-trip serialize to dict                                              |
+| [`get_orjson_default`](#get_orjson_default)           | JSON     | Build custom serializer for orjson                                        |
+| [`make_options`](#make_options)                       | JSON     | Compose orjson option bit flags                                           |
+| [`to_list`](#to_list)                                 | List     | Convert input to list with transformations                                |
+| [`lcall`](#lcall)                                     | List     | Apply function to each element synchronously                              |
+| [`to_dict`](#to_dict)                                 | Dict     | Convert various input types to dictionary                                 |
+| [`now_utc`](#now_utc)                                 | Utility  | Get current UTC datetime                                                  |
+| [`acreate_path`](#acreate_path)                       | Utility  | Generate file path asynchronously                                         |
+| [`get_bins`](#get_bins)                               | Utility  | Organize indices into bins by cumulative length                           |
+| [`import_module`](#import_module)                     | Utility  | Import module by path dynamically                                         |
+| [`is_import_installed`](#is_import_installed)         | Utility  | Check if package is installed                                             |
 
 ## Async Call Utilities
 
@@ -173,7 +182,8 @@ def fuzzy_match_keys(
 
 **Raises**: `TypeError`, `ValueError`
 
-**See**: [fuzzy_match.md](fuzzy_match.md) and [fuzzy_validate.md](fuzzy_validate.md) for detailed API reference
+**See**: [fuzzy_match.md](fuzzy_match.md) and [fuzzy_validate.md](fuzzy_validate.md) for
+detailed API reference
 
 ### `fuzzy_validate_pydantic()`
 
@@ -194,7 +204,8 @@ def fuzzy_validate_pydantic(
 
 **Raises**: `ValidationError`, `TypeError`
 
-**See**: [fuzzy_match.md](fuzzy_match.md) and [fuzzy_validate.md](fuzzy_validate.md) for detailed API reference
+**See**: [fuzzy_match.md](fuzzy_match.md) and [fuzzy_validate.md](fuzzy_validate.md) for
+detailed API reference
 
 ### `fuzzy_validate_mapping()`
 
@@ -221,7 +232,8 @@ def fuzzy_validate_mapping(
 
 **Raises**: `TypeError`, `ValueError`
 
-**See**: [fuzzy_match.md](fuzzy_match.md) and [fuzzy_validate.md](fuzzy_validate.md) for detailed API reference
+**See**: [fuzzy_match.md](fuzzy_match.md) and [fuzzy_validate.md](fuzzy_validate.md) for
+detailed API reference
 
 ### `FuzzyMatchKeysParams`
 
@@ -233,7 +245,8 @@ class FuzzyMatchKeysParams(Params):
     def __call__(self, d_: dict[str, Any], keys: KeysLike) -> dict[str, Any]: ...
 ```
 
-**See**: [fuzzy_match.md](fuzzy_match.md) and [fuzzy_validate.md](fuzzy_validate.md) for detailed API reference
+**See**: [fuzzy_match.md](fuzzy_match.md) and [fuzzy_validate.md](fuzzy_validate.md) for
+detailed API reference
 
 ## Hashing
 
@@ -249,7 +262,8 @@ def hash_dict(data: Any, strict: bool = False) -> int: ...
 
 **Raises**: `TypeError`
 
-**See**: [to_dict.md](to_dict.md), [to_list.md](to_list.md), and [hash.md](hash.md) for detailed API reference
+**See**: [to_dict.md](to_dict.md), [to_list.md](to_list.md), and [hash.md](hash.md) for
+detailed API reference
 
 ## JSON Utilities
 
@@ -407,7 +421,8 @@ def to_list(
 
 **Raises**: `ValueError`
 
-**See**: [to_dict.md](to_dict.md), [to_list.md](to_list.md), and [hash.md](hash.md) for detailed API reference
+**See**: [to_dict.md](to_dict.md), [to_list.md](to_list.md), and [hash.md](hash.md) for
+detailed API reference
 
 ### `lcall()`
 
@@ -436,7 +451,8 @@ def lcall(
 
 **Raises**: `ValueError`, `TypeError`
 
-**See**: [to_dict.md](to_dict.md), [to_list.md](to_list.md), and [hash.md](hash.md) for detailed API reference
+**See**: [to_dict.md](to_dict.md), [to_list.md](to_list.md), and [hash.md](hash.md) for
+detailed API reference
 
 ## Dictionary Conversion
 
@@ -463,7 +479,8 @@ def to_dict(
 
 **Returns**: `dict[str | int, Any]` - Dictionary representation
 
-**See**: [to_dict.md](to_dict.md), [to_list.md](to_list.md), and [hash.md](hash.md) for detailed API reference
+**See**: [to_dict.md](to_dict.md), [to_list.md](to_list.md), and [hash.md](hash.md) for
+detailed API reference
 
 ## General Utilities
 
@@ -550,7 +567,8 @@ def is_import_installed(package_name: str) -> bool: ...
 
 **Design & Performance:**
 
-- [Design Decisions](discussion/ln_design_decisions.md): Rationale behind key design choices
+- [Design Decisions](discussion/ln_design_decisions.md): Rationale behind key design
+  choices
 - [Performance](discussion/ln_performance.md): Benchmarks and optimization strategies
 
 ## See Also

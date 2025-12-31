@@ -4,7 +4,10 @@
 
 ## Overview
 
-lionpride uses **protocol-based composition** (inspired by Rust traits and Go interfaces) instead of inheritance hierarchies. Protocols define **structural contracts** that classes implement through their public interface, not through inheritance.
+lionpride uses **protocol-based composition** (inspired by Rust traits and Go
+interfaces) instead of inheritance hierarchies. Protocols define **structural
+contracts** that classes implement through their public interface, not through
+inheritance.
 
 **Key Topics:**
 
@@ -91,7 +94,9 @@ obj = MyClass()
 print(isinstance(obj, Serializable))  # True (structural match)
 ```
 
-**Key Point**: You don't need to inherit from `Serializable` or use `@implements()` for protocol checking to work. However, `@implements()` provides **explicit documentation and enforcement**.
+**Key Point**: You don't need to inherit from `Serializable` or use `@implements()` for
+protocol checking to work. However, `@implements()` provides **explicit documentation
+and enforcement**.
 
 ---
 
@@ -512,7 +517,8 @@ print(config.allowed())  # {"host", "port", "timeout"}
 
 ### Semantics: Rust-Like Trait Implementation
 
-The `@implements()` decorator enforces **literal implementation**: methods/properties must be defined **in the class body**, not inherited.
+The `@implements()` decorator enforces **literal implementation**: methods/properties
+must be defined **in the class body**, not inherited.
 
 **Rationale:**
 

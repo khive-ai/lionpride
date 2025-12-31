@@ -1,20 +1,28 @@
 # Spec
 
-> Framework-agnostic field specification with metadata validation and type annotation generation
+> Framework-agnostic field specification with metadata validation and type annotation
+> generation
 
 ## Overview
 
-`Spec` is a flexible field specification system that decouples field definitions from framework-specific implementations (Pydantic, attrs, dataclasses). It provides a **framework-agnostic specification layer** with metadata validation, constraint enforcement, and dynamic type annotation generation with caching.
+`Spec` is a flexible field specification system that decouples field definitions from
+framework-specific implementations (Pydantic, attrs, dataclasses). It provides a
+**framework-agnostic specification layer** with metadata validation, constraint
+enforcement, and dynamic type annotation generation with caching.
 
 **Key Capabilities:**
 
-- **Type + Metadata**: Base type with arbitrary metadata (name, nullable, validators, defaults)
-- **Constraint Validation**: Enforces metadata constraints (default vs default_factory, validator callability)
-- **Dynamic Type Annotations**: Generates `Annotated[type, metadata...]` with thread-safe LRU cache
+- **Type + Metadata**: Base type with arbitrary metadata (name, nullable, validators,
+  defaults)
+- **Constraint Validation**: Enforces metadata constraints (default vs default_factory,
+  validator callability)
+- **Dynamic Type Annotations**: Generates `Annotated[type, metadata...]` with
+  thread-safe LRU cache
 - **Modifier Methods**: Fluent API for creating nullable/listable/validated variants
 - **Default Factories**: Supports both sync and async default value factories
 - **Hashable Protocol**: Immutable specs safe for use in sets and as cache keys
-- **Integration with Allowable**: Works with Allowable protocol via CommonMeta enumeration
+- **Integration with Allowable**: Works with Allowable protocol via CommonMeta
+  enumeration
 
 **When to Use Spec:**
 
@@ -30,7 +38,8 @@
 - Static type annotations without runtime metadata (use typing module)
 - Framework-specific features requiring deep integration (use framework's field system)
 
-See interactive notebooks in the [notebooks](../../../notebooks/) directory for hands-on examples.
+See interactive notebooks in the [notebooks](../../../notebooks/) directory for hands-on
+examples.
 
 ## Class Hierarchy
 
@@ -89,22 +98,24 @@ Base type for the field (e.g., `str`, `int`, `list[str]`). Supports:
 
 ***args** : Meta objects, optional
 
-Variable positional arguments accepting `Meta` objects for field metadata.
-Can be mixed with `**kw` keyword arguments.
+Variable positional arguments accepting `Meta` objects for field metadata. Can be mixed
+with `**kw` keyword arguments.
 
 - Flattened automatically (nested tuples/sets/lists resolved)
 - Duplicate keys raise `ValueError`
 
 **metadata** : tuple of Meta, optional
 
-Existing metadata tuple to extend. When provided, new metadata from `*args` and `**kw` are merged with validation for duplicates.
+Existing metadata tuple to extend. When provided, new metadata from `*args` and `**kw`
+are merged with validation for duplicates.
 
 - Default: `None`
 - Duplicate keys with `*args`/`**kw` raise `ValueError`
 
 ****kw** : Any
 
-Keyword arguments converted to `Meta` objects (e.g., `name="field_name"` → `Meta("name", "field_name")`).
+Keyword arguments converted to `Meta` objects (e.g., `name="field_name"` →
+`Meta("name", "field_name")`).
 
 Common metadata keys (from `CommonMeta`):
 
@@ -122,15 +133,16 @@ Common metadata keys (from `CommonMeta`):
 - `validator` must be callable or list of callables (raises `ValueError`)
 - All validation errors raised as `ExceptionGroup`
 
-**Async Default Factory Warning:**
-When providing async `default_factory`, a `UserWarning` is issued as async factories are not yet fully supported by all adapters. Consider using sync factories for compatibility.
+**Async Default Factory Warning:** When providing async `default_factory`, a
+`UserWarning` is issued as async factories are not yet fully supported by all adapters.
+Consider using sync factories for compatibility.
 
 ## Attributes
 
-| Attribute    | Type                | Frozen | Description                                                    |
-| ------------ | ------------------- | ------ | -------------------------------------------------------------- |
-| `base_type`  | `type`              | Yes    | Base type for field (e.g., `str`, `int`, `list[str]`)          |
-| `metadata`   | `tuple[Meta, ...]`  | Yes    | Immutable tuple of metadata (validated and deduplicated)       |
+| Attribute   | Type               | Frozen | Description                                              |
+| ----------- | ------------------ | ------ | -------------------------------------------------------- |
+| `base_type` | `type`             | Yes    | Base type for field (e.g., `str`, `int`, `list[str]`)    |
+| `metadata`  | `tuple[Meta, ...]` | Yes    | Immutable tuple of metadata (validated and deduplicated) |
 
 ## Properties
 
@@ -372,16 +384,19 @@ str | None
 
 - Cache key: `(base_type, metadata)` tuple
 - Thread-safe: Uses `threading.RLock` for concurrent access
-- LRU eviction: Oldest entries removed when cache exceeds `lionpride_FIELD_CACHE_SIZE` (default 10,000)
+- LRU eviction: Oldest entries removed when cache exceeds `lionpride_FIELD_CACHE_SIZE`
+  (default 10,000)
 - Cache size: Set via `lionpride_FIELD_CACHE_SIZE` environment variable
 
 **Performance:**
 
-Cache hit eliminates expensive `Annotated` construction. Useful in hot paths (schema generation, validation).
+Cache hit eliminates expensive `Annotated` construction. Useful in hot paths (schema
+generation, validation).
 
 **Python 3.11-3.14 Compatibility:**
 
-Uses `Annotated.__class_getitem__()` for 3.11-3.12, falls back to `operator.getitem()` for 3.13+ (removed `__class_getitem__`).
+Uses `Annotated.__class_getitem__()` for 3.11-3.12, falls back to `operator.getitem()`
+for 3.13+ (removed `__class_getitem__`).
 
 **Notes:**
 
@@ -473,7 +488,8 @@ def metadict(
 **Parameters:**
 
 - `exclude` (set of str, optional): Keys to exclude from result. Default: `None`
-- `exclude_common` (bool, default False): Exclude all `CommonMeta` keys (name, nullable, listable, validator, default, default_factory)
+- `exclude_common` (bool, default False): Exclude all `CommonMeta` keys (name, nullable,
+  listable, validator, default, default_factory)
 
 **Returns:**
 
@@ -889,7 +905,8 @@ False
 
 **Notes:**
 
-Specs are **frozen dataclasses** (immutable), enabling stable hashing for use in sets, dict keys, and caching.
+Specs are **frozen dataclasses** (immutable), enabling stable hashing for use in sets,
+dict keys, and caching.
 
 ## Protocol Implementations
 
@@ -1148,7 +1165,8 @@ value = await spec.acreate_default_value()
 
 ### Pitfall 4: Cache Size Exhaustion
 
-**Issue**: Default cache size (10,000) may be insufficient for large-scale schema generation.
+**Issue**: Default cache size (10,000) may be insufficient for large-scale schema
+generation.
 
 ```python
 # Generating 50,000 unique Specs
@@ -1187,11 +1205,14 @@ spec = Spec(str, validator=validate)
 
 ### Why Framework-Agnostic Specs?
 
-Different frameworks (Pydantic, attrs, dataclasses) have incompatible field systems. Spec provides a **unified specification layer** that adapters can translate to framework-specific implementations, enabling:
+Different frameworks (Pydantic, attrs, dataclasses) have incompatible field systems.
+Spec provides a **unified specification layer** that adapters can translate to
+framework-specific implementations, enabling:
 
 1. **Code Reuse**: Define schemas once, use across multiple frameworks
 2. **Migration Path**: Easier migration between frameworks (change adapter, not schemas)
-3. **LLM Integration**: Framework-agnostic structured outputs work with any validation library
+3. **LLM Integration**: Framework-agnostic structured outputs work with any validation
+   library
 
 ### Why Immutable Specs?
 
@@ -1204,7 +1225,8 @@ Frozen dataclasses ensure:
 
 ### Why LRU Cache for Annotated Types?
 
-`Annotated` type construction is expensive (involves metaclass machinery). Caching provides:
+`Annotated` type construction is expensive (involves metaclass machinery). Caching
+provides:
 
 1. **Performance**: 100-1000× speedup for repeated access
 2. **Memory Efficiency**: Bounded cache prevents unbounded growth
@@ -1233,7 +1255,8 @@ Async frameworks (FastAPI, async ORMs) need async default values:
 2. **API Calls**: Default values from external services
 3. **Async Context**: Maintaining async/await throughout pipeline
 
-Warning issued because not all adapters support async factories yet (Pydantic supports, attrs doesn't).
+Warning issued because not all adapters support async factories yet (Pydantic supports,
+attrs doesn't).
 
 ### Why CommonMeta Enum?
 

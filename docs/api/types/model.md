@@ -4,14 +4,18 @@
 
 ## Overview
 
-`HashableModel` is a **content-based hashable** base class for immutable value objects. Unlike Element's identity-based hashing (same ID = same hash), HashableModel instances with identical field values have the same hash, making it ideal for cache keys, deduplication, and configuration objects.
+`HashableModel` is a **content-based hashable** base class for immutable value objects.
+Unlike Element's identity-based hashing (same ID = same hash), HashableModel instances
+with identical field values have the same hash, making it ideal for cache keys,
+deduplication, and configuration objects.
 
 **Key Capabilities:**
 
 - **Content-Based Hashing**: Identical fields produce identical hashes
 - **Immutable by Default**: Frozen configuration prevents hash corruption
 - **Deterministic Serialization**: Sorted JSON keys ensure stable hashing
-- **Protocol Implementation**: Implements Serializable, Deserializable, and Hashable protocols
+- **Protocol Implementation**: Implements Serializable, Deserializable, and Hashable
+  protocols
 - **Safe Deduplication**: Works with `to_list(unique=True)` and set operations
 
 **When to Use HashableModel:**
@@ -24,7 +28,8 @@
 
 **When NOT to Use HashableModel (Use Element Instead):**
 
-- Workflow entities where **identity matters** (same ID = same object, even if fields differ)
+- Workflow entities where **identity matters** (same ID = same object, even if fields
+  differ)
 - Objects that **mutate over time** (ID remains stable, but hash shouldn't change)
 - Entities that need **UUID tracking** and creation timestamps
 - Multi-class systems requiring **polymorphic deserialization** with `lion_class`
@@ -33,17 +38,17 @@ See Element class in `lionpride.core.element` for identity-based hashing alterna
 
 ## HashableModel vs Element Comparison
 
-| Feature                | HashableModel                                    | Element                                      |
-| ---------------------- | ------------------------------------------------ | -------------------------------------------- |
-| **Hashing Strategy**   | Content-based (same fields = same hash)          | Identity-based (same ID = same hash)         |
-| **Equality**           | Value equality (all fields compared)             | Identity equality (ID comparison only)       |
-| **Mutability**         | Frozen (immutable)                               | Mutable metadata, frozen ID/created_at       |
-| **Use Case**           | Cache keys, configs, LLM outputs                 | Workflow entities, tracked objects           |
-| **Deduplication**      | By field content                                 | By UUID                                      |
-| **Identity**           | No UUID or timestamp                             | UUID + creation timestamp                    |
-| **Polymorphism**       | Not supported                                    | Polymorphic serialization via `lion_class`   |
-| **Hash Stability**     | Depends on `to_dict()` serialization logic       | Stable (UUID-based)                          |
-| **Set/Dict Safety**    | Safe (frozen prevents corruption)                | Safe (ID-based, metadata can still mutate)   |
+| Feature              | HashableModel                              | Element                                    |
+| -------------------- | ------------------------------------------ | ------------------------------------------ |
+| **Hashing Strategy** | Content-based (same fields = same hash)    | Identity-based (same ID = same hash)       |
+| **Equality**         | Value equality (all fields compared)       | Identity equality (ID comparison only)     |
+| **Mutability**       | Frozen (immutable)                         | Mutable metadata, frozen ID/created_at     |
+| **Use Case**         | Cache keys, configs, LLM outputs           | Workflow entities, tracked objects         |
+| **Deduplication**    | By field content                           | By UUID                                    |
+| **Identity**         | No UUID or timestamp                       | UUID + creation timestamp                  |
+| **Polymorphism**     | Not supported                              | Polymorphic serialization via `lion_class` |
+| **Hash Stability**   | Depends on `to_dict()` serialization logic | Stable (UUID-based)                        |
+| **Set/Dict Safety**  | Safe (frozen prevents corruption)          | Safe (ID-based, metadata can still mutate) |
 
 ## Class Signature
 
@@ -68,7 +73,9 @@ class HashableModel(BaseModel):
 
 ## Parameters
 
-HashableModel is an abstract base class - subclasses define their own fields. The class itself has no constructor parameters beyond Pydantic's standard `BaseModel` initialization.
+HashableModel is an abstract base class - subclasses define their own fields. The class
+itself has no constructor parameters beyond Pydantic's standard `BaseModel`
+initialization.
 
 **Subclass Example:**
 
@@ -92,7 +99,8 @@ assert key1 == key2  # Value equality
 
 ## Attributes
 
-HashableModel has no instance attributes itself - subclasses define their own schema. All attributes are **frozen** by default due to `model_config(frozen=True)`.
+HashableModel has no instance attributes itself - subclasses define their own schema.
+All attributes are **frozen** by default due to `model_config(frozen=True)`.
 
 ## Methods
 
@@ -118,7 +126,8 @@ def to_dict(
   - `'python'`: Native Python types (UUID objects, datetime objects)
   - `'json'`: JSON-safe types (via `orjson.loads(to_json())`)
   - **Note**: Does NOT support `'db'` mode (use Element for database entities)
-- `**kwargs` (Any): Forwarded to Pydantic's `model_dump()`. Common: `include`, `exclude`, `by_alias`
+- `**kwargs` (Any): Forwarded to Pydantic's `model_dump()`. Common: `include`,
+  `exclude`, `by_alias`
   - **WARNING**: Do not pass `mode` in kwargs (use parameter instead)
 
 **Returns:**
@@ -168,7 +177,8 @@ config = Config(name="api", timeout=30, debug=True)
 
 - Sentinel values are automatically filtered out (see `not_sentinel()` in source)
 - JSON mode uses `orjson` for efficient conversion
-- Hash stability depends on consistent `to_dict()` output - changes to serialization logic may invalidate cached hashes
+- Hash stability depends on consistent `to_dict()` output - changes to serialization
+  logic may invalidate cached hashes
 
 #### `to_json()`
 
@@ -187,7 +197,8 @@ def to_json(
 **Parameters:**
 
 - `decode` (bool, default True): Return str (True) or bytes (False)
-- `**kwargs` (Any): Forwarded to `model_dump()`. Common: `include`, `exclude`, `by_alias`
+- `**kwargs` (Any): Forwarded to `model_dump()`. Common: `include`, `exclude`,
+  `by_alias`
 
 **Returns:**
 
@@ -226,9 +237,12 @@ key = CacheKey(model="gpt-4", temperature=0.7)
 
 **Notes:**
 
-**Keys are sorted** (`sort_keys=True`) to ensure **deterministic hashing** - identical objects produce identical JSON output, which is critical for hash stability. This sorting happens automatically and cannot be disabled.
+**Keys are sorted** (`sort_keys=True`) to ensure **deterministic hashing** - identical
+objects produce identical JSON output, which is critical for hash stability. This
+sorting happens automatically and cannot be disabled.
 
-Uses `orjson` for high-performance JSON serialization with custom serializer for nested HashableModel and BaseModel instances.
+Uses `orjson` for high-performance JSON serialization with custom serializer for nested
+HashableModel and BaseModel instances.
 
 ### Deserialization
 
@@ -250,7 +264,8 @@ def from_dict(
 
 **Parameters:**
 
-- `data` (dict or str or bytes): Dictionary to deserialize, or JSON string/bytes if `mode='json'`
+- `data` (dict or str or bytes): Dictionary to deserialize, or JSON string/bytes if
+  `mode='json'`
 - `mode` ({'python', 'json'}, default 'python'): Deserialization mode
   - `'python'`: Deserialize from native Python types
   - `'json'`: Deserialize from JSON string/bytes (auto-parses with `orjson`)
@@ -299,7 +314,9 @@ class Config(HashableModel):
 
 **Notes:**
 
-When `mode='json'` and `data` is a string or bytes, the method automatically parses JSON using `orjson.loads()` before validation. This provides a unified interface for both dict and JSON deserialization.
+When `mode='json'` and `data` is a string or bytes, the method automatically parses JSON
+using `orjson.loads()` before validation. This provides a unified interface for both
+dict and JSON deserialization.
 
 #### `from_json()`
 
@@ -357,7 +374,8 @@ class CacheKey(HashableModel):
 
 **Notes:**
 
-This method delegates to `from_dict(data, mode=mode, **kwargs)`, providing a convenience interface for JSON deserialization.
+This method delegates to `from_dict(data, mode=mode, **kwargs)`, providing a convenience
+interface for JSON deserialization.
 
 ### Special Methods
 
@@ -412,13 +430,16 @@ False
 
 **Notes:**
 
-**Hash Computation**: Hash is computed by converting the object to a dictionary via `to_dict()` and hashing the result. This means:
+**Hash Computation**: Hash is computed by converting the object to a dictionary via
+`to_dict()` and hashing the result. This means:
 
 1. **Deterministic**: Identical field values always produce the same hash
 2. **Serialization-Dependent**: Changes to `to_dict()` logic may change hash values
 3. **Immutability Required**: Objects are frozen to prevent hash corruption
 
-**Hash Stability Warning**: If you modify serialization logic (e.g., change field names, add/remove fields from serialization), previously cached objects with old hashes may become invalid. This is a design trade-off for content-based hashing.
+**Hash Stability Warning**: If you modify serialization logic (e.g., change field names,
+add/remove fields from serialization), previously cached objects with old hashes may
+become invalid. This is a design trade-off for content-based hashing.
 
 ## Protocol Implementations
 
@@ -450,7 +471,8 @@ HashableModel implements three core protocols:
 
 **Usage**: Safe for use in sets and as dict keys due to frozen configuration.
 
-See [Protocols Guide](../../user_guide/protocols.md) for design patterns and protocol-based architecture.
+See [Protocols Guide](../../user_guide/protocols.md) for design patterns and
+protocol-based architecture.
 
 ## Usage Patterns
 
@@ -700,28 +722,37 @@ restored = BaseConfig.from_dict(data)
 print(type(restored).__name__)  # "BaseConfig" (not "APIConfig")
 ```
 
-**Solution**: Use [Element](../base/element.md) for polymorphic workflows, or manually track type information.
+**Solution**: Use [Element](../base/element.md) for polymorphic workflows, or manually
+track type information.
 
 ## Design Rationale
 
 ### Why Content-Based Hashing?
 
-HashableModel provides **content-based hashing** (same fields = same hash) rather than identity-based hashing because:
+HashableModel provides **content-based hashing** (same fields = same hash) rather than
+identity-based hashing because:
 
 1. **Cache Keys**: Cache lookups need value equality (identical config should hit cache)
-2. **Deduplication**: LLM outputs often contain duplicates that should be deduplicated by content
-3. **Configuration Objects**: Configs are immutable values where content matters, not identity
-4. **Set Operations**: Mathematical set operations (union, intersection) work on values, not identities
+2. **Deduplication**: LLM outputs often contain duplicates that should be deduplicated
+   by content
+3. **Configuration Objects**: Configs are immutable values where content matters, not
+   identity
+4. **Set Operations**: Mathematical set operations (union, intersection) work on values,
+   not identities
 
-For **workflow entities** where identity matters (agents, nodes, sessions), use [Element](../base/element.md) with ID-based hashing.
+For **workflow entities** where identity matters (agents, nodes, sessions), use
+[Element](../base/element.md) with ID-based hashing.
 
 ### Why Frozen by Default?
 
 Freezing fields (`model_config(frozen=True)`) ensures:
 
-1. **Hash Stability**: Once an object is used as a dict key or added to a set, its hash cannot change
-2. **Cache Safety**: Cached objects cannot be mutated after caching, preventing corruption
-3. **Immutability Semantics**: Configurations and value objects are conceptually immutable
+1. **Hash Stability**: Once an object is used as a dict key or added to a set, its hash
+   cannot change
+2. **Cache Safety**: Cached objects cannot be mutated after caching, preventing
+   corruption
+3. **Immutability Semantics**: Configurations and value objects are conceptually
+   immutable
 4. **Thread Safety**: Immutable objects are inherently thread-safe for concurrent access
 
 This trade-off sacrifices mutability for correctness in hashing and caching scenarios.
@@ -730,19 +761,23 @@ This trade-off sacrifices mutability for correctness in hashing and caching scen
 
 HashableModel sorts JSON keys (`sort_keys=True`) to ensure **deterministic hashing**:
 
-1. **Hash Stability**: Identical objects always produce identical JSON, regardless of field insertion order
-2. **Cache Consistency**: Same content always generates same hash, improving cache hit rates
+1. **Hash Stability**: Identical objects always produce identical JSON, regardless of
+   field insertion order
+2. **Cache Consistency**: Same content always generates same hash, improving cache hit
+   rates
 3. **Reproducibility**: Serialized output is consistent across runs and environments
 
 The performance cost of sorting is negligible compared to the correctness benefits.
 
 ### Why No Polymorphic Deserialization?
 
-HashableModel does NOT inject `lion_class` metadata or support polymorphic deserialization because:
+HashableModel does NOT inject `lion_class` metadata or support polymorphic
+deserialization because:
 
 1. **Simplicity**: Value objects rarely need polymorphism (they're data, not entities)
 2. **Hash Purity**: Injecting metadata would affect hash computation
-3. **Use Case Mismatch**: Polymorphism is for workflow entities (Element), not configs (HashableModel)
+3. **Use Case Mismatch**: Polymorphism is for workflow entities (Element), not configs
+   (HashableModel)
 
 If you need polymorphism, use [Element](../base/element.md) instead.
 
@@ -751,8 +786,10 @@ If you need polymorphism, use [Element](../base/element.md) instead.
 HashableModel does NOT support `mode='db'` serialization because:
 
 1. **Database entities need identity**: Use Element with UUID for database storage
-2. **No metadata field**: HashableModel lacks the metadata field required for `node_metadata` renaming
-3. **Value objects are transient**: Configs and cache keys are typically not persisted to databases
+2. **No metadata field**: HashableModel lacks the metadata field required for
+   `node_metadata` renaming
+3. **Value objects are transient**: Configs and cache keys are typically not persisted
+   to databases
 
 For database persistence, use [Element](../base/element.md) or subclass it.
 
@@ -763,7 +800,10 @@ For database persistence, use [Element](../base/element.md) or subclass it.
   - Node: Element subclass with relationship edges
   - Event: Element subclass with async execution lifecycle
 
-See [User Guides](../../user_guide/) including [API Design](../../user_guide/api_design.md), [Type Safety](../../user_guide/type_safety.md), and [Validation](../../user_guide/validation.md) for practical examples.
+See [User Guides](../../user_guide/) including
+[API Design](../../user_guide/api_design.md),
+[Type Safety](../../user_guide/type_safety.md), and
+[Validation](../../user_guide/validation.md) for practical examples.
 
 ## Examples
 

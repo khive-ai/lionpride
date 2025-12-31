@@ -6,10 +6,12 @@
 
 ## Overview
 
-`ServiceRegistry` provides Pile-backed storage with O(1) name lookup, tag-based filtering, tool schema extraction, and MCP integration. Central service management for Sessions.
+`ServiceRegistry` provides Pile-backed storage with O(1) name lookup, tag-based
+filtering, tool schema extraction, and MCP integration. Central service management for
+Sessions.
 
-**Use for**: Multiple LLM backends, tool registration, MCP servers.
-**Skip for**: Single-model workflows (pass iModel directly).
+**Use for**: Multiple LLM backends, tool registration, MCP servers. **Skip for**:
+Single-model workflows (pass iModel directly).
 
 ## Class Signature
 
@@ -29,12 +31,13 @@ class ServiceRegistry:
 
 ## Attributes
 
-| Attribute | Type | Mutable | Description |
-|-----------|------|---------|-------------|
-| `_pile` | `Pile[iModel]` | Yes (internal) | Internal storage for iModel instances |
-| `_name_index` | `dict[str, UUID]` | Yes (internal) | Name to UUID mapping for O(1) lookup |
+| Attribute     | Type              | Mutable        | Description                           |
+| ------------- | ----------------- | -------------- | ------------------------------------- |
+| `_pile`       | `Pile[iModel]`    | Yes (internal) | Internal storage for iModel instances |
+| `_name_index` | `dict[str, UUID]` | Yes (internal) | Name to UUID mapping for O(1) lookup  |
 
-**Note**: Internal attributes are prefixed with `_` and should not be accessed directly. Use the public methods for all operations.
+**Note**: Internal attributes are prefixed with `_` and should not be accessed directly.
+Use the public methods for all operations.
 
 ## Methods
 
@@ -55,7 +58,8 @@ Remove and return service by name. Raises `KeyError` if not found. O(n).
 
 #### `get(name, default=...) -> iModel`
 
-Get by name, UUID, or iModel instance. Raises `KeyError` if not found and no default. O(1).
+Get by name, UUID, or iModel instance. Raises `KeyError` if not found and no default.
+O(1).
 
 ```python
 model = registry.get("gpt-4o-mini")
@@ -88,7 +92,8 @@ Count services or remove all. O(1).
 
 #### `get_tool_schemas(tool_names=None) -> list[dict]`
 
-Get JSON schemas for LLM tool calling. Returns `{"type": "function", "function": {...}}` format.
+Get JSON schemas for LLM tool calling. Returns `{"type": "function", "function": {...}}`
+format.
 
 ```python
 schemas = registry.get_tool_schemas()  # All tools
@@ -126,13 +131,17 @@ Supports `len(registry)`, `"name" in registry`, and `repr(registry)`.
 
 ## Protocol Implementations
 
-ServiceRegistry is a **pure Python class** (not an Element). Supports Python collection protocols (`__len__`, `__contains__`, `__repr__`). Managed iModel instances ARE Elements with full protocol support.
+ServiceRegistry is a **pure Python class** (not an Element). Supports Python collection
+protocols (`__len__`, `__contains__`, `__repr__`). Managed iModel instances ARE Elements
+with full protocol support.
 
 ## Design Rationale
 
-**Dual Index**: Pile[iModel] for type-safe storage + dict[str, UUID] for O(1) name lookup.
+**Dual Index**: Pile[iModel] for type-safe storage + dict[str, UUID] for O(1) name
+lookup.
 
-**Name Uniqueness**: Duplicates raise ValueError; `update=True` for explicit replacement.
+**Name Uniqueness**: Duplicates raise ValueError; `update=True` for explicit
+replacement.
 
 **MCP First-Class**: Native async methods match MCP's subprocess model.
 
@@ -182,9 +191,11 @@ await registry.register_mcp_server({
 
 - **Duplicate registration**: Use `update=True` or check `has()` first.
 
-- **Non-tool schemas**: `get_tool_schemas()` only works for Tool-backed services. Use `list_by_tag("tool")` to filter.
+- **Non-tool schemas**: `get_tool_schemas()` only works for Tool-backed services. Use
+  `list_by_tag("tool")` to filter.
 
-- **Missing await**: MCP methods are async. Always `await registry.register_mcp_server(...)`.
+- **Missing await**: MCP methods are async. Always
+  `await registry.register_mcp_server(...)`.
 
 ---
 

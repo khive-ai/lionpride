@@ -1,10 +1,13 @@
 # Base Types
 
-> Foundation types for parameter handling, configuration, and metadata with sentinel support
+> Foundation types for parameter handling, configuration, and metadata with sentinel
+> support
 
 ## Overview
 
-The `base` module provides foundational types for building structured data models in lionpride. These types implement **sentinel handling** for optional/unset values, **validation**, and **serialization** with configurable behavior.
+The `base` module provides foundational types for building structured data models in
+lionpride. These types implement **sentinel handling** for optional/unset values,
+**validation**, and **serialization** with configurable behavior.
 
 **Key Components:**
 
@@ -55,7 +58,9 @@ class Enum(StrEnum):
 
 ### Overview
 
-Extends Python's `StrEnum` (3.11+) to provide automatic extraction of allowed values via the `Allowable` protocol. Enum members are strings, enabling direct JSON serialization without custom encoders.
+Extends Python's `StrEnum` (3.11+) to provide automatic extraction of allowed values via
+the `Allowable` protocol. Enum members are strings, enabling direct JSON serialization
+without custom encoders.
 
 ### Methods
 
@@ -97,7 +102,8 @@ False
 
 **Notes:**
 
-Enum members are strings, so they serialize directly to JSON without requiring `.value` access or custom encoders.
+Enum members are strings, so they serialize directly to JSON without requiring `.value`
+access or custom encoders.
 
 ---
 
@@ -117,13 +123,13 @@ class ModelConfig:
 
 ### Attributes
 
-| Attribute          | Type   | Default | Description                                              |
-| ------------------ | ------ | ------- | -------------------------------------------------------- |
-| `none_as_sentinel` | `bool` | `False` | Treat `None` as sentinel value (exclude from `to_dict`) |
-| `empty_as_sentinel`| `bool` | `False` | Treat empty collections/strings as sentinel             |
-| `strict`           | `bool` | `False` | Raise errors for missing required parameters            |
-| `prefill_unset`    | `bool` | `True`  | Auto-fill undefined fields with `Unset` sentinel        |
-| `use_enum_values`  | `bool` | `False` | Serialize enums as `.value` instead of enum objects     |
+| Attribute           | Type   | Default | Description                                             |
+| ------------------- | ------ | ------- | ------------------------------------------------------- |
+| `none_as_sentinel`  | `bool` | `False` | Treat `None` as sentinel value (exclude from `to_dict`) |
+| `empty_as_sentinel` | `bool` | `False` | Treat empty collections/strings as sentinel             |
+| `strict`            | `bool` | `False` | Raise errors for missing required parameters            |
+| `prefill_unset`     | `bool` | `True`  | Auto-fill undefined fields with `Unset` sentinel        |
+| `use_enum_values`   | `bool` | `False` | Serialize enums as `.value` instead of enum objects     |
 
 ### Usage
 
@@ -159,10 +165,13 @@ params2.to_dict()  # {'name': 'test'} - value excluded
 
 **Notes:**
 
-- **Sentinel Handling**: Controls which values are excluded from `to_dict()` serialization
+- **Sentinel Handling**: Controls which values are excluded from `to_dict()`
+  serialization
 - **Validation**: `strict=True` enforces all fields must be set (no sentinels)
-- **Prefill**: `prefill_unset=True` fills undefined fields with `Unset` for explicit sentinel tracking
-- **Enum Serialization**: `use_enum_values=True` automatically converts enum members to strings
+- **Prefill**: `prefill_unset=True` fills undefined fields with `Unset` for explicit
+  sentinel tracking
+- **Enum Serialization**: `use_enum_values=True` automatically converts enum members to
+  strings
 
 ---
 
@@ -185,7 +194,8 @@ class Params:
 
 Immutable parameter container with:
 
-- **Sentinel handling**: Configurable treatment of `None`, empty values, `Unset`, `Undefined`
+- **Sentinel handling**: Configurable treatment of `None`, empty values, `Unset`,
+  `Undefined`
 - **Validation**: Optional strict mode requiring all fields
 - **Serialization**: Exclude sentinel values from `to_dict()`
 - **Hashing**: Content-based hashing for cache keys
@@ -209,10 +219,10 @@ def __init__(self, **kwargs: Any) -> None:
 
 ### Class Variables
 
-| Variable        | Type                | Description                                    |
-| --------------- | ------------------- | ---------------------------------------------- |
-| `_config`       | `ModelConfig`       | Configuration for validation/serialization     |
-| `_allowed_keys` | `set[str]`          | Cached set of allowed parameter names          |
+| Variable        | Type          | Description                                |
+| --------------- | ------------- | ------------------------------------------ |
+| `_config`       | `ModelConfig` | Configuration for validation/serialization |
+| `_allowed_keys` | `set[str]`    | Cached set of allowed parameter names      |
 
 ### Methods
 
@@ -314,7 +324,8 @@ def default_kw(self) -> Any: ...
 
 **Notes:**
 
-This method extracts `kwargs` and `kw` fields (if present) and merges them into the main parameter dict, useful for passing parameters to functions that accept `**kwargs`.
+This method extracts `kwargs` and `kw` fields (if present) and merges them into the main
+parameter dict, useful for passing parameters to functions that accept `**kwargs`.
 
 #### `with_updates()`
 
@@ -380,7 +391,9 @@ False  # Deep copy
 
 **Notes:**
 
-Since Params is frozen (immutable), this method provides the standard functional update pattern. Use `copy_containers` when parameters contain mutable collections that should be isolated.
+Since Params is frozen (immutable), this method provides the standard functional update
+pattern. Use `copy_containers` when parameters contain mutable collections that should
+be isolated.
 
 #### `__hash__()`
 
@@ -412,7 +425,9 @@ True  # Same content = same hash
 
 **Notes:**
 
-Unlike Element (identity-based hashing), Params uses **content-based hashing** since parameters are value objects. Two Params with identical field values have identical hashes.
+Unlike Element (identity-based hashing), Params uses **content-based hashing** since
+parameters are value objects. Two Params with identical field values have identical
+hashes.
 
 #### `__eq__()`
 
@@ -529,7 +544,9 @@ class DataClass:
 
 ### Overview
 
-Provides the same sentinel handling, validation, and serialization as Params, but **mutable** (not frozen). Use when you need to modify fields after creation while retaining validation.
+Provides the same sentinel handling, validation, and serialization as Params, but
+**mutable** (not frozen). Use when you need to modify fields after creation while
+retaining validation.
 
 ### Constructor
 
@@ -537,7 +554,8 @@ Standard dataclass constructor with automatic `__post_init__` validation.
 
 **Post-init Validation:**
 
-After field initialization, `_validate()` runs automatically to check for missing required fields and prefill unset values.
+After field initialization, `_validate()` runs automatically to check for missing
+required fields and prefill unset values.
 
 ### Methods
 
@@ -591,7 +609,8 @@ hash2 = hash(config)
 - **Params**: Immutable parameter objects, cache keys, function arguments
 - **DataClass**: Mutable state objects, configuration that needs updates
 
-Both share the same validation, sentinel handling, and serialization logic via `_config`.
+Both share the same validation, sentinel handling, and serialization logic via
+`_config`.
 
 ---
 
@@ -609,7 +628,8 @@ class KeysDict(TypedDict, total=False):
 
 **Usage:**
 
-TypedDict representing a dictionary with arbitrary key-value pairs, used for type checking key mappings.
+TypedDict representing a dictionary with arbitrary key-value pairs, used for type
+checking key mappings.
 
 ### KeysLike
 
@@ -655,10 +675,10 @@ class Meta:
 
 ### Attributes
 
-| Attribute | Type  | Description                                 |
-| --------- | ----- | ------------------------------------------- |
-| `key`     | `str` | Metadata key name                           |
-| `value`   | `Any` | Metadata value (any type, including callable)|
+| Attribute | Type  | Description                                   |
+| --------- | ----- | --------------------------------------------- |
+| `key`     | `str` | Metadata key name                             |
+| `value`   | `Any` | Metadata value (any type, including callable) |
 
 ### Methods
 
@@ -915,7 +935,8 @@ config.name = "changed"
 cache[config]  # KeyError! Hash changed
 ```
 
-**Solution**: Use immutable Params for cache keys, or don't mutate DataClass instances used as keys.
+**Solution**: Use immutable Params for cache keys, or don't mutate DataClass instances
+used as keys.
 
 ---
 

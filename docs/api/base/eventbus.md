@@ -1,12 +1,16 @@
 # EventBus
 
-> Instance-based pub/sub with topic routing and concurrent handler execution for observability patterns.
+> Instance-based pub/sub with topic routing and concurrent handler execution for
+> observability patterns.
 
 ---
 
 ## Overview
 
-**EventBus** provides instance-based publish-subscribe with topic-based routing and concurrent handler execution. Each EventBus instance maintains its own subscription registry, enabling isolated event channels for different concerns (metrics, tracing, logging).
+**EventBus** provides instance-based publish-subscribe with topic-based routing and
+concurrent handler execution. Each EventBus instance maintains its own subscription
+registry, enabling isolated event channels for different concerns (metrics, tracing,
+logging).
 
 **Key Features:**
 
@@ -83,9 +87,9 @@ trace_bus = EventBus()
 
 ## Attributes
 
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `_subs` | `dict[str, list[weakref.ref[Handler]]]` | Subscription registry (topic → weakrefs to handlers) |
+| Attribute | Type                                    | Description                                          |
+| --------- | --------------------------------------- | ---------------------------------------------------- |
+| `_subs`   | `dict[str, list[weakref.ref[Handler]]]` | Subscription registry (topic → weakrefs to handlers) |
 
 **Note**: `_subs` uses `defaultdict(list)` for automatic topic creation on subscription.
 
@@ -327,7 +331,8 @@ def _cleanup_dead_refs(self, topic: str) -> list[Handler]: ...
 
 **Why instance-based instead of singleton like Broadcaster?**
 
-1. **Isolation**: Different EventBus instances for different concerns (metrics vs tracing)
+1. **Isolation**: Different EventBus instances for different concerns (metrics vs
+   tracing)
 2. **Flexibility**: Each component can have its own event channel
 3. **Testing**: Easy to mock/isolate in tests (pass custom EventBus)
 
@@ -343,7 +348,9 @@ def _cleanup_dead_refs(self, topic: str) -> list[Handler]: ...
 2. **Latency**: Slow handlers don't block fast handlers
 3. **Observability**: Multiple metrics collectors can run concurrently
 
-**Implementation**: `await gather(*(h(*args, **kwargs) for h in handlers), return_exceptions=True)` (uses custom `gather` from `lionpride.libs.concurrency`)
+**Implementation**:
+`await gather(*(h(*args, **kwargs) for h in handlers), return_exceptions=True)` (uses
+custom `gather` from `lionpride.libs.concurrency`)
 
 **Trade-off**: Unpredictable execution order, but far better performance.
 
@@ -355,7 +362,8 @@ def _cleanup_dead_refs(self, topic: str) -> list[Handler]: ...
 2. **Decoupling**: Metrics handler doesn't receive tracing events
 3. **Scalability**: Avoid waking up irrelevant handlers
 
-**Pattern**: Topic strings as namespaced identifiers (e.g., "node.start", "request.complete").
+**Pattern**: Topic strings as namespaced identifiers (e.g., "node.start",
+"request.complete").
 
 **Trade-off**: Slightly more complex API, but much more flexible.
 
@@ -501,7 +509,9 @@ await bus.emit("plugin.event", message="test")
 print(bus.handler_count("plugin.event"))  # 3
 ```
 
-**Note on Bound Methods**: EventBus uses `weakref.ref()` which creates dead references for bound methods. Use module-level functions or keep strong references to objects. For bound method support, consider using Broadcaster which handles `WeakMethod` internally.
+**Note on Bound Methods**: EventBus uses `weakref.ref()` which creates dead references
+for bound methods. Use module-level functions or keep strong references to objects. For
+bound method support, consider using Broadcaster which handles `WeakMethod` internally.
 
 ---
 
@@ -589,7 +599,8 @@ bus.subscribe("test", failing_handler)
 await bus.emit("test")  # No exception raised (suppressed)
 ```
 
-**Solution**: Understand fire-and-forget semantics. Add logging inside handlers if needed:
+**Solution**: Understand fire-and-forget semantics. Add logging inside handlers if
+needed:
 
 ```python
 async def robust_handler(**kw):
@@ -604,9 +615,11 @@ async def robust_handler(**kw):
 
 ## Protocol Implementations
 
-EventBus does NOT implement lionpride protocols (Observable, Serializable, etc.). It is a standalone utility class for pub/sub patterns.
+EventBus does NOT implement lionpride protocols (Observable, Serializable, etc.). It is
+a standalone utility class for pub/sub patterns.
 
-**Rationale**: EventBus manages runtime subscriptions and handlers (not serializable state). It's designed as lightweight infrastructure, not domain objects.
+**Rationale**: EventBus manages runtime subscriptions and handlers (not serializable
+state). It's designed as lightweight infrastructure, not domain objects.
 
 ---
 
@@ -614,7 +627,8 @@ EventBus does NOT implement lionpride protocols (Observable, Serializable, etc.)
 
 - [`Broadcaster`](broadcaster.md): Singleton pub/sub for global event channels
 - [`Event`](event.md): Base event class for lifecycle tracking
-- [Pub/Sub Patterns Notebook](../../../notebooks/broadcaster_eventbus.ipynb): Comprehensive examples
+- [Pub/Sub Patterns Notebook](../../../notebooks/broadcaster_eventbus.ipynb):
+  Comprehensive examples
 
 ---
 
@@ -749,4 +763,5 @@ EventBus provides **instance-based pub/sub with topic routing** for observabilit
 - ❌ Unpredictable handler order (concurrent execution)
 - ❌ Requires async handlers (no sync callback support)
 
-**When to use**: Observability patterns (metrics, tracing, logging) where topic filtering and concurrent handler execution are critical.
+**When to use**: Observability patterns (metrics, tracing, logging) where topic
+filtering and concurrent handler execution are critical.

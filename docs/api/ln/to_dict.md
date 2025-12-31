@@ -1,17 +1,24 @@
 # to_dict
 
-> Universal dictionary conversion utilities with recursive processing and polymorphic type handling
+> Universal dictionary conversion utilities with recursive processing and polymorphic
+> type handling
 
 ## Overview
 
-The `to_dict` module provides universal conversion of Python objects to dictionaries with support for JSON parsing, recursive processing, and automatic handling of custom types including Pydantic models, dataclasses, and iterables.
+The `to_dict` module provides universal conversion of Python objects to dictionaries
+with support for JSON parsing, recursive processing, and automatic handling of custom
+types including Pydantic models, dataclasses, and iterables.
 
 **Key Capabilities:**
 
-- **Universal Conversion**: Handles Pydantic models, dataclasses, enums, mappings, sequences, sets, and custom objects
-- **String Parsing**: Automatic JSON parsing of string inputs (orjson-based with fuzzy fallback)
-- **Recursive Processing**: Deep conversion of nested structures with configurable depth limits
-- **Custom Type Handling**: Automatic detection and conversion via `model_dump()`, `to_dict()`, `dict()`, `to_json()`, or `__dict__`
+- **Universal Conversion**: Handles Pydantic models, dataclasses, enums, mappings,
+  sequences, sets, and custom objects
+- **String Parsing**: Automatic JSON parsing of string inputs (orjson-based with fuzzy
+  fallback)
+- **Recursive Processing**: Deep conversion of nested structures with configurable depth
+  limits
+- **Custom Type Handling**: Automatic detection and conversion via `model_dump()`,
+  `to_dict()`, `dict()`, `to_json()`, or `__dict__`
 - **Enum Support**: Flexible enum conversion (members or values)
 - **Iterable Enumeration**: Sequences and iterables converted to indexed dictionaries
 
@@ -72,11 +79,13 @@ Object to convert to dictionary. Supports:
 - **Enums** (class): Members mapping `{name: member}` or `{name: value}`
 - **None/Undefined**: Returns empty dict `{}`
 - **Strings**: Parsed as JSON (orjson or custom parser)
-- **Custom objects**: Converted via `to_dict()`, `dict()`, `to_json()`, `__dict__`, or `dict(obj)`
+- **Custom objects**: Converted via `to_dict()`, `dict()`, `to_json()`, `__dict__`, or
+  `dict(obj)`
 
 **prioritize_model_dump** : bool, default False
 
-If True, prioritize `.model_dump()` for Pydantic v2 models over other conversion methods.
+If True, prioritize `.model_dump()` for Pydantic v2 models over other conversion
+methods.
 
 - `False`: Checks methods in order: `to_dict`, `dict`, `to_json`, `json`, `model_dump`
 - `True`: Checks `model_dump` first, then falls back to other methods
@@ -87,7 +96,8 @@ If True, prioritize `.model_dump()` for Pydantic v2 models over other conversion
 Enable fuzzy JSON parsing for malformed string inputs.
 
 - `False`: Strict JSON parsing via `orjson.loads()`
-- `True`: Fallback to `fuzzy_json()` for strings with syntax errors, trailing commas, etc.
+- `True`: Fallback to `fuzzy_json()` for strings with syntax errors, trailing commas,
+  etc.
 - Only applies to string inputs
 
 **suppress** : bool, default False
@@ -127,8 +137,10 @@ Maximum recursion depth for nested structure processing.
 
 Restrict recursive processing to Python built-in types only.
 
-- `True`: Recurse into dicts, lists, tuples, sets only (custom objects converted at top level)
-- `False`: Also recursively convert nested custom objects via `model_dump()`, `to_dict()`, etc.
+- `True`: Recurse into dicts, lists, tuples, sets only (custom objects converted at top
+  level)
+- `False`: Also recursively convert nested custom objects via `model_dump()`,
+  `to_dict()`, etc.
 - Only applies when `recursive=True`
 
 **use_enum_values** : bool, default False
@@ -155,7 +167,8 @@ Dictionary representation of input:
 
 - **String keys**: For mappings, objects with attributes, enums
 - **Integer keys**: For sequences, iterables (enumerated by index)
-- **Empty dict**: If `suppress=True` and conversion fails, or if `input_` is None/undefined
+- **Empty dict**: If `suppress=True` and conversion fails, or if `input_` is
+  None/undefined
 
 ### Raises
 
@@ -204,7 +217,8 @@ When `recursive=True`, nested structures are processed depth-first:
 4. **Enum classes** → Convert to dict, recurse into result
 5. **Custom objects** (if `recursive_python_only=False`) → Convert to mapping, recurse
 
-Container types are preserved during recursion (list stays list, set stays set, etc.). Only at the **top level** does final conversion to dict occur.
+Container types are preserved during recursion (list stays list, set stays set, etc.).
+Only at the **top level** does final conversion to dict occur.
 
 ### String Parsing
 
@@ -533,7 +547,8 @@ result = to_dict(obj, recursive=True, recursive_python_only=False)
 # {'inner': {'value': 42}}  # Fully converted
 ```
 
-**Solution**: Set `recursive=True` and `recursive_python_only=False` for deep custom object conversion.
+**Solution**: Set `recursive=True` and `recursive_python_only=False` for deep custom
+object conversion.
 
 ### Pitfall 2: Recursive Python Only Flag
 
@@ -553,7 +568,8 @@ to_dict(data, recursive=True, recursive_python_only=False)
 # {'models': [{...}, {...}]}  # Models converted
 ```
 
-**Solution**: Use `recursive_python_only=False` when nested structures contain custom objects.
+**Solution**: Use `recursive_python_only=False` when nested structures contain custom
+objects.
 
 ### Pitfall 3: Fuzzy Parse Not Enabled
 
@@ -598,16 +614,20 @@ result = to_dict(object(), suppress=True)  # {}
 to_dict(object(), suppress=False)  # Raises TypeError with clear message
 ```
 
-**Solution**: Use `suppress=False` (default) during development; enable `suppress=True` only for production fault tolerance.
+**Solution**: Use `suppress=False` (default) during development; enable `suppress=True`
+only for production fault tolerance.
 
 ## Design Rationale
 
 ### Why Single Function Instead of Class?
 
-The `to_dict()` function provides a **universal conversion interface** rather than a class-based design because:
+The `to_dict()` function provides a **universal conversion interface** rather than a
+class-based design because:
 
-1. **Simplicity**: Single function call for all conversion types, no instantiation overhead
-2. **Functional Style**: Aligns with Python's functional conversion patterns (`dict()`, `list()`, `str()`)
+1. **Simplicity**: Single function call for all conversion types, no instantiation
+   overhead
+2. **Functional Style**: Aligns with Python's functional conversion patterns (`dict()`,
+   `list()`, `str()`)
 3. **Zero State**: No configuration state to manage, all options passed explicitly
 4. **Composability**: Easy to wrap or chain with other functional transformations
 
@@ -615,10 +635,13 @@ The `to_dict()` function provides a **universal conversion interface** rather th
 
 `recursive_python_only=True` is the safe default because:
 
-1. **Performance**: Avoids expensive recursive `model_dump()` calls for deeply nested objects
-2. **Predictability**: Built-in types (dict, list) have well-defined conversion semantics
+1. **Performance**: Avoids expensive recursive `model_dump()` calls for deeply nested
+   objects
+2. **Predictability**: Built-in types (dict, list) have well-defined conversion
+   semantics
 3. **Control**: Users explicitly opt-in to deep custom object conversion
-4. **Safety**: Prevents unexpected behavior with objects that have side effects in conversion methods
+4. **Safety**: Prevents unexpected behavior with objects that have side effects in
+   conversion methods
 
 ### Why String Parsing in Dict Conversion?
 
@@ -645,7 +668,8 @@ The 10-level maximum recursion depth balances:
 1. **Safety**: Prevents stack overflow on circular references or pathological nesting
 2. **Practicality**: Real-world data structures rarely exceed 10 levels
 3. **Performance**: Deep recursion is expensive; limit encourages data structure review
-4. **Migration**: Previous implementations had implicit limits; 10 is generous upgrade path
+4. **Migration**: Previous implementations had implicit limits; 10 is generous upgrade
+   path
 
 ## See Also
 
@@ -657,7 +681,10 @@ The 10-level maximum recursion depth balances:
   - `lionpride.libs.string_handlers._fuzzy_json`: Fuzzy JSON parsing
   - `orjson`: High-performance JSON library
 
-See [User Guides](../../user_guide/) including [API Design](../../user_guide/api_design.md), [Type Safety](../../user_guide/type_safety.md), and [Validation](../../user_guide/validation.md) for practical examples.
+See [User Guides](../../user_guide/) including
+[API Design](../../user_guide/api_design.md),
+[Type Safety](../../user_guide/type_safety.md), and
+[Validation](../../user_guide/validation.md) for practical examples.
 
 ## Examples
 

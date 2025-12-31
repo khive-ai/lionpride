@@ -6,16 +6,14 @@
 
 ## Overview
 
-**Event** is the foundation for trackable async operations. Events manage
-execution lifecycle, capture responses/errors, measure duration, and enable
-retry patterns.
+**Event** is the foundation for trackable async operations. Events manage execution
+lifecycle, capture responses/errors, measure duration, and enable retry patterns.
 
 **Core Components**:
 
 - **EventStatus**: Enum with 7 lifecycle states (PENDING → terminal)
 - **Execution**: Dataclass tracking status, duration, response, error, retryable
-- **Event**: Base class with `_invoke()` for custom logic, `invoke()` for
-  execution
+- **Event**: Base class with `_invoke()` for custom logic, `invoke()` for execution
 
 **Thread Safety**: All `invoke()` calls are synchronized via async lock.
 
@@ -109,8 +107,8 @@ def __init__(
 
 **Parameters**:
 
-- `timeout` (float | None): Optional execution timeout in seconds. Must be
-  positive and finite. Default: None (no timeout)
+- `timeout` (float | None): Optional execution timeout in seconds. Must be positive and
+  finite. Default: None (no timeout)
 - `**data`: Additional Element fields (id, created_at, metadata)
 
 **Example**:
@@ -155,8 +153,8 @@ Execution state tracking status, duration, response, error, and retryable flag.
 timeout: float | None
 ```
 
-Optional execution timeout in seconds. If exceeded, raises
-`lionprideTimeoutError` and sets status to CANCELLED.
+Optional execution timeout in seconds. If exceeded, raises `lionprideTimeoutError` and
+sets status to CANCELLED.
 
 **Type:** float | None
 
@@ -285,9 +283,9 @@ Execute with lifecycle management (idempotent)
 async def invoke(self) -> None
 ```
 
-Execute event with status tracking, timing, and error capture. Multiple
-concurrent calls execute `_invoke()` exactly once. Access result via
-`event.response` property after execution.
+Execute event with status tracking, timing, and error capture. Multiple concurrent calls
+execute `_invoke()` exactly once. Access result via `event.response` property after
+execution.
 
 **Returns:** None (result stored in `execution.response`)
 
@@ -313,8 +311,7 @@ re-execution. Status must be PENDING for execution to occur.
 - Captures all in ExceptionGroup
 - Retryable = True only if ALL exceptions retryable
 
-**Thread Safety**: Synchronized with `@async_synchronized` decorator (async
-lock)
+**Thread Safety**: Synchronized with `@async_synchronized` decorator (async lock)
 
 **Time Complexity:** O(1) after first execution (cached result lookup)
 
@@ -365,8 +362,8 @@ Stream execution results. Override in subclasses that support streaming.
 
 **Raises**: NotImplementedError if not overridden
 
-**Design Note**: For events that produce incremental results (e.g., LLM
-streaming responses).
+**Design Note**: For events that produce incremental results (e.g., LLM streaming
+responses).
 
 ---
 
@@ -378,8 +375,8 @@ Clone with reset execution state
 def as_fresh_event(self, copy_meta: bool = False) -> Event
 ```
 
-Create fresh event instance with new ID, PENDING status, and reset execution
-state. Enables retry pattern after FAILED/CANCELLED execution.
+Create fresh event instance with new ID, PENDING status, and reset execution state.
+Enables retry pattern after FAILED/CANCELLED execution.
 
 **Parameters**:
 
@@ -430,8 +427,7 @@ if original.execution.retryable:
 
 #### `to_dict()`
 
-Serialize event to dictionary with full execution state (inherited from
-Element).
+Serialize event to dictionary with full execution state (inherited from Element).
 
 **Signature:**
 
@@ -475,8 +471,7 @@ data = event.to_dict(mode="json")
 # }
 ```
 
-**Note**: `timeout` is excluded from serialization (`exclude=True` field
-config).
+**Note**: `timeout` is excluded from serialization (`exclude=True` field config).
 
 ---
 
@@ -486,12 +481,11 @@ config).
 
 **Why check status before execution?**
 
-1. **Concurrent Safety**: Multiple concurrent `invoke()` calls execute
-   `_invoke()` exactly once
+1. **Concurrent Safety**: Multiple concurrent `invoke()` calls execute `_invoke()`
+   exactly once
 2. **Deterministic**: Same event always returns same result (cached)
 3. **Performance**: Avoid re-execution overhead after first call
-4. **State Consistency**: Terminal states (COMPLETED/FAILED/CANCELLED) are
-   immutable
+4. **State Consistency**: Terminal states (COMPLETED/FAILED/CANCELLED) are immutable
 
 **Implementation**: Status check at beginning of `invoke()`:
 
@@ -524,8 +518,8 @@ if self.execution.status != EventStatus.PENDING:
 3. **Serialization**: Include error details in logs/monitoring
 4. **Idempotency**: Return None consistently for failures
 
-**Exception**: `BaseException` (like CancelledError) is raised to preserve
-cancellation semantics.
+**Exception**: `BaseException` (like CancelledError) is raised to preserve cancellation
+semantics.
 
 ### Timeout → CANCELLED Status
 
@@ -557,7 +551,8 @@ Event implements three core protocols:
 
 **Method**: `invoke()` (async)
 
-Execute the event and manage lifecycle transitions. This is the primary protocol implementation that makes Event a first-class async operation.
+Execute the event and manage lifecycle transitions. This is the primary protocol
+implementation that makes Event a first-class async operation.
 
 **Features**:
 
@@ -572,16 +567,20 @@ Execute the event and manage lifecycle transitions. This is the primary protocol
 
 **Methods** (inherited from Element):
 
-- `to_dict(mode='python'|'json'|'db', **kwargs)`: Dictionary serialization with three modes
-- `to_json(pretty=False, sort_keys=False, decode=True, **kwargs)`: JSON string serialization
+- `to_dict(mode='python'|'json'|'db', **kwargs)`: Dictionary serialization with three
+  modes
+- `to_json(pretty=False, sort_keys=False, decode=True, **kwargs)`: JSON string
+  serialization
 
 **Event-specific serialization**:
 
-- Execution state included in serialization (status, duration, response, error, retryable)
+- Execution state included in serialization (status, duration, response, error,
+  retryable)
 - Timeout excluded from serialization (transient field marked with `exclude=True`)
 - EventStatus serialized as string value (`"pending"`, `"completed"`, etc.)
 
-**Polymorphism**: Automatically injects `lion_class` in metadata for subclass reconstruction.
+**Polymorphism**: Automatically injects `lion_class` in metadata for subclass
+reconstruction.
 
 ### Observable
 
@@ -589,7 +588,8 @@ Execute the event and manage lifecycle transitions. This is the primary protocol
 
 UUID-based identity for tracking events across distributed systems.
 
-**Usage**: Use `event.id` for correlation IDs in logs, distributed tracing, and debugging across async workflows.
+**Usage**: Use `event.id` for correlation IDs in logs, distributed tracing, and
+debugging across async workflows.
 
 ---
 
@@ -852,7 +852,8 @@ fresh = event.as_fresh_event()  # New instance with PENDING status
 
 ## Examples
 
-See [Event Notebook](../../../notebooks/event.ipynb) for comprehensive examples and patterns.
+See [Event Notebook](../../../notebooks/event.ipynb) for comprehensive examples and
+patterns.
 
 Comprehensive examples demonstrating:
 
@@ -887,7 +888,8 @@ Comprehensive examples demonstrating:
 - `await event.invoke()` - Execute with lifecycle management
 - `if event.execution.retryable: fresh = event.as_fresh_event()` - Retry pattern
 - `event.execution.to_dict()` - Serialize for monitoring
-- `await gather(*[e.invoke() for e in events])` - Parallel execution (import from `lionpride.libs.concurrency`)
+- `await gather(*[e.invoke() for e in events])` - Parallel execution (import from
+  `lionpride.libs.concurrency`)
 
 **Performance**:
 

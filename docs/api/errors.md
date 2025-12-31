@@ -1,12 +1,14 @@
 # Error Handling
 
-lionpride provides a comprehensive exception hierarchy with structured error context and retry semantics.
+lionpride provides a comprehensive exception hierarchy with structured error context and
+retry semantics.
 
 ## Overview
 
 The error module provides:
 
-- **Semantic exceptions**: `NotFoundError` and `ExistsError` replace generic `ValueError`
+- **Semantic exceptions**: `NotFoundError` and `ExistsError` replace generic
+  `ValueError`
 - **Structured context**: `.details` dict for debugging information
 - **Retry semantics**: `.retryable` flag for retry strategies
 - **Exception chaining**: `.__cause__` preservation for root cause analysis
@@ -115,7 +117,8 @@ error_data = error.to_dict()
 
 Item not found. **Not retryable** by default.
 
-**Use when:** An expected item is missing (collection access, file lookup, database query).
+**Use when:** An expected item is missing (collection access, file lookup, database
+query).
 
 **Attributes:**
 
@@ -204,7 +207,8 @@ if task is None:
 
 Item already exists. **Not retryable** by default.
 
-**Use when:** Attempting to create an item that already exists (duplicate insertion, unique constraint violation).
+**Use when:** Attempting to create an item that already exists (duplicate insertion,
+unique constraint violation).
 
 **Attributes:**
 
@@ -254,7 +258,8 @@ if item.id in pile:
 
 Validation failure. **Not retryable**.
 
-**Use when:** Input validation fails (schema mismatch, type error, constraint violation).
+**Use when:** Input validation fails (schema mismatch, type error, constraint
+violation).
 
 **Attributes:**
 
@@ -287,7 +292,8 @@ if not all(field in data.keys() for field in required_fields):
 
 Configuration error. **Not retryable**.
 
-**Use when:** Invalid configuration (missing environment variable, invalid settings, incompatible options).
+**Use when:** Invalid configuration (missing environment variable, invalid settings,
+incompatible options).
 
 **Attributes:**
 
@@ -320,7 +326,8 @@ if max_workers <= 0:
 
 Event/Calling execution failure. **Retryable** by default.
 
-**Use when:** Runtime execution fails (function call error, async task failure, operation timeout).
+**Use when:** Runtime execution fails (function call error, async task failure,
+operation timeout).
 
 **Attributes:**
 
@@ -359,7 +366,8 @@ except Exception as e:
 
 Connection/network failure. **Retryable** by default.
 
-**Use when:** Network operations fail (API call timeout, database connection lost, socket error).
+**Use when:** Network operations fail (API call timeout, database connection lost,
+socket error).
 
 **Attributes:**
 
@@ -398,7 +406,8 @@ except Exception as e:
 
 Operation timeout. **Retryable** by default.
 
-**Use when:** Operations exceed time limit (async timeout, request timeout, lock timeout).
+**Use when:** Operations exceed time limit (async timeout, request timeout, lock
+timeout).
 
 **Attributes:**
 
@@ -439,7 +448,8 @@ except concurrency.get_cancelled_exc_class() as e:
 
 Queue capacity exceeded. **Retryable** by default.
 
-**Use when:** Queue or buffer capacity is exceeded (bounded queues, rate limiting, backpressure).
+**Use when:** Queue or buffer capacity is exceeded (bounded queues, rate limiting,
+backpressure).
 
 **Attributes:**
 
@@ -1007,6 +1017,5 @@ except NotFoundError:  # ✅ Semantic exception
 
 ---
 
-**Version**: 1.0.0-alpha4+
-**Breaking Changes**: Yes (ValueError → NotFoundError/ExistsError)
-**Protocol Support**: `Serializable` (`.to_dict()`)
+**Version**: 1.0.0-alpha4+ **Breaking Changes**: Yes (ValueError →
+NotFoundError/ExistsError) **Protocol Support**: `Serializable` (`.to_dict()`)

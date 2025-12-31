@@ -2,7 +2,8 @@
 
 **Time**: 25 min | **Difficulty**: 🟠 Advanced
 
-Build production-grade systems with automatic retries, timeouts, error handling, and resource limits using lionpride's concurrency primitives.
+Build production-grade systems with automatic retries, timeouts, error handling, and
+resource limits using lionpride's concurrency primitives.
 
 ## The Problem
 
@@ -13,7 +14,8 @@ Production systems must handle:
 - Cascading failures (one slow service blocks everything)
 - Partial batch failures (some items succeed, some fail)
 
-Manual error handling is error-prone and verbose. lionpride-core provides battle-tested primitives.
+Manual error handling is error-prone and verbose. lionpride-core provides battle-tested
+primitives.
 
 ## Core Concepts
 
@@ -151,7 +153,8 @@ async def process_all_items(items: list[DataItem]) -> list[ProcessedItem]:
     return successful
 ```
 
-**Key insight**: `max_concurrent=20` for processing, but `CapacityLimiter(5)` ensures only 5 database connections at a time.
+**Key insight**: `max_concurrent=20` for processing, but `CapacityLimiter(5)` ensures
+only 5 database connections at a time.
 
 ### 4. Store Results with Error Aggregation
 
@@ -363,12 +366,12 @@ async def run_with_shutdown(item_ids: list[str]):
 
 ## Performance Characteristics
 
-| Operation | Overhead | Typical Use |
-|-----------|----------|-------------|
-| alcall | 1-5ms | Batch async operations |
-| CapacityLimiter | <1ms | Resource pool management |
-| ExceptionGroup | <1ms | Error aggregation |
-| Timeout (fail_after) | <1ms | Per-operation time limits |
+| Operation            | Overhead | Typical Use               |
+| -------------------- | -------- | ------------------------- |
+| alcall               | 1-5ms    | Batch async operations    |
+| CapacityLimiter      | <1ms     | Resource pool management  |
+| ExceptionGroup       | <1ms     | Error aggregation         |
+| Timeout (fail_after) | <1ms     | Per-operation time limits |
 
 ## When to Use These Patterns
 
@@ -405,4 +408,5 @@ async def run_with_shutdown(item_ids: list[str]):
 }
 ```
 
-**Key takeaway**: Resilience patterns achieve 83% success rate with graceful degradation, vs 0% with fail-fast approach.
+**Key takeaway**: Resilience patterns achieve 83% success rate with graceful
+degradation, vs 0% with fail-fast approach.

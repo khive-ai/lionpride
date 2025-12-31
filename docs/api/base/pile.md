@@ -6,15 +6,22 @@
 
 ## Overview
 
-`Pile` is a thread-safe collection for managing Element instances with type validation and rich querying capabilities. It combines dict-like keyed access with list-like insertion order preservation and provides a powerful type-dispatched `__getitem__` interface.
+`Pile` is a thread-safe collection for managing Element instances with type validation
+and rich querying capabilities. It combines dict-like keyed access with list-like
+insertion order preservation and provides a powerful type-dispatched `__getitem__`
+interface.
 
 **Key Capabilities:**
 
-- **Element Inheritance**: Auto-generated UUID, timestamps, metadata (from Element base class)
+- **Element Inheritance**: Auto-generated UUID, timestamps, metadata (from Element base
+  class)
 - **Thread Safety**: RLock-based synchronization for concurrent access
-- **Type Validation**: Flexible constraints with Union support (single type, multiple types, or any Element)
-- **Rich Queries**: Type-dispatched `__getitem__` (UUID, index, slice, callable, Progression)
-- **Idempotent Operations**: `include`, `exclude` for safe retry (operations that can be called multiple times with the same effect as calling once)
+- **Type Validation**: Flexible constraints with Union support (single type, multiple
+  types, or any Element)
+- **Rich Queries**: Type-dispatched `__getitem__` (UUID, index, slice, callable,
+  Progression)
+- **Idempotent Operations**: `include`, `exclude` for safe retry (operations that can be
+  called multiple times with the same effect as calling once)
 - **Async Support**: Separate async lock for concurrent async operations
 - **Serialization**: JSON roundtrip with type preservation
 
@@ -103,9 +110,11 @@ class Pile(Element, Generic[T]):
 
 **items**: `list[T] | None = None` - Initial items (auto-validated against `item_type`)
 
-**item_type**: `type[T] | set[type] | None = None` - Type constraint(s). Single type, set/Union, or None (any Element). O(1) check per add/update.
+**item_type**: `type[T] | set[type] | None = None` - Type constraint(s). Single type,
+set/Union, or None (any Element). O(1) check per add/update.
 
-**order**: `list[UUID] | Progression | None = None` - Custom insertion order (validates UUIDs present)
+**order**: `list[UUID] | Progression | None = None` - Custom insertion order (validates
+UUIDs present)
 
 **strict_type**: `bool = False` - Exact type match (no subclasses) when True
 
@@ -113,21 +122,23 @@ class Pile(Element, Generic[T]):
 
 ## Attributes
 
-| Attribute     | Type              | Mutable | Inherited | Description                          |
-|---------------|-------------------|---------|-----------|--------------------------------------|
-| `item_type`   | `set[type] \| None` | **No (frozen)** | No | Type constraints (None = any Element) |
-| `strict_type` | `bool`            | **No (frozen)** | No | Exact type enforcement               |
-| `id`          | `UUID`            | No      | Yes       | Unique identifier (frozen)           |
-| `created_at`  | `datetime`        | No      | Yes       | Creation timestamp (frozen)          |
-| `metadata`    | `dict[str, Any]`  | Yes     | Yes       | Additional metadata                  |
+| Attribute     | Type                | Mutable         | Inherited | Description                           |
+| ------------- | ------------------- | --------------- | --------- | ------------------------------------- |
+| `item_type`   | `set[type] \| None` | **No (frozen)** | No        | Type constraints (None = any Element) |
+| `strict_type` | `bool`              | **No (frozen)** | No        | Exact type enforcement                |
+| `id`          | `UUID`              | No              | Yes       | Unique identifier (frozen)            |
+| `created_at`  | `datetime`          | No              | Yes       | Creation timestamp (frozen)           |
+| `metadata`    | `dict[str, Any]`    | Yes             | Yes       | Additional metadata                   |
 
 **Read-only Properties:**
 
-| Property      | Type                  | Description                              |
-|---------------|-----------------------|------------------------------------------|
-| `progression` | `Progression`         | Copy of insertion order (prevents mutation) |
+| Property      | Type          | Description                                 |
+| ------------- | ------------- | ------------------------------------------- |
+| `progression` | `Progression` | Copy of insertion order (prevents mutation) |
 
-**Important**: `item_type` and `strict_type` are **frozen fields** (PR #156). Type configuration must be set at initialization and cannot be mutated afterward. This prevents runtime type confusion.
+**Important**: `item_type` and `strict_type` are **frozen fields** (PR #156). Type
+configuration must be set at initialization and cannot be mutated afterward. This
+prevents runtime type confusion.
 
 ## Methods
 
@@ -216,7 +227,8 @@ def pop(self, item_id: UUID | str | Element, default: Any = ...) -> T | Any
 
 #### `get(item_id, default=...) -> T | None`
 
-Get item by ID with optional default. O(1), thread-safe. Raises NotFoundError if not found and no default.
+Get item by ID with optional default. O(1), thread-safe. Raises NotFoundError if not
+found and no default.
 
 ```python
 item = pile.get(uuid, default=None)
@@ -224,7 +236,8 @@ item = pile.get(uuid, default=None)
 
 #### `update(item) -> None`
 
-Update existing item. O(1), thread-safe. Raises NotFoundError if not found, TypeError if type validation fails.
+Update existing item. O(1), thread-safe. Raises NotFoundError if not found, TypeError if
+type validation fails.
 
 ```python
 item = pile.get(uuid)
@@ -242,7 +255,9 @@ Remove all items. O(1), thread-safe.
 
 #### `include(item) -> bool`
 
-Add item if not present (idempotent). Returns True if item IS in pile (guaranteed state), False if validation fails. Changed from "action taken" to "guaranteed state" semantics.
+Add item if not present (idempotent). Returns True if item IS in pile (guaranteed
+state), False if validation fails. Changed from "action taken" to "guaranteed state"
+semantics.
 
 ```python
 pile.include(item)  # True both times (idempotent)
@@ -251,11 +266,14 @@ pile.include(item)  # Item is guaranteed in pile
 
 **Time Complexity:** O(1) for membership check, O(1) for add if needed
 
-**Note**: Not thread-safe for concurrent calls with same item (check-then-act race condition). Use external synchronization for concurrent access.
+**Note**: Not thread-safe for concurrent calls with same item (check-then-act race
+condition). Use external synchronization for concurrent access.
 
 #### `exclude(item) -> bool`
 
-Remove item if present (idempotent). Returns True if item IS NOT in pile (guaranteed state), False if ID coercion fails. O(n). Not thread-safe for concurrent same-item calls.
+Remove item if present (idempotent). Returns True if item IS NOT in pile (guaranteed
+state), False if ID coercion fails. O(n). Not thread-safe for concurrent same-item
+calls.
 
 ---
 
@@ -406,7 +424,8 @@ for uuid, item in pile.items():
 
 **Added in:** v1.0.0a5 (PR #159)
 
-**⚠️ BREAKING CHANGE:** Before PR #159, `items` was a read-only property returning `MappingProxyType[UUID, T]`. Now it's a method returning an iterator.
+**⚠️ BREAKING CHANGE:** Before PR #159, `items` was a read-only property returning
+`MappingProxyType[UUID, T]`. Now it's a method returning an iterator.
 
 **Migration:**
 
@@ -431,7 +450,8 @@ Check if pile is empty.
 
 **Time Complexity:** O(1)
 
-**Note:** Prefer `if not pile:` using the `__bool__()` protocol instead of `if pile.is_empty():`.
+**Note:** Prefer `if not pile:` using the `__bool__()` protocol instead of
+`if pile.is_empty():`.
 
 ---
 
@@ -476,9 +496,11 @@ print(len(tasks_only))  # 1
 
 ### Async Support
 
-**⚠️ BREAKING CHANGE (PR #156):** Async methods `add_async()`, `remove_async()`, and `get_async()` have been removed.
+**⚠️ BREAKING CHANGE (PR #156):** Async methods `add_async()`, `remove_async()`, and
+`get_async()` have been removed.
 
-**Rationale:** Pile operations are O(1) CPU-bound (dict/list operations), not I/O-bound. Async overhead provides no benefit.
+**Rationale:** Pile operations are O(1) CPU-bound (dict/list operations), not I/O-bound.
+Async overhead provides no benefit.
 
 **Migration:**
 

@@ -1,12 +1,16 @@
 # Graph
 
-> Directed graph with Pile-backed storage, O(1) adjacency queries, and classical graph algorithms.
+> Directed graph with Pile-backed storage, O(1) adjacency queries, and classical graph
+> algorithms.
 
 ---
 
 ## Overview
 
-**Graph** is a directed graph implementation built on [Pile](pile.md) storage with pre-computed adjacency lists for O(1) neighbor queries. It combines efficient graph operations with classical algorithms for cycle detection, topological sorting, and pathfinding.
+**Graph** is a directed graph implementation built on [Pile](pile.md) storage with
+pre-computed adjacency lists for O(1) neighbor queries. It combines efficient graph
+operations with classical algorithms for cycle detection, topological sorting, and
+pathfinding.
 
 **Architecture**:
 
@@ -31,7 +35,8 @@
 
 **Don't use Graph when:**
 
-- Undirected edges are primary requirement → implement wrapper or use specialized library
+- Undirected edges are primary requirement → implement wrapper or use specialized
+  library
 - Very large graphs (millions of nodes) → consider database-backed graph (Neo4j, etc.)
 - Simple linear sequence → use [Progression](progression.md)
 - Tree structure without multiple parents → use simpler tree data structure
@@ -115,7 +120,8 @@ edge = Edge(
 )
 ```
 
-**Note**: Conditions are not serialized. They're runtime constructs for dynamic graph traversal logic.
+**Note**: Conditions are not serialized. They're runtime constructs for dynamic graph
+traversal logic.
 
 ---
 
@@ -157,7 +163,8 @@ Pile of Node instances representing graph vertices.
 
 **Type:** Pile[Node]
 
-**Access:** Direct Pile access with all Pile operations (add, remove, UUID lookup, iteration)
+**Access:** Direct Pile access with all Pile operations (add, remove, UUID lookup,
+iteration)
 
 **Example:**
 
@@ -180,9 +187,11 @@ Pile of Edge instances representing directed connections.
 
 **Type:** Pile[Edge]
 
-**Access:** Direct Pile access with all Pile operations (add, remove, UUID lookup, iteration)
+**Access:** Direct Pile access with all Pile operations (add, remove, UUID lookup,
+iteration)
 
-**Note:** For graph integrity, use `add_edge()` and `remove_edge()` methods instead of direct Pile operations, as they maintain adjacency lists.
+**Note:** For graph integrity, use `add_edge()` and `remove_edge()` methods instead of
+direct Pile operations, as they maintain adjacency lists.
 
 **Example:**
 
@@ -231,7 +240,8 @@ node = Node(content={"name": "TaskA"})
 graph.add_node(node)
 ```
 
-**Implementation Note**: Atomically adds node to pile and initializes empty adjacency sets in `_out_edges` and `_in_edges`.
+**Implementation Note**: Atomically adds node to pile and initializes empty adjacency
+sets in `_out_edges` and `_in_edges`.
 
 ---
 
@@ -267,7 +277,8 @@ removed = graph.remove_node(node_id)
 print(f"Removed node with {len(removed_edges)} connected edges")
 ```
 
-**Cascade Behavior**: Automatically removes all edges connected to the node (both incoming and outgoing) before removing the node itself.
+**Cascade Behavior**: Automatically removes all edges connected to the node (both
+incoming and outgoing) before removing the node itself.
 
 ---
 
@@ -370,7 +381,8 @@ predecessors = graph.get_predecessors(task_node)
 print(f"Dependencies: {[n.content['name'] for n in predecessors]}")
 ```
 
-**Implementation**: Uses `_in_edges` adjacency list for O(1) edge set lookup, then O(k) node retrievals.
+**Implementation**: Uses `_in_edges` adjacency list for O(1) edge set lookup, then O(k)
+node retrievals.
 
 ---
 
@@ -400,7 +412,8 @@ successors = graph.get_successors(task_node)
 print(f"Dependents: {[n.content['name'] for n in successors]}")
 ```
 
-**Implementation**: Uses `_out_edges` adjacency list for O(1) edge set lookup, then O(k) node retrievals.
+**Implementation**: Uses `_out_edges` adjacency list for O(1) edge set lookup, then O(k)
+node retrievals.
 
 ---
 
@@ -562,7 +575,8 @@ except ValueError:
     print("Cannot sort - graph has cycles")
 ```
 
-**Property**: For every directed edge (u, v), node u appears before v in the sorted list.
+**Property**: For every directed edge (u, v), node u appears before v in the sorted
+list.
 
 **Use Cases**: Build order resolution, task scheduling, dependency resolution.
 
@@ -587,7 +601,8 @@ async def find_path(
 
 - `start` (UUID | Node): Starting node
 - `end` (UUID | Node): Target node
-- `check_conditions` (bool): If True, evaluate edge conditions during traversal. Default: False
+- `check_conditions` (bool): If True, evaluate edge conditions during traversal.
+  Default: False
 
 **Returns:** list[Edge] | None - List of edges forming path, or None if no path exists
 
@@ -613,11 +628,14 @@ if path:
 conditional_path = await graph.find_path(start_node, end_node, check_conditions=True)
 ```
 
-**Property**: Returns shortest path by edge count (BFS guarantees shortest path in unweighted graphs).
+**Property**: Returns shortest path by edge count (BFS guarantees shortest path in
+unweighted graphs).
 
-**Conditional Traversal**: When `check_conditions=True`, edges with conditions that evaluate to False are skipped.
+**Conditional Traversal**: When `check_conditions=True`, edges with conditions that
+evaluate to False are skipped.
 
-**Note**: Graph uses async-first design. In Jupyter notebooks, use `await` syntax directly. In sync contexts, use `run_async()` from `lionpride.libs.concurrency`.
+**Note**: Graph uses async-first design. In Jupyter notebooks, use `await` syntax
+directly. In sync contexts, use `run_async()` from `lionpride.libs.concurrency`.
 
 ---
 
@@ -666,7 +684,8 @@ db_data = graph.to_dict(
 )
 ```
 
-**Note**: Adjacency lists (`_out_edges`, `_in_edges`) are NOT serialized. They're rebuilt from edges during deserialization.
+**Note**: Adjacency lists (`_out_edges`, `_in_edges`) are NOT serialized. They're
+rebuilt from edges during deserialization.
 
 ---
 
@@ -707,7 +726,8 @@ restored = Graph.from_dict(data)
 predecessors = restored.get_predecessors(node_id)
 ```
 
-**Post-Init Hook**: The `_rebuild_adjacency_after_init` validator automatically rebuilds adjacency lists from deserialized nodes and edges.
+**Post-Init Hook**: The `_rebuild_adjacency_after_init` validator automatically rebuilds
+adjacency lists from deserialized nodes and edges.
 
 ---
 
@@ -763,13 +783,15 @@ print(f"Graph has {len(graph)} nodes")
 print(f"Graph has {len(graph.edges)} edges")
 ```
 
-**Note**: `len(graph)` returns node count, not edge count. Use `len(graph.edges)` for edge count.
+**Note**: `len(graph)` returns node count, not edge count. Use `len(graph.edges)` for
+edge count.
 
 ---
 
 ### Adapter Methods
 
-Graph implements pydapter integration for external format conversion (e.g., Neo4j, NetworkX, JSON Graph Format).
+Graph implements pydapter integration for external format conversion (e.g., Neo4j,
+NetworkX, JSON Graph Format).
 
 #### `adapt_to()`
 
@@ -896,7 +918,8 @@ async with db_session() as session:
 
 **Adapter Registration**:
 
-Adapters must be registered before use. See [pydapter documentation](https://github.com/khive-ai/pydapter) for registration details.
+Adapters must be registered before use. See
+[pydapter documentation](https://github.com/khive-ai/pydapter) for registration details.
 
 ```python
 from pydapter import Adapter
@@ -1129,7 +1152,8 @@ graph.add_edge(Edge(head=node1.id, tail=node2.id))
 
 ### Pitfall 3: Expecting Undirected Edges
 
-**Issue**: Graph is directed by design. Undirected behavior requires explicit bidirectional edges.
+**Issue**: Graph is directed by design. Undirected behavior requires explicit
+bidirectional edges.
 
 ```python
 # Only creates A → B, not B → A
@@ -1390,7 +1414,8 @@ else:
 - EdgeCondition runtime-only (not serialized)
 - Directed by design (explicit bidirectional edges for undirected behavior)
 
-**Use Cases**: Dependency resolution, workflow graphs, state machines, network topology, build systems, task scheduling.
+**Use Cases**: Dependency resolution, workflow graphs, state machines, network topology,
+build systems, task scheduling.
 
 See `src/lionpride/base/graph.py` for full implementation details.
 

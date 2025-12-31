@@ -4,9 +4,12 @@
 
 ## Overview
 
-`Report` defines workflows through class attributes with type annotations. The system introspects annotations to derive field types, schedule form execution based on dependencies, and validate outputs against Pydantic models.
+`Report` defines workflows through class attributes with type annotations. The system
+introspects annotations to derive field types, schedule form execution based on
+dependencies, and validate outputs against Pydantic models.
 
-**Key principles:** Class attributes = output schemas | Model docstrings = LLM instructions | Dependencies inferred from dataflow | Parallel execution automatic
+**Key principles:** Class attributes = output schemas | Model docstrings = LLM
+instructions | Dependencies inferred from dataflow | Parallel execution automatic
 
 Inherits from `Element` (UUID identity, timestamps, serialization).
 
@@ -42,28 +45,29 @@ class Report(Element):
 
 ## Parameters
 
-Report is designed to be subclassed, not instantiated directly with parameters. Define workflows through class attributes:
+Report is designed to be subclassed, not instantiated directly with parameters. Define
+workflows through class attributes:
 
-| Class Attribute | Type | Description |
-|-----------------|------|-------------|
-| `assignment` | `str` | Overall workflow contract: `"inputs -> final_outputs"` |
-| `form_assignments` | `list[str]` | Form DSL strings defining individual steps |
-| `instruction` | `str` | Overall workflow goal (passed to LLM for context) |
-| Output schemas | `Type \| None` | Class attributes with type annotations become output fields |
+| Class Attribute    | Type           | Description                                                 |
+| ------------------ | -------------- | ----------------------------------------------------------- |
+| `assignment`       | `str`          | Overall workflow contract: `"inputs -> final_outputs"`      |
+| `form_assignments` | `list[str]`    | Form DSL strings defining individual steps                  |
+| `instruction`      | `str`          | Overall workflow goal (passed to LLM for context)           |
+| Output schemas     | `Type \| None` | Class attributes with type annotations become output fields |
 
 ## Attributes
 
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `id` | `UUID` | Unique identifier (inherited from Element) |
-| `created_at` | `datetime` | UTC timestamp (inherited from Element) |
-| `metadata` | `dict[str, Any]` | Arbitrary metadata (inherited from Element) |
-| `input_fields` | `list[str]` | Derived from `assignment` (before `->`) |
-| `output_fields` | `list[str]` | Derived from `assignment` (after `->`) |
-| `forms` | `Pile[Form]` | All forms created from `form_assignments` |
-| `completed_forms` | `Pile[Form]` | Forms that have been executed |
-| `available_data` | `dict[str, Any]` | Current state of all field values |
-| `progress` | `tuple[int, int]` | Property: `(completed_count, total_count)` |
+| Attribute         | Type              | Description                                 |
+| ----------------- | ----------------- | ------------------------------------------- |
+| `id`              | `UUID`            | Unique identifier (inherited from Element)  |
+| `created_at`      | `datetime`        | UTC timestamp (inherited from Element)      |
+| `metadata`        | `dict[str, Any]`  | Arbitrary metadata (inherited from Element) |
+| `input_fields`    | `list[str]`       | Derived from `assignment` (before `->`)     |
+| `output_fields`   | `list[str]`       | Derived from `assignment` (after `->`)      |
+| `forms`           | `Pile[Form]`      | All forms created from `form_assignments`   |
+| `completed_forms` | `Pile[Form]`      | Forms that have been executed               |
+| `available_data`  | `dict[str, Any]`  | Current state of all field values           |
+| `progress`        | `tuple[int, int]` | Property: `(completed_count, total_count)`  |
 
 ## Methods
 
@@ -251,7 +255,8 @@ def get_field_type(self, field: str) -> type | None: ...
 
 **Returns:**
 
-- `type | None`: The type annotation, or None if not declared. Unwraps `Optional[X]` / `X | None` to return `X`.
+- `type | None`: The type annotation, or None if not declared. Unwraps `Optional[X]` /
+  `X | None` to return `X`.
 
 **Examples:**
 
@@ -280,7 +285,8 @@ def get_request_model(self, field: str) -> type[BaseModel] | None: ...
 
 **Returns:**
 
-- `type[BaseModel] | None`: The Pydantic model class, or None if field is primitive or not declared
+- `type[BaseModel] | None`: The Pydantic model class, or None if field is primitive or
+  not declared
 
 **Examples:**
 
@@ -303,34 +309,34 @@ The assignment DSL specifies data flow and resource requirements.
 
 ### Components
 
-| Component | Description | Example |
-|-----------|-------------|---------|
-| `branch:` | Optional branch prefix | `"orchestrator: a -> b"` |
-| `operation()` | Operation type (default: `operate`) | `"react(a -> b)"` |
-| `inputs` | Comma-separated input fields | `"topic, context"` |
-| `->` | Data flow operator (required) | |
-| `outputs` | Comma-separated output fields | `"analysis, score"` |
-| `\| resources` | Resource declarations | `"\| api:gpt4, tool:*"` |
+| Component      | Description                         | Example                  |
+| -------------- | ----------------------------------- | ------------------------ |
+| `branch:`      | Optional branch prefix              | `"orchestrator: a -> b"` |
+| `operation()`  | Operation type (default: `operate`) | `"react(a -> b)"`        |
+| `inputs`       | Comma-separated input fields        | `"topic, context"`       |
+| `->`           | Data flow operator (required)       |                          |
+| `outputs`      | Comma-separated output fields       | `"analysis, score"`      |
+| `\| resources` | Resource declarations               | `"\| api:gpt4, tool:*"`  |
 
 ### Operations
 
-| Operation | Description |
-|-----------|-------------|
-| `generate` | Raw LLM completion |
-| `parse` | Structured data extraction |
-| `communicate` | Generate + parse |
-| `operate` | Full structured output (default) |
-| `react` | Multi-turn reasoning loop |
+| Operation     | Description                      |
+| ------------- | -------------------------------- |
+| `generate`    | Raw LLM completion               |
+| `parse`       | Structured data extraction       |
+| `communicate` | Generate + parse                 |
+| `operate`     | Full structured output (default) |
+| `react`       | Multi-turn reasoning loop        |
 
 ### Resources
 
-| Resource Type | Description | Example |
-|---------------|-------------|---------|
-| `api:` | Default model for all roles | `api:gpt4` |
-| `api_gen:` | Model for generation | `api_gen:gpt4` |
-| `api_parse:` | Model for parsing | `api_parse:gpt4mini` |
-| `api_interpret:` | Model for react interpretation | `api_interpret:gpt4` |
-| `tool:` | Tool access (use `*` for all) | `tool:search`, `tool:*` |
+| Resource Type    | Description                    | Example                 |
+| ---------------- | ------------------------------ | ----------------------- |
+| `api:`           | Default model for all roles    | `api:gpt4`              |
+| `api_gen:`       | Model for generation           | `api_gen:gpt4`          |
+| `api_parse:`     | Model for parsing              | `api_parse:gpt4mini`    |
+| `api_interpret:` | Model for react interpretation | `api_interpret:gpt4`    |
+| `tool:`          | Tool access (use `*` for all)  | `tool:search`, `tool:*` |
 
 ### Examples
 
@@ -416,17 +422,23 @@ result = await flow_report(session, report, branch=branch)
 
 ## Common Pitfalls
 
-- **Missing type annotation**: Use `analysis: Analysis | None = None` (not bare `analysis: Analysis`)
-- **No model docstring**: Add docstrings to Pydantic models - they become LLM instructions
-- **Uninitialized report**: Always call `report.initialize(**inputs)` before `flow_report()`
+- **Missing type annotation**: Use `analysis: Analysis | None = None` (not bare
+  `analysis: Analysis`)
+- **No model docstring**: Add docstrings to Pydantic models - they become LLM
+  instructions
+- **Uninitialized report**: Always call `report.initialize(**inputs)` before
+  `flow_report()`
 
 ## Design Rationale
 
-**Class Attributes**: Type introspection via `get_type_hints()`, IDE autocomplete, self-documenting workflow specs.
+**Class Attributes**: Type introspection via `get_type_hints()`, IDE autocomplete,
+self-documenting workflow specs.
 
-**Docstrings as Instructions**: Co-located schema + instructions; same docstring serves users and LLMs.
+**Docstrings as Instructions**: Co-located schema + instructions; same docstring serves
+users and LLMs.
 
-**Inferred Dependencies**: No explicit graph construction; dependencies derived from dataflow are always accurate.
+**Inferred Dependencies**: No explicit graph construction; dependencies derived from
+dataflow are always accurate.
 
 ## See Also
 

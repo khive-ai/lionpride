@@ -1,10 +1,14 @@
 # Utilities (ln._utils)
 
-> Core utility functions for datetime, path creation, import management, and binning operations
+> Core utility functions for datetime, path creation, import management, and binning
+> operations
 
 ## Overview
 
-The `ln._utils` module provides essential utility functions used throughout lionpride for common operations that don't belong to specific classes. These functions handle timezone-aware datetime operations, async path creation with timeout support, module importing with validation, and list partitioning.
+The `ln._utils` module provides essential utility functions used throughout lionpride
+for common operations that don't belong to specific classes. These functions handle
+timezone-aware datetime operations, async path creation with timeout support, module
+importing with validation, and list partitioning.
 
 **Key Functions:**
 
@@ -57,11 +61,13 @@ datetime.UTC
 
 **Notes:**
 
-Uses `datetime.now(UTC)` to ensure timezone-aware datetime objects. All timestamps in lionpride should use UTC for consistency across distributed systems.
+Uses `datetime.now(UTC)` to ensure timezone-aware datetime objects. All timestamps in
+lionpride should use UTC for consistency across distributed systems.
 
 **See Also:**
 
-- [Element.created_at](../base/element.md#attributes): Default timestamp generation uses this function
+- [Element.created_at](../base/element.md#attributes): Default timestamp generation uses
+  this function
 
 ---
 
@@ -94,7 +100,8 @@ async def acreate_path(
 
 Base directory path for file creation. Automatically converted to `AsyncPath`.
 
-- Supports nested subdirectories via `filename` parameter (e.g., `filename="subdir/file.txt"`)
+- Supports nested subdirectories via `filename` parameter (e.g.,
+  `filename="subdir/file.txt"`)
 - Created recursively if doesn't exist (when `dir_exist_ok=True`)
 
 **filename** : str
@@ -119,7 +126,8 @@ Add timestamp to filename for uniqueness.
 
 - Uses `timestamp_format` or default `"%Y%m%d%H%M%S"` format
 - Position controlled by `time_prefix` parameter
-- Example: `"output.txt"` → `"output_20251109143045.txt"` or `"20251109143045_output.txt"`
+- Example: `"output.txt"` → `"output_20251109143045.txt"` or
+  `"20251109143045_output.txt"`
 
 **dir_exist_ok** : bool, default True
 
@@ -150,7 +158,8 @@ Custom `strftime` format for timestamp.
 
 - Default: `"%Y%m%d%H%M%S"` (e.g., `"20251109143045"`)
 - Examples: `"%Y-%m-%d"` → `"2025-11-09"`, `"%Y%m%d_%H%M"` → `"20251109_1430"`
-- See [strftime documentation](https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes)
+- See
+  [strftime documentation](https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes)
 
 **random_hash_digits** : int, default 0
 
@@ -172,12 +181,15 @@ Maximum time in seconds for async I/O operations.
 
 **Returns:**
 
-- AsyncPath: Validated path to target file (directory created, file availability checked)
+- AsyncPath: Validated path to target file (directory created, file availability
+  checked)
 
 **Raises:**
 
-- ValueError: If `filename` contains backslash `\` (use forward slash `/` for subdirectories)
-- FileExistsError: If file exists and `file_exist_ok=False`, or directory exists and `dir_exist_ok=False`
+- ValueError: If `filename` contains backslash `\` (use forward slash `/` for
+  subdirectories)
+- FileExistsError: If file exists and `file_exist_ok=False`, or directory exists and
+  `dir_exist_ok=False`
 - TimeoutError: If `timeout` exceeded during I/O operations
 
 **Examples:**
@@ -307,9 +319,12 @@ async def create_network_path(mount: str, filename: str) -> AsyncPath:
 
 - **Async I/O**: Uses `anyio.Path` for async directory creation and file checks
 - **Path Creation**: Creates parent directories recursively (like `mkdir -p`)
-- **No File Creation**: Function only validates path and creates directories, does **not** create the file itself
-- **Timeout Scope**: `timeout` parameter uses `move_on_after` from `lionpride.libs.concurrency`
-- **Subdirectory Handling**: Forward slashes in `filename` split into directory components (e.g., `"a/b/c.txt"` → directory: `base/a/b`, filename: `c.txt`)
+- **No File Creation**: Function only validates path and creates directories, does
+  **not** create the file itself
+- **Timeout Scope**: `timeout` parameter uses `move_on_after` from
+  `lionpride.libs.concurrency`
+- **Subdirectory Handling**: Forward slashes in `filename` split into directory
+  components (e.g., `"a/b/c.txt"` → directory: `base/a/b`, filename: `c.txt`)
 
 **See Also:**
 
@@ -420,7 +435,8 @@ def distribute_tasks(tasks: list[str], max_size: int) -> list[list[str]]:
 - **Order Preserved**: Output bins maintain input order
 - **Index-Based**: Returns indices, not values, for memory efficiency with large items
 - **No Splitting**: Individual items never split across bins (atomic units)
-- **Length Metric**: Uses `len()` for length measurement (works for strings, lists, bytes)
+- **Length Metric**: Uses `len()` for length measurement (works for strings, lists,
+  bytes)
 
 **Algorithm Behavior:**
 
@@ -587,7 +603,8 @@ create_element = LazyLoader("lionpride", "base.element", "Element")
 - **Dynamic Import**: Uses `__import__()` for runtime module loading
 - **Error Context**: Wraps `ImportError` with full module path for debugging
 - **Fromlist Handling**: Uses `fromlist` parameter for attribute imports
-- **Return Type**: Returns single object for `str` import_name, list for `list` import_name
+- **Return Type**: Returns single object for `str` import_name, list for `list`
+  import_name
 
 **See Also:**
 
@@ -689,7 +706,8 @@ if missing:
 - **Fast Check**: Uses `importlib.util.find_spec()` (doesn't actually import)
 - **No Side Effects**: Doesn't load package into memory
 - **Top-Level Only**: Checks package availability, not submodules
-- **Import vs Install**: Returns `False` for both "not installed" and "not importable" cases
+- **Import vs Install**: Returns `False` for both "not installed" and "not importable"
+  cases
 
 **See Also:**
 

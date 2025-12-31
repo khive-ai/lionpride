@@ -1,17 +1,22 @@
 # Broadcaster
 
-> Singleton pub/sub pattern for O(1) memory overhead event broadcasting with automatic weakref cleanup.
+> Singleton pub/sub pattern for O(1) memory overhead event broadcasting with automatic
+> weakref cleanup.
 
 ---
 
 ## Overview
 
-**Broadcaster** provides a singleton-based publish-subscribe pattern optimized for application-wide event notifications. All instances of a Broadcaster subclass share the same subscription registry at the class level, resulting in O(1) memory overhead regardless of instance count.
+**Broadcaster** provides a singleton-based publish-subscribe pattern optimized for
+application-wide event notifications. All instances of a Broadcaster subclass share the
+same subscription registry at the class level, resulting in O(1) memory overhead
+regardless of instance count.
 
 **Key Features:**
 
 - **Singleton Pattern**: One subscriber registry per subclass (class-level state)
-- **Weakref Cleanup**: Automatic subscriber removal when callback objects are garbage collected
+- **Weakref Cleanup**: Automatic subscriber removal when callback objects are garbage
+  collected
 - **Mixed Async/Sync**: Supports both sync and async callback functions
 - **Exception Isolation**: Callback exceptions logged, not propagated (fire-and-forget)
 - **Type Safety**: Enforces event type validation at broadcast time
@@ -63,13 +68,15 @@ class Broadcaster:
 
 ## ClassVars (Shared State)
 
-| ClassVar | Type | Description |
-|----------|------|-------------|
-| `_instance` | `Broadcaster \| None` | Singleton instance (one per subclass) |
+| ClassVar       | Type                          | Description                             |
+| -------------- | ----------------------------- | --------------------------------------- |
+| `_instance`    | `Broadcaster \| None`         | Singleton instance (one per subclass)   |
 | `_subscribers` | `list[weakref.ref[Callable]]` | Weak references to subscriber callbacks |
-| `_event_type` | `type` | Expected event type for validation |
+| `_event_type`  | `type`                        | Expected event type for validation      |
 
-**Important**: ClassVars are shared at the **subclass level**, not across all Broadcaster subclasses. Each subclass has its own singleton instance and subscriber registry.
+**Important**: ClassVars are shared at the **subclass level**, not across all
+Broadcaster subclasses. Each subclass has its own singleton instance and subscriber
+registry.
 
 ---
 
@@ -266,7 +273,8 @@ def _cleanup_dead_refs(
 - **Mutates ClassVar**: Updates `_subscribers` in-place via slice assignment
 - Uses `cls._subscribers[:] = alive_refs` to maintain ClassVar identity
 
-**Internal Use Only**: Called automatically by `broadcast()` and `get_subscriber_count()`.
+**Internal Use Only**: Called automatically by `broadcast()` and
+`get_subscriber_count()`.
 
 ---
 
@@ -282,7 +290,8 @@ def _cleanup_dead_refs(
 
 **Implementation**: `__new__` returns cached instance per subclass via `cls._instance`.
 
-**Trade-off**: Less flexible than instance-based (EventBus), but far more memory-efficient.
+**Trade-off**: Less flexible than instance-based (EventBus), but far more
+memory-efficient.
 
 ### Weakref for Automatic Cleanup
 
@@ -463,7 +472,8 @@ b1.subscribe(handler1)
 # b2 also has handler1 subscribed (same instance!)
 ```
 
-**Solution**: Understand that `b1 is b2` (singleton). Use EventBus for instance-level isolation.
+**Solution**: Understand that `b1 is b2` (singleton). Use EventBus for instance-level
+isolation.
 
 ### Pitfall 2: Weakref Death Before Broadcast
 
@@ -521,23 +531,28 @@ ShutdownBroadcaster.subscribe(handler2)
 # BUT: Dead weakref cleanup can reorder list
 ```
 
-**Solution**: Don't rely on execution order. Use explicit orchestration if order matters.
+**Solution**: Don't rely on execution order. Use explicit orchestration if order
+matters.
 
 ---
 
 ## Protocol Implementations
 
-Broadcaster does NOT implement lionpride protocols (Observable, Serializable, etc.). It is a standalone utility class for pub/sub patterns.
+Broadcaster does NOT implement lionpride protocols (Observable, Serializable, etc.). It
+is a standalone utility class for pub/sub patterns.
 
-**Rationale**: Broadcaster manages class-level state (ClassVars), which doesn't fit Element-based protocol patterns designed for instance state.
+**Rationale**: Broadcaster manages class-level state (ClassVars), which doesn't fit
+Element-based protocol patterns designed for instance state.
 
 ---
 
 ## See Also
 
-- [`EventBus`](eventbus.md): Instance-based pub/sub with topic routing and concurrent handlers
+- [`EventBus`](eventbus.md): Instance-based pub/sub with topic routing and concurrent
+  handlers
 - [`Event`](event.md): Base event class for lifecycle tracking
-- [Pub/Sub Patterns Notebook](../../../notebooks/broadcaster_eventbus.ipynb): Comprehensive examples
+- [Pub/Sub Patterns Notebook](../../../notebooks/broadcaster_eventbus.ipynb):
+  Comprehensive examples
 
 ---
 
@@ -644,4 +659,5 @@ Broadcaster provides **singleton pub/sub** with automatic memory management:
 - ❌ Sequential execution (use EventBus for concurrency)
 - ❌ No instance isolation (singleton per subclass)
 
-**When to use**: Application-wide notifications where all components need same event stream and memory efficiency is critical.
+**When to use**: Application-wide notifications where all components need same event
+stream and memory efficiency is critical.

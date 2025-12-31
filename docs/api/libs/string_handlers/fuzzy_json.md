@@ -1,10 +1,14 @@
 # Fuzzy JSON Parser
 
-> Fault-tolerant JSON parser with automatic error correction for quotes, spacing, and brackets
+> Fault-tolerant JSON parser with automatic error correction for quotes, spacing, and
+> brackets
 
 ## Overview
 
-The `fuzzy_json` module provides robust JSON parsing with automatic error correction for common formatting issues. It attempts multiple parsing strategies with progressive error correction, making it ideal for handling LLM-generated or user-provided JSON strings that may contain formatting errors.
+The `fuzzy_json` module provides robust JSON parsing with automatic error correction for
+common formatting issues. It attempts multiple parsing strategies with progressive error
+correction, making it ideal for handling LLM-generated or user-provided JSON strings
+that may contain formatting errors.
 
 **Key Capabilities:**
 
@@ -50,7 +54,8 @@ def fuzzy_json(str_to_parse: str, /) -> dict[str, Any] | list[dict[str, Any]]: .
 
 **Returns:**
 
-- dict[str, Any] or list[dict[str, Any]]: Parsed JSON as dictionary or list of dictionaries
+- dict[str, Any] or list[dict[str, Any]]: Parsed JSON as dictionary or list of
+  dictionaries
 
 **Raises:**
 
@@ -92,7 +97,8 @@ def fuzzy_json(str_to_parse: str, /) -> dict[str, Any] | list[dict[str, Any]]: .
 The function attempts parsing in this order:
 
 1. **Direct Parse**: Try `orjson.loads()` on original string (fast path for valid JSON)
-2. **Quote Normalization**: Replace single quotes with double quotes, clean whitespace, remove trailing commas
+2. **Quote Normalization**: Replace single quotes with double quotes, clean whitespace,
+   remove trailing commas
 3. **Bracket Fixing**: Balance unmatched brackets by adding missing closing brackets
 
 **See Also:**
@@ -102,20 +108,26 @@ The function attempts parsing in this order:
 
 **Notes:**
 
-Uses `orjson` for high-performance JSON parsing once the string is corrected. The multi-stage approach minimizes overhead for well-formed JSON (single parsing attempt) while providing robust error recovery for malformed input.
+Uses `orjson` for high-performance JSON parsing once the string is corrected. The
+multi-stage approach minimizes overhead for well-formed JSON (single parsing attempt)
+while providing robust error recovery for malformed input.
 
 **Limitations:**
 
-- Cannot fix structurally invalid JSON (e.g., misplaced commas, invalid escape sequences not addressed by normalization)
+- Cannot fix structurally invalid JSON (e.g., misplaced commas, invalid escape sequences
+  not addressed by normalization)
 - Does not validate JSON schema or data types
-- May incorrectly fix intentionally malformed strings (e.g., strings containing literal bracket characters)
+- May incorrectly fix intentionally malformed strings (e.g., strings containing literal
+  bracket characters)
 - Extra closing brackets or mismatched bracket types raise `ValueError`
 
 ### Helper Functions
 
 #### `fix_json_string()`
 
-> **⚠️ Internal API**: This function is an internal helper and not part of the public API. Use `fuzzy_json()` for general JSON parsing. Direct use of this function is not recommended unless you specifically need bracket balancing in isolation.
+> **⚠️ Internal API**: This function is an internal helper and not part of the public
+> API. Use `fuzzy_json()` for general JSON parsing. Direct use of this function is not
+> recommended unless you specifically need bracket balancing in isolation.
 
 Fix JSON string by balancing unmatched brackets.
 
@@ -177,7 +189,8 @@ ValueError: Mismatched brackets.
 
 **Notes:**
 
-This function is exposed for standalone use when you need bracket balancing without full fuzzy parsing. It properly handles:
+This function is exposed for standalone use when you need bracket balancing without full
+fuzzy parsing. It properly handles:
 
 - Escaped characters (`\"`, `\\`)
 - String contents (skips bracket-like characters inside strings)
@@ -247,7 +260,8 @@ Internal cleaning function that performs:
 3. Remove trailing commas before closing brackets/braces
 4. Quote unquoted object keys (e.g., `{key: value}` → `{"key": value}`)
 
-Not intended for external use. Used by `fuzzy_json()` as part of the progressive correction strategy.
+Not intended for external use. Used by `fuzzy_json()` as part of the progressive
+correction strategy.
 
 ## Usage Patterns
 
@@ -321,7 +335,8 @@ valid_results = [r for r in results if r is not None]
 
 ### Standalone Bracket Fixing
 
-> **⚠️ Advanced Usage**: Shows internal API usage for bracket fixing only. Prefer `fuzzy_json()` for general use.
+> **⚠️ Advanced Usage**: Shows internal API usage for bracket fixing only. Prefer
+> `fuzzy_json()` for general use.
 
 ```python
 from lionpride.libs.string_handlers._fuzzy_json import fix_json_string  # Internal API
@@ -348,7 +363,8 @@ invalid_json = '{"a": 1 "b": 2}'  # Missing comma
 fuzzy_json(invalid_json)  # ValueError: Invalid JSON string
 ```
 
-**Solution**: Use fuzzy_json for common formatting issues (quotes, brackets, trailing commas). For structural errors, validate and sanitize input before parsing.
+**Solution**: Use fuzzy_json for common formatting issues (quotes, brackets, trailing
+commas). For structural errors, validate and sanitize input before parsing.
 
 #### Pitfall 2: Performance Overhead in Hot Paths
 
@@ -360,7 +376,8 @@ for item in large_dataset:
     data = fuzzy_json(item)  # Overhead even if item is valid JSON
 ```
 
-**Solution**: Use `orjson.loads()` directly when JSON is known to be well-formed. Reserve fuzzy_json for uncertain inputs.
+**Solution**: Use `orjson.loads()` directly when JSON is known to be well-formed.
+Reserve fuzzy_json for uncertain inputs.
 
 ```python
 # Optimized version
@@ -373,7 +390,8 @@ for item in large_dataset:
 
 #### Pitfall 3: Incorrect Bracket Fixing for Intentional Content
 
-**Issue**: Bracket fixing may alter strings that intentionally contain unmatched brackets.
+**Issue**: Bracket fixing may alter strings that intentionally contain unmatched
+brackets.
 
 ```python
 # String content with intentional brackets
@@ -382,7 +400,8 @@ fixed = fuzzy_json(json_str)
 # Adds '}' which may not be intended location
 ```
 
-**Solution**: Ensure JSON strings are properly escaped and quoted before fuzzy parsing, or use `fix_json_string()` separately with caution.
+**Solution**: Ensure JSON strings are properly escaped and quoted before fuzzy parsing,
+or use `fix_json_string()` separately with caution.
 
 #### Pitfall 4: Not Handling TypeError for Non-String Input
 
@@ -410,7 +429,8 @@ def safe_parse(obj):
 
 ### Why Progressive Error Correction?
 
-The multi-stage parsing strategy (direct → clean → fix) provides optimal performance for well-formed JSON while maintaining robust error recovery:
+The multi-stage parsing strategy (direct → clean → fix) provides optimal performance for
+well-formed JSON while maintaining robust error recovery:
 
 1. **Fast Path Optimization**: Valid JSON parses immediately without correction overhead
 2. **Incremental Correction**: Only apply transformations when needed
@@ -418,7 +438,8 @@ The multi-stage parsing strategy (direct → clean → fix) provides optimal per
 
 ### Why Quote Normalization?
 
-Python dict literals use single quotes, but JSON requires double quotes. Automatic normalization enables:
+Python dict literals use single quotes, but JSON requires double quotes. Automatic
+normalization enables:
 
 1. **LLM Compatibility**: Many LLMs generate Python-style dicts instead of strict JSON
 2. **Developer Convenience**: Copy-paste Python dicts without manual conversion
@@ -426,7 +447,8 @@ Python dict literals use single quotes, but JSON requires double quotes. Automat
 
 ### Why Bracket Balancing Instead of Rejection?
 
-LLM-generated JSON frequently has truncated responses with missing closing brackets. Automatic balancing:
+LLM-generated JSON frequently has truncated responses with missing closing brackets.
+Automatic balancing:
 
 1. **Improves UX**: Recovers from common LLM output truncation
 2. **Reduces Retry Overhead**: Avoids re-querying LLMs for simple formatting errors
@@ -585,7 +607,8 @@ print(parser.stats())  # "Fast: 2 (66.7%), Fuzzy: 1"
 
 ### Example 4: Bracket Fixing with Validation
 
-> **⚠️ Advanced Usage**: Shows internal API usage. Prefer `fuzzy_json()` for general use.
+> **⚠️ Advanced Usage**: Shows internal API usage. Prefer `fuzzy_json()` for general
+> use.
 
 ```python
 from lionpride.libs.string_handlers._fuzzy_json import fix_json_string  # Internal API

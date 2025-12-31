@@ -4,12 +4,16 @@
 
 ## Overview
 
-The `ln._json_dump` module provides high-performance JSON serialization powered by orjson with extensive customization for handling Python types beyond standard JSON. It offers fast default serializers for common types (Path, Decimal, Enum, datetime), safe fallback modes for logging, and streaming support for large datasets.
+The `ln._json_dump` module provides high-performance JSON serialization powered by
+orjson with extensive customization for handling Python types beyond standard JSON. It
+offers fast default serializers for common types (Path, Decimal, Enum, datetime), safe
+fallback modes for logging, and streaming support for large datasets.
 
 **Key Functions:**
 
 - **Serialization**: `json_dumpb()`, `json_dumps()` for bytes/string output
-- **Configuration**: `get_orjson_default()` for custom type handlers, `make_options()` for orjson flags
+- **Configuration**: `get_orjson_default()` for custom type handlers, `make_options()`
+  for orjson flags
 - **Streaming**: `json_lines_iter()` for NDJSON output of large iterables
 
 **Common Use Cases:**
@@ -17,12 +21,14 @@ The `ln._json_dump` module provides high-performance JSON serialization powered 
 - Serializing API responses with Path, UUID, datetime, Decimal types
 - Logging structured data with safe fallback (no serialization errors)
 - Streaming large datasets as NDJSON (newline-delimited JSON)
-- Building custom serializers with deterministic output (sorted sets, consistent datetime formatting)
+- Building custom serializers with deterministic output (sorted sets, consistent
+  datetime formatting)
 - Converting Python objects to JSON dictionaries via orjson round-trip
 
 **When to Use:**
 
-- Production code requiring fast JSON serialization (orjson is 2-5× faster than stdlib json)
+- Production code requiring fast JSON serialization (orjson is 2-5× faster than stdlib
+  json)
 - Handling types beyond JSON spec (Path, Decimal, Enum, UUID, datetime)
 - Logging pipelines where serialization errors must not crash (safe_fallback mode)
 - Streaming APIs with large response bodies (json_lines_iter)
@@ -65,10 +71,12 @@ def get_orjson_default(
 Custom type resolution order for serializers.
 
 - Controls which types are checked first during serialization
-- Default order: `[Path, Decimal, set, frozenset]` (with Enum/datetime prepended if enabled)
+- Default order: `[Path, Decimal, set, frozenset]` (with Enum/datetime prepended if
+  enabled)
 - If `extend_default=True`, provided types are appended to default order
 - If `extend_default=False`, replaces default order entirely
-- Types already in orjson's native fast path (datetime/date/time/UUID) are automatically excluded unless `passthrough_datetime=True`
+- Types already in orjson's native fast path (datetime/date/time/UUID) are automatically
+  excluded unless `passthrough_datetime=True`
 
 **additional** : Mapping[type, Callable], optional
 
@@ -118,7 +126,8 @@ Enable passthrough mode for datetime serialization.
 
 - `False`: orjson handles datetime natively (ISO 8601 format)
 - `True`: datetime routed through default handler (calls `.isoformat()`)
-- Must also set `OPT_PASSTHROUGH_DATETIME` in options via `make_options(passthrough_datetime=True)`
+- Must also set `OPT_PASSTHROUGH_DATETIME` in options via
+  `make_options(passthrough_datetime=True)`
 - Rarely needed unless custom datetime formatting required
 
 **safe_fallback** : bool, default False
@@ -254,10 +263,14 @@ def log_event(event: dict):
 **Notes:**
 
 - **Caching**: Default handlers are cached via `_cached_default()` (LRU cache size 128)
-- **Duck Typing**: Automatically handles objects with `.model_dump()` (Pydantic) or `.dict()` methods
-- **Performance**: Type resolution uses isinstance checks with caching (first lookup slow, subsequent fast)
-- **Native Types**: orjson natively serializes str/int/float/bool/None/list/dict/datetime/date/time/UUID at C speed
-- **Passthrough**: `passthrough_datetime=True` requires `OPT_PASSTHROUGH_DATETIME` flag in options (use `make_options(passthrough_datetime=True)`)
+- **Duck Typing**: Automatically handles objects with `.model_dump()` (Pydantic) or
+  `.dict()` methods
+- **Performance**: Type resolution uses isinstance checks with caching (first lookup
+  slow, subsequent fast)
+- **Native Types**: orjson natively serializes
+  str/int/float/bool/None/list/dict/datetime/date/time/UUID at C speed
+- **Passthrough**: `passthrough_datetime=True` requires `OPT_PASSTHROUGH_DATETIME` flag
+  in options (use `make_options(passthrough_datetime=True)`)
 
 **See Also:**
 
@@ -431,21 +444,15 @@ def json_dumpb(
 
 Object to serialize (dict, list, primitives, custom types).
 
-**pretty** : bool, default False
-**sort_keys** : bool, default False
-**naive_utc** : bool, default False
-**utc_z** : bool, default False
-**append_newline** : bool, default False
-**allow_non_str_keys** : bool, default False
+**pretty** : bool, default False **sort_keys** : bool, default False **naive_utc** :
+bool, default False **utc_z** : bool, default False **append_newline** : bool, default
+False **allow_non_str_keys** : bool, default False
 
 Passed to `make_options()`. See `make_options()` documentation.
 
-**deterministic_sets** : bool, default False
-**decimal_as_float** : bool, default False
-**enum_as_name** : bool, default False
-**passthrough_datetime** : bool, default False
-**safe_fallback** : bool, default False
-**fallback_clip** : int, default 2048
+**deterministic_sets** : bool, default False **decimal_as_float** : bool, default False
+**enum_as_name** : bool, default False **passthrough_datetime** : bool, default False
+**safe_fallback** : bool, default False **fallback_clip** : int, default 2048
 
 Passed to `get_orjson_default()`. See `get_orjson_default()` documentation.
 
@@ -514,7 +521,8 @@ b'{"id":1}\n'
 
 - **Prefer bytes**: Direct bytes output is fastest (no decode overhead)
 - **Caching**: Default handlers cached via `_cached_default()` (LRU size 128)
-- **passthrough_datetime**: If `True`, must set both `passthrough_datetime=True` in params AND in options
+- **passthrough_datetime**: If `True`, must set both `passthrough_datetime=True` in
+  params AND in options
 - **safe_fallback**: Only use for logging. Produces lossy output for unknown types.
 
 **See Also:**
@@ -627,17 +635,13 @@ def json_lines_iter(
 
 Iterable of objects to serialize (list, generator, etc.).
 
-**deterministic_sets** : bool, default False
-**decimal_as_float** : bool, default False
-**enum_as_name** : bool, default False
-**passthrough_datetime** : bool, default False
-**safe_fallback** : bool, default False
-**fallback_clip** : int, default 2048
+**deterministic_sets** : bool, default False **decimal_as_float** : bool, default False
+**enum_as_name** : bool, default False **passthrough_datetime** : bool, default False
+**safe_fallback** : bool, default False **fallback_clip** : int, default 2048
 
 Passed to `get_orjson_default()`. See `get_orjson_default()` documentation.
 
-**naive_utc** : bool, default False
-**utc_z** : bool, default False
+**naive_utc** : bool, default False **utc_z** : bool, default False
 **allow_non_str_keys** : bool, default False
 
 Passed to `make_options()`. See `make_options()` documentation.
@@ -802,7 +806,8 @@ Parameters passed to `json_dumpb()` (see `json_dumpb()` documentation).
 **Notes:**
 
 - **Round-Trip**: `orjson.loads(orjson.dumps(obj, default=default))`
-- **Type Coercion**: Converts non-JSON types via default handler, then back to primitives
+- **Type Coercion**: Converts non-JSON types via default handler, then back to
+  primitives
 - **Use Case**: Normalize objects to JSON-compatible dicts for storage/transmission
 
 **See Also:**
@@ -925,7 +930,8 @@ result = json_dumpb(data, default=custom_default)
 # datetime objects converted via custom handler
 ```
 
-See [Tutorials](../../tutorials/) for advanced type serialization patterns and custom handlers.
+See [Tutorials](../../tutorials/) for advanced type serialization patterns and custom
+handlers.
 
 ## Design Rationale
 
@@ -942,13 +948,15 @@ orjson provides 2-5× faster serialization than stdlib json with additional bene
 
 `json_dumpb()` returns bytes to match orjson's native API:
 
-1. **Performance**: Avoids decode overhead when bytes acceptable (HTTP responses, file writes)
+1. **Performance**: Avoids decode overhead when bytes acceptable (HTTP responses, file
+   writes)
 2. **Explicitness**: Caller controls decode timing and error handling
 3. **Compatibility**: `json_dumps()` wrapper provides familiar str-returning API
 
 ### Why Cached Default Handlers?
 
-Default handler creation is relatively expensive (builds serializer dict, processes order list). Caching provides:
+Default handler creation is relatively expensive (builds serializer dict, processes
+order list). Caching provides:
 
 1. **Performance**: Amortizes setup cost across calls
 2. **Convenience**: No need to manually cache handlers
@@ -1134,7 +1142,8 @@ def export_results(output_path: Path):
 export_results(Path("export.ndjson"))
 ```
 
-See [Tutorials](../../tutorials/) for large-scale data export patterns and streaming examples.
+See [Tutorials](../../tutorials/) for large-scale data export patterns and streaming
+examples.
 
 ### Example 4: Deterministic Hashing
 

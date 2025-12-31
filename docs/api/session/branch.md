@@ -4,22 +4,28 @@
 
 ## Overview
 
-`Branch` extends `Progression` with session binding and access control. It represents a conversation thread, tracking message UUIDs while enforcing permissions via `capabilities` (output schemas) and `resources` (services).
+`Branch` extends `Progression` with session binding and access control. It represents a
+conversation thread, tracking message UUIDs while enforcing permissions via
+`capabilities` (output schemas) and `resources` (services).
 
-**Use Branch for**: Conversation threads with access control, multi-model workflows, structured output validation, parallel exploration (forking).
+**Use Branch for**: Conversation threads with access control, multi-model workflows,
+structured output validation, parallel exploration (forking).
 
-**Note**: Operations are invoked via `Session.conduct()`, not Branch methods. Branch = state, Session = operations.
+**Note**: Operations are invoked via `Session.conduct()`, not Branch methods. Branch =
+state, Session = operations.
 
-See [Progression](../base/progression.md) and [Session](session.md) for related components.
+See [Progression](../base/progression.md) and [Session](session.md) for related
+components.
 
 ## Capability-Based Security
 
-| Attribute | Controls | Default | Note |
-|-----------|----------|---------|------|
-| `capabilities` | Output schema names | `set()` (empty = no access) | Checked during operate/communicate |
-| `resources` | Service names (models, tools) | `set()` (empty = no access) | Checked during service resolution |
+| Attribute      | Controls                      | Default                     | Note                               |
+| -------------- | ----------------------------- | --------------------------- | ---------------------------------- |
+| `capabilities` | Output schema names           | `set()` (empty = no access) | Checked during operate/communicate |
+| `resources`    | Service names (models, tools) | `set()` (empty = no access) | Checked during service resolution  |
 
-**Important**: Empty sets deny all access. You must explicitly grant permissions for operations to succeed.
+**Important**: Empty sets deny all access. You must explicitly grant permissions for
+operations to succeed.
 
 ```python
 branch = session.create_branch(
@@ -57,29 +63,29 @@ class Branch(Progression):
 
 ## Parameters
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `session_id` | `UUID` (required, frozen) | - | Parent session UUID (immutable) |
-| `name` | `str` | `None` (auto: `branch_{n}`) | Human-readable name |
-| `order` | `list[UUID]` | `[]` | Message UUIDs (system at index 0) |
-| `system_message` | `UUID` | `None` | System message UUID at order[0] |
-| `capabilities` | `set[str]` | `set()` | Allowed output schemas (empty = unrestricted) |
-| `resources` | `set[str]` | `set()` | Allowed services (empty = unrestricted) |
-| `id`, `created_at`, `metadata` | - | - | Inherited from Element |
+| Parameter                      | Type                      | Default                     | Description                                   |
+| ------------------------------ | ------------------------- | --------------------------- | --------------------------------------------- |
+| `session_id`                   | `UUID` (required, frozen) | -                           | Parent session UUID (immutable)               |
+| `name`                         | `str`                     | `None` (auto: `branch_{n}`) | Human-readable name                           |
+| `order`                        | `list[UUID]`              | `[]`                        | Message UUIDs (system at index 0)             |
+| `system_message`               | `UUID`                    | `None`                      | System message UUID at order[0]               |
+| `capabilities`                 | `set[str]`                | `set()`                     | Allowed output schemas (empty = unrestricted) |
+| `resources`                    | `set[str]`                | `set()`                     | Allowed services (empty = unrestricted)       |
+| `id`, `created_at`, `metadata` | -                         | -                           | Inherited from Element                        |
 
 ## Attributes
 
-| Attribute | Type | Mutable | Inherited | Description |
-|-----------|------|---------|-----------|-------------|
-| `session_id` | `UUID` | No | No | Parent session UUID (frozen) |
-| `system_message` | `UUID \| None` | Yes | No | System message UUID at order[0] |
-| `capabilities` | `set[str]` | Yes | No | Allowed output schema names |
-| `resources` | `set[str]` | Yes | No | Allowed backend service names |
-| `name` | `str \| None` | Yes | Yes | Branch name for identification |
-| `order` | `list[UUID]` | Yes | Yes | Ordered message UUIDs |
-| `id` | `UUID` | No | Yes | Unique identifier (frozen) |
-| `created_at` | `datetime` | No | Yes | Creation timestamp (frozen) |
-| `metadata` | `dict[str, Any]` | Yes | Yes | Additional metadata |
+| Attribute        | Type             | Mutable | Inherited | Description                     |
+| ---------------- | ---------------- | ------- | --------- | ------------------------------- |
+| `session_id`     | `UUID`           | No      | No        | Parent session UUID (frozen)    |
+| `system_message` | `UUID \| None`   | Yes     | No        | System message UUID at order[0] |
+| `capabilities`   | `set[str]`       | Yes     | No        | Allowed output schema names     |
+| `resources`      | `set[str]`       | Yes     | No        | Allowed backend service names   |
+| `name`           | `str \| None`    | Yes     | Yes       | Branch name for identification  |
+| `order`          | `list[UUID]`     | Yes     | Yes       | Ordered message UUIDs           |
+| `id`             | `UUID`           | No      | Yes       | Unique identifier (frozen)      |
+| `created_at`     | `datetime`       | No      | Yes       | Creation timestamp (frozen)     |
+| `metadata`       | `dict[str, Any]` | Yes     | Yes       | Additional metadata             |
 
 ## Methods
 
@@ -95,7 +101,8 @@ def set_system_message(self, message_id: UUID | Message) -> None
 
 ### Inherited from Progression
 
-**List ops**: `append()`, `extend()`, `insert()`, `remove()`, `pop()`, `popleft()`, `clear()`
+**List ops**: `append()`, `extend()`, `insert()`, `remove()`, `pop()`, `popleft()`,
+`clear()`
 
 **Workflow ops**: `move()`, `swap()`, `reverse()`
 
@@ -109,17 +116,22 @@ def set_system_message(self, message_id: UUID | Message) -> None
 
 ## Protocol Implementations
 
-Inherits: **Observable**, **Serializable**, **Deserializable**, **Hashable**, **Containable**
+Inherits: **Observable**, **Serializable**, **Deserializable**, **Hashable**,
+**Containable**
 
 ## Design Rationale
 
-**Capability-Based Security**: Fine-grained permission control at conversation level. Empty sets default to unrestricted for development convenience.
+**Capability-Based Security**: Fine-grained permission control at conversation level.
+Empty sets default to unrestricted for development convenience.
 
-**Frozen session_id**: Prevents accidental cross-session corruption. Branch messages are stored in Session's Flow.
+**Frozen session_id**: Prevents accidental cross-session corruption. Branch messages are
+stored in Session's Flow.
 
-**System Message at order[0]**: LLM APIs expect system first. `set_system_message()` maintains this invariant.
+**System Message at order[0]**: LLM APIs expect system first. `set_system_message()`
+maintains this invariant.
 
-**Operations via Session.conduct()**: Branch = state, Session = operations. Access control validated at Session level.
+**Operations via Session.conduct()**: Branch = state, Session = operations. Access
+control validated at Session level.
 
 ## Usage Patterns
 
@@ -178,7 +190,8 @@ Never instantiate Branch directly. Use `session.create_branch()`.
 
 ## See Also
 
-- [Progression](../base/progression.md), [Session](session.md), [Message](message.md), [Element](../base/element.md)
+- [Progression](../base/progression.md), [Session](session.md), [Message](message.md),
+  [Element](../base/element.md)
 
 ## Examples
 

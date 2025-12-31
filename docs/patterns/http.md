@@ -4,7 +4,9 @@
 
 ## Overview
 
-lionpride's sentinel values enable **precise PATCH semantics** for HTTP APIs. This guide covers partial update patterns, three-state field handling (value/null/unset), and FastAPI/Pydantic integration for type-safe REST APIs.
+lionpride's sentinel values enable **precise PATCH semantics** for HTTP APIs. This guide
+covers partial update patterns, three-state field handling (value/null/unset), and
+FastAPI/Pydantic integration for type-safe REST APIs.
 
 **Key Topics:**
 

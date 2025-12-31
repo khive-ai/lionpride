@@ -4,7 +4,9 @@
 
 ## Overview
 
-The `rules` module provides a validation pipeline for structured LLM outputs. It automatically assigns validation rules based on field types and supports auto-correction of invalid values.
+The `rules` module provides a validation pipeline for structured LLM outputs. It
+automatically assigns validation rules based on field types and supports auto-correction
+of invalid values.
 
 **Validation Pipeline:**
 
@@ -14,52 +16,54 @@ Spec.base_type -> auto Rule assignment -> validate spec-by-spec -> Operable.crea
 
 **Key Capabilities:**
 
-- **RuleRegistry**: Maps Python types to Rule classes (auto-assignment from Spec.base_type)
+- **RuleRegistry**: Maps Python types to Rule classes (auto-assignment from
+  Spec.base_type)
 - **Built-in Rules**: StringRule, NumberRule, BooleanRule, MappingRule, ChoiceRule, etc.
 - **Validator**: Orchestrates rules over Operable specs with parallel execution
 - **Auto-Fix**: Convert invalid LLM outputs to valid values (e.g., `"0.95"` -> `0.95`)
 
-The rules module integrates with the type system (`Spec`, `Operable`) to provide end-to-end validation from schema definition to validated Pydantic model instances.
+The rules module integrates with the type system (`Spec`, `Operable`) to provide
+end-to-end validation from schema definition to validated Pydantic model instances.
 
 ## Classes
 
 ### Core
 
-| Class | Description |
-|-------|-------------|
-| [Validator](validator.md) | Orchestrates validation over Operable specs |
-| [RuleRegistry](registry.md) | Maps types to Rule classes |
-| `get_default_registry` | Get the default rule registry |
+| Class                       | Description                                 |
+| --------------------------- | ------------------------------------------- |
+| [Validator](validator.md)   | Orchestrates validation over Operable specs |
+| [RuleRegistry](registry.md) | Maps types to Rule classes                  |
+| `get_default_registry`      | Get the default rule registry               |
 
 ### Rule Base
 
-| Class | Description |
-|-------|-------------|
-| [Rule](rules.md) | Base class for all validation rules |
-| `RuleParams` | Parameters for rule configuration |
-| `RuleQualifier` | Rule matching qualifiers |
-| `ValidationError` | Validation failure exception |
+| Class             | Description                         |
+| ----------------- | ----------------------------------- |
+| [Rule](rules.md)  | Base class for all validation rules |
+| `RuleParams`      | Parameters for rule configuration   |
+| `RuleQualifier`   | Rule matching qualifiers            |
+| `ValidationError` | Validation failure exception        |
 
 ### Built-in Rules
 
-| Class | Type | Description |
-|-------|------|-------------|
-| `StringRule` | `str` | Strip, case conversion, length limits, patterns |
-| `NumberRule` | `int`, `float` | Bounds checking, precision, rounding |
-| `BooleanRule` | `bool` | Truthy/falsy conversion |
-| `ChoiceRule` | Enum/Literal | Discrete value validation |
-| `MappingRule` | `dict` | Key/value validation |
-| `BaseModelRule` | `BaseModel` | Pydantic model validation |
-| `ActionRequestRule` | `ActionRequest` | Tool call validation |
-| `ReasonRule` | `Reason` | Reasoning chain validation |
+| Class               | Type            | Description                                     |
+| ------------------- | --------------- | ----------------------------------------------- |
+| `StringRule`        | `str`           | Strip, case conversion, length limits, patterns |
+| `NumberRule`        | `int`, `float`  | Bounds checking, precision, rounding            |
+| `BooleanRule`       | `bool`          | Truthy/falsy conversion                         |
+| `ChoiceRule`        | Enum/Literal    | Discrete value validation                       |
+| `MappingRule`       | `dict`          | Key/value validation                            |
+| `BaseModelRule`     | `BaseModel`     | Pydantic model validation                       |
+| `ActionRequestRule` | `ActionRequest` | Tool call validation                            |
+| `ReasonRule`        | `Reason`        | Reasoning chain validation                      |
 
 ### Output Models
 
-| Class | Description |
-|-------|-------------|
-| `ActionRequest` | Tool/function call request model |
-| `ActionResponse` | Tool execution response model |
-| `Reason` | Reasoning chain with confidence |
+| Class            | Description                      |
+| ---------------- | -------------------------------- |
+| `ActionRequest`  | Tool/function call request model |
+| `ActionResponse` | Tool execution response model    |
+| `Reason`         | Reasoning chain with confidence  |
 
 ## Quick Start
 
@@ -107,7 +111,8 @@ StringRule(
 )
 ```
 
-**Auto-fix behavior:** Converts any type to string via `str()`, then re-validates against constraints.
+**Auto-fix behavior:** Converts any type to string via `str()`, then re-validates
+against constraints.
 
 ### NumberRule Options
 
@@ -120,7 +125,8 @@ NumberRule(
 )
 ```
 
-**Auto-fix behavior:** Converts strings to `int()` or `float()` based on target type, then validates against bounds.
+**Auto-fix behavior:** Converts strings to `int()` or `float()` based on target type,
+then validates against bounds.
 
 ### ChoiceRule Options
 
@@ -131,7 +137,8 @@ ChoiceRule(
 )
 ```
 
-**Auto-fix behavior:** For `case_sensitive=False`, normalizes to canonical case from the choices set.
+**Auto-fix behavior:** For `case_sensitive=False`, normalizes to canonical case from the
+choices set.
 
 ## See Also
 

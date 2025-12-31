@@ -4,11 +4,15 @@
 
 ## Overview
 
-The `lionpride.libs.concurrency` module provides **async-first concurrency primitives** that work across different async backends (asyncio, trio) through AnyIO. These primitives enable safe coordination between concurrent tasks with familiar synchronization patterns.
+The `lionpride.libs.concurrency` module provides **async-first concurrency primitives**
+that work across different async backends (asyncio, trio) through AnyIO. These
+primitives enable safe coordination between concurrent tasks with familiar
+synchronization patterns.
 
 **Key Capabilities:**
 
-- **Cross-Backend Compatibility**: Works with asyncio, trio, and other AnyIO-supported backends
+- **Cross-Backend Compatibility**: Works with asyncio, trio, and other AnyIO-supported
+  backends
 - **Async/Await Native**: Designed for modern async Python patterns
 - **Context Manager Support**: All primitives support `async with` for automatic cleanup
 - **Type-Safe**: Full type hints with generic support where applicable
@@ -252,12 +256,12 @@ Total capacity available. Must be > 0.
 
 ### Attributes
 
-| Attribute           | Type    | Description                                        |
-| ------------------- | ------- | -------------------------------------------------- |
-| `total_tokens`      | `float` | Total capacity limit (get/set property)           |
-| `available_tokens`  | `float` | Currently available capacity (read-only)          |
-| `borrowed_tokens`   | `float` | Currently borrowed capacity (read-only)           |
-| `remaining_tokens`  | `float` | Available capacity (deprecated, use `available_tokens`) |
+| Attribute          | Type    | Description                                             |
+| ------------------ | ------- | ------------------------------------------------------- |
+| `total_tokens`     | `float` | Total capacity limit (get/set property)                 |
+| `available_tokens` | `float` | Currently available capacity (read-only)                |
+| `borrowed_tokens`  | `float` | Currently borrowed capacity (read-only)                 |
+| `remaining_tokens` | `float` | Available capacity (deprecated, use `available_tokens`) |
 
 ### Methods
 
@@ -999,7 +1003,8 @@ The module provides thin wrappers around AnyIO primitives for several reasons:
 
 1. **Consistent API Surface**: Standardized interface across lionpride codebase
 2. **Type Safety**: Explicit type hints for better IDE support and static analysis
-3. **Future Flexibility**: Abstraction layer allows implementation changes without API breaks
+3. **Future Flexibility**: Abstraction layer allows implementation changes without API
+   breaks
 4. **Documentation**: Centralized documentation for team patterns
 
 ### Why Generic Queue?
@@ -1025,7 +1030,8 @@ This prevents runtime errors from incorrect item types.
 
 ### Why Both Blocking and Non-Blocking Queue Operations?
 
-`Queue` provides both `put()`/`get()` (blocking) and `put_nowait()`/`get_nowait()` (non-blocking) for different use cases:
+`Queue` provides both `put()`/`get()` (blocking) and `put_nowait()`/`get_nowait()`
+(non-blocking) for different use cases:
 
 - **Blocking**: Natural backpressure when producer/consumer speed differs
 - **Non-blocking**: Error handling when queue state matters (e.g., poll pattern)
@@ -1129,7 +1135,8 @@ sem = Semaphore(5)
 
 ## See Also
 
-- **AnyIO Documentation**: [https://anyio.readthedocs.io/](https://anyio.readthedocs.io/)
+- **AnyIO Documentation**:
+  [https://anyio.readthedocs.io/](https://anyio.readthedocs.io/)
 - **Related Modules**:
   - `lionpride.libs.concurrency.throttle`: Rate limiting utilities
   - `lionpride.core.broadcaster`: Event broadcasting with async primitives

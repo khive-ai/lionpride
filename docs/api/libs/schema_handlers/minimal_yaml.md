@@ -4,12 +4,17 @@
 
 ## Overview
 
-`minimal_yaml()` provides a streamlined YAML serialization function designed for human-readable output with minimal formatting noise. It automatically removes empty values, handles multiline strings elegantly, and produces clean, readable YAML suitable for configuration files, logs, and documentation.
+`minimal_yaml()` provides a streamlined YAML serialization function designed for
+human-readable output with minimal formatting noise. It automatically removes empty
+values, handles multiline strings elegantly, and produces clean, readable YAML suitable
+for configuration files, logs, and documentation.
 
 **Key Capabilities:**
 
-- **Clean Output**: Disables anchors/aliases (`&id001`, `*id001`) for straightforward serialization
-- **Smart String Formatting**: Uses block scalars (`|`) for multiline text, plain style for single-line
+- **Clean Output**: Disables anchors/aliases (`&id001`, `*id001`) for straightforward
+  serialization
+- **Smart String Formatting**: Uses block scalars (`|`) for multiline text, plain style
+  for single-line
 - **Automatic Pruning**: Recursively removes empty leaves and containers (configurable)
 - **JSON Auto-Parsing**: Automatically parses JSON strings for convenient conversion
 - **Flexible Configuration**: Customizable indentation, line width, and key sorting
@@ -51,18 +56,23 @@ def minimal_yaml(
 
 **value** : Any
 
-The Python object to serialize to YAML. Supports all standard Python types (dict, list, str, int, float, bool, None) and nested structures.
+The Python object to serialize to YAML. Supports all standard Python types (dict, list,
+str, int, float, bool, None) and nested structures.
 
-- **Type coercion**: If `value` is a JSON string, automatically parses to dict/list before serialization (fails gracefully if not valid JSON)
+- **Type coercion**: If `value` is a JSON string, automatically parses to dict/list
+  before serialization (fails gracefully if not valid JSON)
 - **Nested support**: Handles arbitrarily nested dicts, lists, tuples, sets
-- **Custom objects**: Non-serializable objects may raise `yaml.representer.RepresenterError`
+- **Custom objects**: Non-serializable objects may raise
+  `yaml.representer.RepresenterError`
 
 **drop_empties** : bool, default True
 
 Whether to recursively remove empty values before serialization.
 
-- **Behavior**: Removes `None`, empty strings (`""`), empty dicts (`{}`), empty lists/tuples/sets (`[]`)
-- **Preserves**: `0`, `False`, non-empty strings (including whitespace-only if not `.strip()`-empty)
+- **Behavior**: Removes `None`, empty strings (`""`), empty dicts (`{}`), empty
+  lists/tuples/sets (`[]`)
+- **Preserves**: `0`, `False`, non-empty strings (including whitespace-only if not
+  `.strip()`-empty)
 - **Recursive**: Prunes empty leaves first, then removes containers that become empty
 - **When False**: Preserves all values including empty collections
 
@@ -86,7 +96,8 @@ Maximum line width before wrapping. Default effectively disables wrapping.
 
 Whether to sort dictionary keys alphabetically in output.
 
-- **Behavior**: When `True`, produces deterministic output (useful for diffs, version control)
+- **Behavior**: When `True`, produces deterministic output (useful for diffs, version
+  control)
 - **Performance**: Slight overhead for large dicts
 - **Default**: Preserves insertion order (Python 3.7+ dict behavior)
 
@@ -100,7 +111,8 @@ Whether to sort dictionary keys alphabetically in output.
 
 ## Internal Components
 
-While the public API is a single function, understanding the internal components helps explain behavior:
+While the public API is a single function, understanding the internal components helps
+explain behavior:
 
 ### MinimalDumper
 
@@ -108,8 +120,10 @@ Custom YAML dumper class extending `yaml.SafeDumper` with minimal formatting.
 
 **Key Features:**
 
-- **Disables aliases**: `ignore_aliases()` returns `True`, preventing `&id001`/`*id001` reference notation
-- **Custom string representation**: Uses `_represent_str()` for clean multiline formatting
+- **Disables aliases**: `ignore_aliases()` returns `True`, preventing `&id001`/`*id001`
+  reference notation
+- **Custom string representation**: Uses `_represent_str()` for clean multiline
+  formatting
 - **Safe dumper**: Inherits safety constraints (no arbitrary Python object execution)
 
 ### _represent_str(dumper, data)
@@ -361,34 +375,37 @@ print(yaml_str)
 
 ### Why Disable Anchors/Aliases?
 
-YAML's anchor/alias system (`&id001`, `*id001`) is designed for object references and circular structures, but creates visual noise in typical serialization:
+YAML's anchor/alias system (`&id001`, `*id001`) is designed for object references and
+circular structures, but creates visual noise in typical serialization:
 
 ```yaml
 # With anchors (standard yaml.dump)
 agents:
-- &id001
-  name: agent1
-  config: &id002 {}
-- name: agent2
-  config: *id002
+  - &id001
+    name: agent1
+    config: &id002 {}
+  - name: agent2
+    config: *id002
 
-# Minimal YAML (cleaner)
+  # Minimal YAML (cleaner)
 agents:
-- name: agent1
-- name: agent2
+  - name: agent1
+  - name: agent2
 ```
 
-**Trade-off**: Cannot preserve object identity across deserialization (each reference becomes independent copy). Acceptable for most configuration/logging use cases.
+**Trade-off**: Cannot preserve object identity across deserialization (each reference
+becomes independent copy). Acceptable for most configuration/logging use cases.
 
 ### Why Automatic Pruning?
 
-Configuration files and logs often accumulate empty placeholder values that add noise without information:
+Configuration files and logs often accumulate empty placeholder values that add noise
+without information:
 
 ```yaml
 # Without pruning (verbose)
 config:
   name: app
-  description: ''
+  description: ""
   tags: []
   metadata: null
   features:
@@ -402,7 +419,8 @@ config:
     auth: true
 ```
 
-**Semantic preservation**: `0` and `False` are explicitly preserved because they carry meaning distinct from "absent" or "empty".
+**Semantic preservation**: `0` and `False` are explicitly preserved because they carry
+meaning distinct from "absent" or "empty".
 
 ### Why Block Scalars for Multiline?
 
@@ -419,7 +437,8 @@ description: |
   Line 3
 ```
 
-**Automatic detection**: Single-line strings use plain style (no quotes) unless YAML syntax requires them.
+**Automatic detection**: Single-line strings use plain style (no quotes) unless YAML
+syntax requires them.
 
 ### Why JSON Auto-Parsing?
 
@@ -435,11 +454,13 @@ yaml_str = minimal_yaml(data)
 yaml_str = minimal_yaml(json_str)  # One step
 ```
 
-**Safety**: Fails gracefully on invalid JSON (treats as plain string), no exceptions raised.
+**Safety**: Fails gracefully on invalid JSON (treats as plain string), no exceptions
+raised.
 
 ### Why Default to No Line Wrapping?
 
-Line wrapping can break semantic meaning in certain contexts (URLs, code snippets). Default to no wrapping for safety:
+Line wrapping can break semantic meaning in certain contexts (URLs, code snippets).
+Default to no wrapping for safety:
 
 ```yaml
 # With wrapping (line_width=40)
@@ -450,7 +471,8 @@ url: https://api.example.com/very/long/
 url: https://api.example.com/very/long/path
 ```
 
-Users can opt-in to wrapping for specific use cases (e.g., `line_width=80` for documentation).
+Users can opt-in to wrapping for specific use cases (e.g., `line_width=80` for
+documentation).
 
 ## Common Pitfalls
 
@@ -493,7 +515,8 @@ yaml_str = minimal_yaml(data)
 #   setting: value  # Independent copy, not reference
 ```
 
-**Solution**: This is intentional (clean output). If object identity matters, use standard `yaml.dump()` with anchors enabled.
+**Solution**: This is intentional (clean output). If object identity matters, use
+standard `yaml.dump()` with anchors enabled.
 
 ### Pitfall 3: Forgetting Zero and False Are Preserved
 
@@ -510,7 +533,8 @@ yaml_str = minimal_yaml(data)
 # (description pruned)
 ```
 
-**Solution**: This is intentional (semantic correctness). Use explicit filtering before serialization if needed.
+**Solution**: This is intentional (semantic correctness). Use explicit filtering before
+serialization if needed.
 
 ### Pitfall 4: Non-Serializable Custom Objects
 
@@ -524,7 +548,8 @@ data = {"timestamp": datetime.now()}
 # yaml_str = minimal_yaml(data)  # RepresenterError!
 ```
 
-**Solution**: Convert to serializable types first (use `.isoformat()`, `.to_dict()`, etc.).
+**Solution**: Convert to serializable types first (use `.isoformat()`, `.to_dict()`,
+etc.).
 
 ```python
 data = {"timestamp": datetime.now().isoformat()}
@@ -541,7 +566,8 @@ Recursive pruning traverses entire data structure:
 - **Medium data (1-100KB)**: Noticeable overhead (~10-50ms)
 - **Large data (>100KB)**: May be significant (~100ms+)
 
-**Optimization**: Disable pruning (`drop_empties=False`) for large structures when performance matters.
+**Optimization**: Disable pruning (`drop_empties=False`) for large structures when
+performance matters.
 
 ### JSON Auto-Parsing
 
@@ -554,16 +580,17 @@ JSON parsing adds overhead for string inputs:
 
 ### Comparison to Alternatives
 
-| Operation                          | minimal_yaml() | yaml.dump() | orjson   |
-| ---------------------------------- | -------------- | ----------- | -------- |
-| Small dict (10 keys)               | ~2ms           | ~1.5ms      | ~0.1ms   |
-| Medium dict (100 keys)             | ~15ms          | ~10ms       | ~0.5ms   |
-| Large dict (1000 keys)             | ~150ms         | ~100ms      | ~5ms     |
-| Readability (human)                | Excellent      | Good        | N/A      |
-| Empty value handling               | Automatic      | Manual      | N/A      |
-| Multiline string formatting        | Automatic      | Configurable| N/A      |
+| Operation                   | minimal_yaml() | yaml.dump()  | orjson |
+| --------------------------- | -------------- | ------------ | ------ |
+| Small dict (10 keys)        | ~2ms           | ~1.5ms       | ~0.1ms |
+| Medium dict (100 keys)      | ~15ms          | ~10ms        | ~0.5ms |
+| Large dict (1000 keys)      | ~150ms         | ~100ms       | ~5ms   |
+| Readability (human)         | Excellent      | Good         | N/A    |
+| Empty value handling        | Automatic      | Manual       | N/A    |
+| Multiline string formatting | Automatic      | Configurable | N/A    |
 
-**Recommendation**: Use `minimal_yaml()` for human-facing output, `orjson` for performance-critical machine-to-machine serialization.
+**Recommendation**: Use `minimal_yaml()` for human-facing output, `orjson` for
+performance-critical machine-to-machine serialization.
 
 ## Examples
 
@@ -819,6 +846,7 @@ print(yaml_metrics)
   - `to_dict()` - Object to dictionary conversion
 - **External Libraries**:
   - [PyYAML](https://pyyaml.org/) - Underlying YAML library
-  - [orjson](https://github.com/ijl/orjson) - High-performance JSON (used for auto-parsing)
+  - [orjson](https://github.com/ijl/orjson) - High-performance JSON (used for
+    auto-parsing)
 - **Related Modules**:
   - `lionpride.libs.schema_handlers` - Schema handling utilities

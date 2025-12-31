@@ -4,23 +4,22 @@
 
 ## Overview
 
-`Node` is the polymorphic container in lionpride, extending Element with
-structured content storage, embedding support, and automatic subclass
-registration. It enables graph-of-graphs patterns through type-safe content
-composition and polymorphic deserialization.
+`Node` is the polymorphic container in lionpride, extending Element with structured
+content storage, embedding support, and automatic subclass registration. It enables
+graph-of-graphs patterns through type-safe content composition and polymorphic
+deserialization.
 
 **Key Capabilities:**
 
-- **Element Inheritance**: Auto-generated UUID, timestamps, metadata (from
-  Element base class)
-- **Structured Content**: `content: dict | Serializable | BaseModel | None`
-  enforces query-able, composable data
-- **Embedding Support**: Optional `embedding: list[float]` for vector search
-  with DB JSON string coercion
+- **Element Inheritance**: Auto-generated UUID, timestamps, metadata (from Element base
+  class)
+- **Structured Content**: `content: dict | Serializable | BaseModel | None` enforces
+  query-able, composable data
+- **Embedding Support**: Optional `embedding: list[float]` for vector search with DB
+  JSON string coercion
 - **Auto-Registry**: Subclasses automatically register in `NODE_REGISTRY` for
   polymorphic deserialization
-- **Pydapter Integration**: TOML/YAML adapters with isolated per-subclass
-  registries
+- **Pydapter Integration**: TOML/YAML adapters with isolated per-subclass registries
 
 **When to Use Node:**
 
@@ -78,16 +77,14 @@ class Node(Element, PydapterAdaptable, PydapterAsyncAdaptable):
 
 **content** : dict | Serializable | BaseModel | None, optional
 
-Structured data payload. Enforces query-able, composable types for PostgreSQL
-JSONB and graph-of-graphs patterns.
+Structured data payload. Enforces query-able, composable types for PostgreSQL JSONB and
+graph-of-graphs patterns.
 
 - **Accepted**: `dict`, `Serializable` protocol, Pydantic `BaseModel`, `None`
-- **Rejected**: Primitives (str, int, float, bool), collections (list, tuple,
-  set)
-- Auto-serialization: Nested Elements automatically serialize via
-  `_serialize_content`
-- Auto-deserialization: Dicts with `lion_class` metadata auto-deserialize to
-  correct type
+- **Rejected**: Primitives (str, int, float, bool), collections (list, tuple, set)
+- Auto-serialization: Nested Elements automatically serialize via `_serialize_content`
+- Auto-deserialization: Dicts with `lion_class` metadata auto-deserialize to correct
+  type
 - **Migration**: Wrap primitives in dict: `content={"value": "text"}` or use
   `Element.metadata`
 - Default: `None`
@@ -98,16 +95,15 @@ Optional embedding vector for semantic search and vector databases.
 
 - Type: `list[float]` (validated and normalized)
 - Validation: Must contain only numeric values, cannot be empty list
-- Coercion: Integers auto-convert to floats, JSON strings parse to lists during
-  INPUT validation
+- Coercion: Integers auto-convert to floats, JSON strings parse to lists during INPUT
+  validation
 - Default: `None`
 
 **id** : UUID or str, optional (inherited from Element)
 
 Unique identifier. Auto-generated via `uuid4()` if not provided. Frozen field.
 
-**created_at** : datetime or str or int or float, optional (inherited from
-Element)
+**created_at** : datetime or str or int or float, optional (inherited from Element)
 
 UTC creation timestamp. Auto-generated if not provided. Frozen field.
 
@@ -117,13 +113,13 @@ Arbitrary metadata. Auto-converts non-dict objects via `to_dict()`.
 
 ## Attributes
 
-| Attribute    | Type                | Frozen | Inherited | Description                        |
-| ------------ | ------------------- | ------ | --------- | ---------------------------------- |
-| `content`    | `dict[str, Any] \| Serializable \| BaseModel \| None` | No | No | Structured content payload |
-| `embedding`  | `list[float]` or None | No     | No        | Optional embedding vector          |
-| `id`         | `UUID`              | Yes    | Element   | Unique identifier                  |
-| `created_at` | `datetime`          | Yes    | Element   | UTC creation timestamp             |
-| `metadata`   | `dict[str, Any]`    | No     | Element   | Arbitrary metadata                 |
+| Attribute    | Type                                                  | Frozen | Inherited | Description                |
+| ------------ | ----------------------------------------------------- | ------ | --------- | -------------------------- |
+| `content`    | `dict[str, Any] \| Serializable \| BaseModel \| None` | No     | No        | Structured content payload |
+| `embedding`  | `list[float]` or None                                 | No     | No        | Optional embedding vector  |
+| `id`         | `UUID`                                                | Yes    | Element   | Unique identifier          |
+| `created_at` | `datetime`                                            | Yes    | Element   | UTC creation timestamp     |
+| `metadata`   | `dict[str, Any]`                                      | No     | Element   | Arbitrary metadata         |
 
 ## Methods
 
@@ -131,7 +127,8 @@ Arbitrary metadata. Auto-converts non-dict objects via `to_dict()`.
 
 #### `from_dict()`
 
-Deserialize from dictionary with **polymorphic type restoration** and optional **content deserialization** for round-trip transformations.
+Deserialize from dictionary with **polymorphic type restoration** and optional **content
+deserialization** for round-trip transformations.
 
 **Signature:**
 
@@ -149,17 +146,17 @@ def from_dict(
 **Parameters:**
 
 - `data` (dict[str, Any]): Serialized node dictionary (from `to_dict()`)
-- `meta_key` (str, optional): Restore metadata from this key (db mode
-  compatibility). Default: `'metadata'`
-- `content_deserializer` (Callable[[Any], Any], optional): Custom function to deserialize content field.
-  Applied to content field before model_validate. Enables round-trip serialization with custom transformations.
-  Must be symmetric inverse of content_serializer used in to_dict(). Default: None
+- `meta_key` (str, optional): Restore metadata from this key (db mode compatibility).
+  Default: `'metadata'`
+- `content_deserializer` (Callable[[Any], Any], optional): Custom function to
+  deserialize content field. Applied to content field before model_validate. Enables
+  round-trip serialization with custom transformations. Must be symmetric inverse of
+  content_serializer used in to_dict(). Default: None
 - `**kwargs` (Any): Forwarded to Pydantic's `model_validate()`
 
 **Returns:**
 
-- Node: Deserialized Node instance (or correct subclass if `lion_class`
-  present)
+- Node: Deserialized Node instance (or correct subclass if `lion_class` present)
 
 **Examples:**
 
@@ -223,8 +220,8 @@ restored = Node.from_dict(data, content_deserializer=decrypt)
 3. If found and different from calling class, delegates to target's `from_dict()`
 4. Returns instance of correct subclass
 
-This enables heterogeneous collections from database queries to deserialize
-with correct types.
+This enables heterogeneous collections from database queries to deserialize with correct
+types.
 
 **Metadata Key Handling:**
 
@@ -251,8 +248,7 @@ def adapt_to(
 
 **Parameters:**
 
-- `obj_key` (str): Adapter key (e.g., `"toml"`, `"yaml"`). Must register
-  adapter first!
+- `obj_key` (str): Adapter key (e.g., `"toml"`, `"yaml"`). Must register adapter first!
 - `many` (bool, optional): Adapt multiple instances. Default: `False`
 - `**kwargs` (Any): Forwarded to adapter. Defaults: `adapt_meth="to_dict"`,
   `adapt_kw={"mode": "db"}`
@@ -292,8 +288,8 @@ custom_toml = custom.adapt_to("toml")
 **Isolated Registry Pattern (Rust-like Explicit):**
 
 Base `Node` has TOML/YAML adapters pre-registered. Subclasses get **isolated
-registries** and do NOT inherit adapters. This prevents adapter pollution while
-keeping base Node convenient.
+registries** and do NOT inherit adapters. This prevents adapter pollution while keeping
+base Node convenient.
 
 ```python
 # Base Node works
@@ -403,13 +399,18 @@ def to_dict(
 
 **Parameters:**
 
-- `mode` (str, optional): Serialization mode ('python', 'json', or 'db'). Default: 'python'
-- `created_at_format` (str, optional): Format for created_at field. Default: auto-selected by mode
-- `meta_key` (str, optional): Rename metadata field. Default: 'node_metadata' for db mode
-- `embedding_format` (str, optional): Format for embedding serialization ('pgvector', 'jsonb', or 'list'). Default: 'list'
-- `content_serializer` (Callable[[Any], Any], optional): Custom function to serialize content field.
-  If provided, content is excluded from model_dump and replaced with `content_serializer(self.content)` result.
-  Default: None (use default field serialization)
+- `mode` (str, optional): Serialization mode ('python', 'json', or 'db'). Default:
+  'python'
+- `created_at_format` (str, optional): Format for created_at field. Default:
+  auto-selected by mode
+- `meta_key` (str, optional): Rename metadata field. Default: 'node_metadata' for db
+  mode
+- `embedding_format` (str, optional): Format for embedding serialization ('pgvector',
+  'jsonb', or 'list'). Default: 'list'
+- `content_serializer` (Callable[[Any], Any], optional): Custom function to serialize
+  content field. If provided, content is excluded from model_dump and replaced with
+  `content_serializer(self.content)` result. Default: None (use default field
+  serialization)
 - `**kwargs` (Any): Additional arguments passed to model_dump()
 
 **Returns:**
@@ -453,7 +454,8 @@ data = node.to_dict(
 
 **See Also:**
 
-- `from_dict()`: Deserialize from dictionary with `content_deserializer` for round-trip support
+- `from_dict()`: Deserialize from dictionary with `content_deserializer` for round-trip
+  support
 
 **Notes:**
 
@@ -491,13 +493,14 @@ restored = Node.from_dict(data, content_deserializer=inverse_fn)
 # restored.content == original.content ✓
 ```
 
-**Important**: Always provide symmetric `content_deserializer` to `from_dict()` for round-trip correctness.
-Without deserializer, content remains in transformed format after deserialization.
+**Important**: Always provide symmetric `content_deserializer` to `from_dict()` for
+round-trip correctness. Without deserializer, content remains in transformed format
+after deserialization.
 
 ### Special Methods (Inherited from Element)
 
-Node inherits Element methods with Node-specific behavior for `to_dict()` (documented above).
-See [Element API documentation](element.md) for other methods:
+Node inherits Element methods with Node-specific behavior for `to_dict()` (documented
+above). See [Element API documentation](element.md) for other methods:
 
 - `to_json(pretty=False, **kwargs)`: Serialize to JSON string
 - `from_json(json_str, **kwargs)`: Deserialize from JSON string
@@ -524,8 +527,7 @@ Node implements six core protocols (three from Element + three additional):
 **Node-Specific Behavior**:
 
 - `content` field: Nested Elements auto-serialize via `_serialize_content`
-- `embedding` field: Serializes as JSON string in db mode for database
-  compatibility
+- `embedding` field: Serializes as JSON string in db mode for database compatibility
 
 ### Deserializable
 
@@ -562,7 +564,8 @@ Node implements six core protocols (three from Element + three additional):
 - `adapt_to_async(obj_key, **kwargs)`: Async external format conversion
 - `adapt_from_async(obj, obj_key, **kwargs)`: Async deserialization
 
-See [Protocols Guide](../../user_guide/protocols.md) for implementation patterns and protocol design principles.
+See [Protocols Guide](../../user_guide/protocols.md) for implementation patterns and
+protocol design principles.
 
 ## NODE_REGISTRY
 
@@ -900,14 +903,14 @@ type(node.content).__name__  # 'Element'
 
 `content: Any` enables composition over inheritance:
 
-1. **Flexibility**: Single Node type handles all data shapes (primitives,
-   collections, nested structures)
+1. **Flexibility**: Single Node type handles all data shapes (primitives, collections,
+   nested structures)
 2. **Graph-of-Graphs**: Node can contain Graph which contains Nodes (recursive
    composition)
 3. **No Schema Lock-In**: Add new data types without modifying Node definition
 
-For **typed content validation**, create custom Node subclasses with specific
-field types.
+For **typed content validation**, create custom Node subclasses with specific field
+types.
 
 ### Why Auto-Registry?
 
@@ -932,16 +935,15 @@ class PersonNode(Node):
 # ✓ Automatically registered via __pydantic_init_subclass__
 ```
 
-This zero-config pattern reduces errors and makes polymorphic deserialization
-"just work".
+This zero-config pattern reduces errors and makes polymorphic deserialization "just
+work".
 
 ### Why Isolated Adapter Registries?
 
-Subclasses get isolated pydapter registries (Rust-like explicit pattern) to
-prevent adapter pollution:
+Subclasses get isolated pydapter registries (Rust-like explicit pattern) to prevent
+adapter pollution:
 
-1. **Explicit > Implicit**: Subclass authors explicitly choose which formats to
-   support
+1. **Explicit > Implicit**: Subclass authors explicitly choose which formats to support
 2. **No Pollution**: Base Node's TOML/YAML don't leak to unrelated subclasses
 3. **Base Convenience**: Base Node still has built-in adapters for common usage
 
@@ -951,12 +953,9 @@ Trade-off: More verbose but safer and more maintainable for large codebases.
 
 `embedding: list[float]` with JSON string coercion enables vector search:
 
-1. **Semantic Search**: Store embeddings alongside content for similarity
-   queries
-2. **DB Compatibility**: Graph databases (Neo4j) store embeddings as JSON
-   strings
-3. **Type Safety**: Validation ensures only numeric values, auto-coerces ints to
-   floats
+1. **Semantic Search**: Store embeddings alongside content for similarity queries
+2. **DB Compatibility**: Graph databases (Neo4j) store embeddings as JSON strings
+3. **Type Safety**: Validation ensures only numeric values, auto-coerces ints to floats
 
 ## See Also
 
@@ -966,7 +965,10 @@ Trade-off: More verbose but safer and more maintainable for large codebases.
   - [Graph](graph.md): Directed graph composition with nodes and edges
   - [Pile](pile.md): Type-safe collections with O(1) UUID lookup
 
-See [User Guides](../../user_guide/) including [API Design](../../user_guide/api_design.md), [Type Safety](../../user_guide/type_safety.md), and [Validation](../../user_guide/validation.md) for practical examples.
+See [User Guides](../../user_guide/) including
+[API Design](../../user_guide/api_design.md),
+[Type Safety](../../user_guide/type_safety.md), and
+[Validation](../../user_guide/validation.md) for practical examples.
 
 ## Examples
 

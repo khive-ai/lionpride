@@ -4,16 +4,21 @@
 
 ## Overview
 
-The fuzzy matching module provides utilities for validating and correcting dictionary keys using similarity algorithms. It handles common scenarios where dictionary keys may be misspelled, use different casing, or have slight variations from expected keys.
+The fuzzy matching module provides utilities for validating and correcting dictionary
+keys using similarity algorithms. It handles common scenarios where dictionary keys may
+be misspelled, use different casing, or have slight variations from expected keys.
 
 **Key Capabilities:**
 
-- **Fuzzy String Matching**: Correct misspelled keys using similarity algorithms (Jaro-Winkler, Levenshtein, etc.)
-- **Flexible Unmatched Handling**: Configurable strategies for keys that don't match (ignore, raise, remove, fill, force)
+- **Fuzzy String Matching**: Correct misspelled keys using similarity algorithms
+  (Jaro-Winkler, Levenshtein, etc.)
+- **Flexible Unmatched Handling**: Configurable strategies for keys that don't match
+  (ignore, raise, remove, fill, force)
 - **Exact Match Priority**: Exact matches take precedence before fuzzy matching
 - **Fill Support**: Add missing expected keys with default or custom values
 - **Strict Mode**: Enforce presence of all expected keys
-- **Type-Safe Parameters**: Immutable dataclass configuration for reusable validation logic
+- **Type-Safe Parameters**: Immutable dataclass configuration for reusable validation
+  logic
 
 **When to Use Fuzzy Match:**
 
@@ -86,17 +91,20 @@ Input dictionary to validate and correct.
 
 Expected keys to validate against.
 
-- Accepted types: List of strings or any object with `.keys()` method (dict, Pydantic model)
+- Accepted types: List of strings or any object with `.keys()` method (dict, Pydantic
+  model)
 - Validation: Cannot be None, raises TypeError if None
 - Behavior: If empty, returns copy of original dict
 
 ### Keyword-Only Parameters
 
-**similarity_algo** : SIMILARITY_TYPE or SimilarityAlgo or SimilarityFunc, default "jaro_winkler"
+**similarity_algo** : SIMILARITY_TYPE or SimilarityAlgo or SimilarityFunc, default
+"jaro_winkler"
 
 Algorithm for computing string similarity.
 
-- String options: `"jaro_winkler"`, `"levenshtein"`, `"jaro"`, `"hamming"`, `"jaccard"`, etc.
+- String options: `"jaro_winkler"`, `"levenshtein"`, `"jaro"`, `"hamming"`, `"jaccard"`,
+  etc.
 - Enum: Can use `SimilarityAlgo` enum values
 - Custom: Can pass custom similarity function `(str, str) -> float`
 - Validation: Raises ValueError if string not in `SIMILARITY_ALGO_MAP`
@@ -245,7 +253,8 @@ class FuzzyMatchKeysParams(Params):
 
 ### Attributes
 
-All attributes match `fuzzy_match_keys()` keyword parameters (see [Parameters](#parameters) section).
+All attributes match `fuzzy_match_keys()` keyword parameters (see
+[Parameters](#parameters) section).
 
 ### Methods
 
@@ -608,7 +617,8 @@ Users can override with `similarity_algo` for specific needs.
 ## See Also
 
 - **Related Modules**:
-  - [String Similarity](../libs/string_handlers/string_similarity.md): Fuzzy string matching implementation
+  - [String Similarity](../libs/string_handlers/string_similarity.md): Fuzzy string
+    matching implementation
   - [Spec](../types/spec.md): Pydantic model validation with fuzzy key support
   - [Operable](../types/operable.md): Structured LLM outputs with validation
 - **Related Types**:
@@ -626,7 +636,6 @@ from pydantic import BaseModel
 ### Example 1: API Request Validation
 
 ```python
-
 # API expects specific keys
 api_schema = ["user_id", "action", "timestamp"]
 

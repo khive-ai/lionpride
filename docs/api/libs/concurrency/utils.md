@@ -1,16 +1,21 @@
 # Concurrency Utilities
 
-> Async utility functions for time, sleep, sync/async detection, and thread pool execution
+> Async utility functions for time, sleep, sync/async detection, and thread pool
+> execution
 
 ## Overview
 
-The `lionpride.libs.concurrency` utilities module provides **essential async utilities** for common concurrency operations. These functions handle time management, async/sync function detection, and seamless execution of synchronous code in async contexts.
+The `lionpride.libs.concurrency` utilities module provides **essential async utilities**
+for common concurrency operations. These functions handle time management, async/sync
+function detection, and seamless execution of synchronous code in async contexts.
 
 **Key Capabilities:**
 
 - **Monotonic Time**: Clock-independent time measurement for timeouts and benchmarks
-- **Coroutine Detection**: Cached runtime detection of async functions (handles partials)
-- **Sync-to-Async Bridge**: Run blocking sync functions in thread pool without blocking event loop
+- **Coroutine Detection**: Cached runtime detection of async functions (handles
+  partials)
+- **Sync-to-Async Bridge**: Run blocking sync functions in thread pool without blocking
+  event loop
 - **Non-Blocking Sleep**: Sleep with async/await without blocking other tasks
 - **Type-Safe**: ParamSpec-based generics preserve function signatures
 
@@ -153,7 +158,8 @@ while current_time() < deadline:
 
 ### Notes
 
-Uses `anyio.current_time()` which provides a **monotonic clock** guaranteed to never go backwards (immune to system clock adjustments). This is critical for:
+Uses `anyio.current_time()` which provides a **monotonic clock** guaranteed to never go
+backwards (immune to system clock adjustments). This is critical for:
 
 1. **Accurate Timeouts**: System clock changes don't affect timeout calculations
 2. **Reliable Benchmarks**: Measures actual elapsed time, not wall clock time
@@ -192,7 +198,8 @@ def is_coro_func(func: Callable[..., Any]) -> bool: ...
 
 **func** : Callable
 
-Function or callable to check. Handles regular functions, coroutine functions, and partials.
+Function or callable to check. Handles regular functions, coroutine functions, and
+partials.
 
 ### Returns
 
@@ -250,9 +257,11 @@ class WorkflowStep:
 
 ### Notes
 
-**Caching**: Results are cached using `@cache` decorator for performance. Repeated checks on the same function are instant (no runtime overhead).
+**Caching**: Results are cached using `@cache` decorator for performance. Repeated
+checks on the same function are instant (no runtime overhead).
 
-**Partial Unwrapping**: Automatically unwraps `functools.partial` objects to check the underlying function:
+**Partial Unwrapping**: Automatically unwraps `functools.partial` objects to check the
+underlying function:
 
 ```python
 from functools import partial
@@ -264,7 +273,8 @@ partial_func = partial(async_func, 1)
 is_coro_func(partial_func)  # True (unwraps to async_func)
 ```
 
-**Implementation**: Uses `inspect.iscoroutinefunction()` under the hood, which checks for `async def` functions (not generators or awaitables).
+**Implementation**: Uses `inspect.iscoroutinefunction()` under the hood, which checks
+for `async def` functions (not generators or awaitables).
 
 ### See Also
 
@@ -395,9 +405,12 @@ hashes = await gather(
 
 ### Notes
 
-**Thread Pool**: Uses `anyio.to_thread.run_sync()` which executes functions in AnyIO's worker thread pool. This prevents blocking the event loop but doesn't bypass the GIL for CPU-bound work.
+**Thread Pool**: Uses `anyio.to_thread.run_sync()` which executes functions in AnyIO's
+worker thread pool. This prevents blocking the event loop but doesn't bypass the GIL for
+CPU-bound work.
 
-**Keyword Arguments**: The function handles kwargs specially due to AnyIO API limitations:
+**Keyword Arguments**: The function handles kwargs specially due to AnyIO API
+limitations:
 
 ```python
 # Internally uses partial when kwargs present
@@ -418,7 +431,8 @@ result: bool = await run_sync(sync_func, 1, "hello")
 **Performance Considerations**:
 
 - **Thread Pool Overhead**: ~1-5ms per call (thread switching cost)
-- **GIL Limitation**: CPU-bound Python code won't parallelize (use `multiprocessing` instead)
+- **GIL Limitation**: CPU-bound Python code won't parallelize (use `multiprocessing`
+  instead)
 - **I/O-Bound**: Excellent for blocking I/O (file ops, sync HTTP libs, database drivers)
 
 **When NOT to Use**:
@@ -559,7 +573,8 @@ async def test_concurrent_operations():
 
 ### Notes
 
-**Non-Blocking**: Uses `anyio.sleep()` which yields control to the event loop, allowing other tasks to run during the sleep period.
+**Non-Blocking**: Uses `anyio.sleep()` which yields control to the event loop, allowing
+other tasks to run during the sleep period.
 
 **Comparison with time.sleep()**:
 
@@ -576,13 +591,15 @@ async def good_sleep():
     await sleep(1.0)  # Other tasks run during this
 ```
 
-**Precision**: Sleep duration is approximate. Actual sleep time may be slightly longer due to:
+**Precision**: Sleep duration is approximate. Actual sleep time may be slightly longer
+due to:
 
 - Event loop scheduling overhead (~1-10ms)
 - System timer resolution (typically 1-15ms on different platforms)
 - CPU load and context switching
 
-**Cancellation**: Sleep is cancellation-safe. If the task is cancelled during sleep, it raises `asyncio.CancelledError` immediately.
+**Cancellation**: Sleep is cancellation-safe. If the task is cancelled during sleep, it
+raises `asyncio.CancelledError` immediately.
 
 ### See Also
 
@@ -607,7 +624,8 @@ These utilities wrap AnyIO functions to provide:
 
 `current_time()` uses monotonic clock instead of wall clock because:
 
-1. **Timeout Accuracy**: System clock changes (NTP sync, DST, manual adjustment) don't affect timeouts
+1. **Timeout Accuracy**: System clock changes (NTP sync, DST, manual adjustment) don't
+   affect timeouts
 2. **Benchmark Reliability**: Measures actual elapsed time, not calendar time
 3. **Event Loop Compatibility**: Integrates with AnyIO's time-based operations
 
@@ -796,8 +814,10 @@ while True:
   - [Primitives](primitives.md): Lock, Semaphore, Queue, Event
   - [Patterns](patterns.md): TaskGroup, ExitStack, exception handlers
   - [Cancel](cancel.md): Cancellation scopes and timeout utilities
-- **AnyIO Documentation**: [https://anyio.readthedocs.io/](https://anyio.readthedocs.io/)
-- **Python asyncio**: [https://docs.python.org/3/library/asyncio.html](https://docs.python.org/3/library/asyncio.html)
+- **AnyIO Documentation**:
+  [https://anyio.readthedocs.io/](https://anyio.readthedocs.io/)
+- **Python asyncio**:
+  [https://docs.python.org/3/library/asyncio.html](https://docs.python.org/3/library/asyncio.html)
 
 ## Examples
 

@@ -4,19 +4,22 @@
 
 ## Overview
 
-This document provides performance benchmarks, optimization guidance, and trade-off analysis for the ln module. All benchmarks run on Python 3.11 with representative workloads.
+This document provides performance benchmarks, optimization guidance, and trade-off
+analysis for the ln module. All benchmarks run on Python 3.11 with representative
+workloads.
 
 ## JSON Serialization
 
 ### orjson vs stdlib json
 
-**Benchmark**: 10,000 iterations serializing complex nested dict (100 keys, mixed types including datetime, UUID, nested lists).
+**Benchmark**: 10,000 iterations serializing complex nested dict (100 keys, mixed types
+including datetime, UUID, nested lists).
 
-| Operation        | stdlib json | orjson | Speedup |
-|------------------|-------------|--------|---------|
-| Serialize (str)  | 2.3s        | 0.8s   | 2.9x    |
-| Serialize (bytes)| N/A         | 0.7s   | -       |
-| Deserialize      | 1.8s        | 0.2s   | 9.0x    |
+| Operation         | stdlib json | orjson | Speedup |
+| ----------------- | ----------- | ------ | ------- |
+| Serialize (str)   | 2.3s        | 0.8s   | 2.9x    |
+| Serialize (bytes) | N/A         | 0.7s   | -       |
+| Deserialize       | 1.8s        | 0.2s   | 9.0x    |
 
 **Memory usage** (1,000,000 item list):
 
@@ -33,22 +36,23 @@ This document provides performance benchmarks, optimization guidance, and trade-
 
 **Benchmark**: Serialize 10,000 Pydantic models with datetime/UUID fields.
 
-| Approach                | Time  | Notes                          |
-|-------------------------|-------|--------------------------------|
-| json_dumps (orjson)     | 0.9s  | Auto model_dump()              |
-| stdlib json + encoder   | 3.1s  | Manual JSONEncoder subclass    |
-| manual dict conversion  | 2.4s  | Explicit model.dict() calls    |
+| Approach               | Time | Notes                       |
+| ---------------------- | ---- | --------------------------- |
+| json_dumps (orjson)    | 0.9s | Auto model_dump()           |
+| stdlib json + encoder  | 3.1s | Manual JSONEncoder subclass |
+| manual dict conversion | 2.4s | Explicit model.dict() calls |
 
-**Takeaway**: Automatic type handling in `json_dumps` is both faster and more convenient.
+**Takeaway**: Automatic type handling in `json_dumps` is both faster and more
+convenient.
 
 ### Deterministic Sets
 
 **Benchmark**: Serialize dict with 1,000-element sets.
 
-| Option                    | Time  | Speedup |
-|---------------------------|-------|---------|
-| deterministic_sets=False  | 0.15s | 1.0x    |
-| deterministic_sets=True   | 0.42s | 0.36x   |
+| Option                   | Time  | Speedup |
+| ------------------------ | ----- | ------- |
+| deterministic_sets=False | 0.15s | 1.0x    |
+| deterministic_sets=True  | 0.42s | 0.36x   |
 
 **Cost**: Deterministic set sorting adds ~3x overhead.
 
@@ -64,13 +68,13 @@ This document provides performance benchmarks, optimization guidance, and trade-
 
 **Benchmark**: Fetch 1,000 URLs with simulated 100ms latency.
 
-| max_concurrent | Wall Time | CPU Time | Throughput (req/s) |
-|----------------|-----------|----------|--------------------|
-| 1 (sequential) | 100.0s    | 0.5s     | 10                 |
-| 10             | 10.2s     | 0.5s     | 98                 |
-| 50             | 2.1s      | 0.6s     | 476                |
-| 100            | 1.2s      | 0.7s     | 833                |
-| None (unlimited)| 0.9s     | 1.2s     | 1111               |
+| max_concurrent   | Wall Time | CPU Time | Throughput (req/s) |
+| ---------------- | --------- | -------- | ------------------ |
+| 1 (sequential)   | 100.0s    | 0.5s     | 10                 |
+| 10               | 10.2s     | 0.5s     | 98                 |
+| 50               | 2.1s      | 0.6s     | 476                |
+| 100              | 1.2s      | 0.7s     | 833                |
+| None (unlimited) | 0.9s      | 1.2s     | 1111               |
 
 **Observations**:
 
@@ -89,7 +93,7 @@ This document provides performance benchmarks, optimization guidance, and trade-
 **Benchmark**: Process 10,000 items with 10ms per-item latency.
 
 | batch_size | Wall Time | Memory Peak |
-|------------|-----------|-------------|
+| ---------- | --------- | ----------- |
 | 10         | 102.0s    | 50 MB       |
 | 100        | 11.5s     | 55 MB       |
 | 1000       | 2.8s      | 120 MB      |
@@ -107,13 +111,14 @@ This document provides performance benchmarks, optimization guidance, and trade-
 
 **Benchmark**: 1,000 successful calls with retry_attempts=3.
 
-| Configuration             | Time  | Overhead |
-|---------------------------|-------|----------|
-| No retry (baseline)       | 1.0s  | -        |
-| retry_attempts=3, success | 1.02s | 2%       |
-| retry_attempts=3, 10% fail| 1.8s  | 80%      |
+| Configuration              | Time  | Overhead |
+| -------------------------- | ----- | -------- |
+| No retry (baseline)        | 1.0s  | -        |
+| retry_attempts=3, success  | 1.02s | 2%       |
+| retry_attempts=3, 10% fail | 1.8s  | 80%      |
 
-**Takeaway**: Retry configuration has minimal overhead on success path, but failures add significant latency.
+**Takeaway**: Retry configuration has minimal overhead on success path, but failures add
+significant latency.
 
 **Recommendation**:
 
@@ -127,11 +132,11 @@ This document provides performance benchmarks, optimization guidance, and trade-
 
 **Benchmark**: Match 10,000 field name pairs (average length 15 characters).
 
-| Algorithm      | Time  | Correct Matches | False Positives |
-|----------------|-------|-----------------|-----------------|
-| Jaro-Winkler   | 0.8s  | 9,650 (96.5%)   | 180 (1.8%)      |
-| Levenshtein    | 2.3s  | 9,420 (94.2%)   | 450 (4.5%)      |
-| Cosine         | 1.1s  | 8,900 (89.0%)   | 320 (3.2%)      |
+| Algorithm    | Time | Correct Matches | False Positives |
+| ------------ | ---- | --------------- | --------------- |
+| Jaro-Winkler | 0.8s | 9,650 (96.5%)   | 180 (1.8%)      |
+| Levenshtein  | 2.3s | 9,420 (94.2%)   | 450 (4.5%)      |
+| Cosine       | 1.1s | 8,900 (89.0%)   | 320 (3.2%)      |
 
 **Takeaway**: Jaro-Winkler is fastest and most accurate for field name matching.
 
@@ -140,7 +145,7 @@ This document provides performance benchmarks, optimization guidance, and trade-
 **Benchmark**: 10,000 LLM outputs with typos/variations.
 
 | Threshold | True Positives | False Positives | False Negatives |
-|-----------|----------------|-----------------|-----------------|
+| --------- | -------------- | --------------- | --------------- |
 | 0.70      | 99.2%          | 15.3%           | 0.8%            |
 | 0.80      | 98.5%          | 8.7%            | 1.5%            |
 | 0.85      | 96.8%          | 2.1%            | 3.2%            |
@@ -161,11 +166,11 @@ This document provides performance benchmarks, optimization guidance, and trade-
 
 **Benchmark**: Flatten nested list (depth=5, 100,000 total elements).
 
-| Configuration                  | Time  | Memory |
-|--------------------------------|-------|--------|
-| flatten=True                   | 0.12s | 8 MB   |
-| flatten=True, unique=True      | 0.45s | 12 MB  |
-| flatten=True, flatten_tuple_set| 0.18s | 10 MB  |
+| Configuration                   | Time  | Memory |
+| ------------------------------- | ----- | ------ |
+| flatten=True                    | 0.12s | 8 MB   |
+| flatten=True, unique=True       | 0.45s | 12 MB  |
+| flatten=True, flatten_tuple_set | 0.18s | 10 MB  |
 
 **Cost of uniqueness**: 3.75x slowdown (hash computation + deduplication).
 
@@ -178,11 +183,11 @@ This document provides performance benchmarks, optimization guidance, and trade-
 
 **Benchmark**: Apply function to 10,000 items.
 
-| Operation Type | lcall (sync) | alcall (async) | Winner |
-|----------------|--------------|----------------|--------|
-| CPU-bound (md5)| 2.3s         | 2.8s           | lcall  |
-| I/O (sleep 1ms)| 10,000s      | 11.2s          | alcall |
-| Mixed (50/50)  | 5,012s       | 28.4s          | alcall |
+| Operation Type  | lcall (sync) | alcall (async) | Winner |
+| --------------- | ------------ | -------------- | ------ |
+| CPU-bound (md5) | 2.3s         | 2.8s           | lcall  |
+| I/O (sleep 1ms) | 10,000s      | 11.2s          | alcall |
+| Mixed (50/50)   | 5,012s       | 28.4s          | alcall |
 
 **Rule of thumb**:
 
@@ -196,12 +201,12 @@ This document provides performance benchmarks, optimization guidance, and trade-
 
 **Benchmark**: Convert 10,000 objects to dict.
 
-| Input Type       | Time  | Strategy Used          |
-|------------------|-------|------------------------|
-| Pydantic model   | 0.5s  | .model_dump()          |
-| Dataclass        | 0.7s  | dataclasses.asdict()   |
-| JSON string      | 0.9s  | orjson.loads()         |
-| Generic object   | 1.8s  | vars() fallback        |
+| Input Type     | Time | Strategy Used        |
+| -------------- | ---- | -------------------- |
+| Pydantic model | 0.5s | .model_dump()        |
+| Dataclass      | 0.7s | dataclasses.asdict() |
+| JSON string    | 0.9s | orjson.loads()       |
+| Generic object | 1.8s | vars() fallback      |
 
 **Optimization**: Pydantic models are fastest due to optimized model_dump().
 
@@ -209,11 +214,11 @@ This document provides performance benchmarks, optimization guidance, and trade-
 
 **Benchmark**: Convert nested dict with 5 levels, 10,000 nodes.
 
-| Configuration          | Time  | Memory |
-|------------------------|-------|--------|
-| recursive=False        | 0.08s | 5 MB   |
-| recursive=True, depth=3| 0.35s | 12 MB  |
-| recursive=True, depth=5| 0.82s | 25 MB  |
+| Configuration           | Time  | Memory |
+| ----------------------- | ----- | ------ |
+| recursive=False         | 0.08s | 5 MB   |
+| recursive=True, depth=3 | 0.35s | 12 MB  |
+| recursive=True, depth=5 | 0.82s | 25 MB  |
 
 **Cost**: Each recursion level adds ~2.5x overhead.
 
@@ -229,12 +234,12 @@ This document provides performance benchmarks, optimization guidance, and trade-
 
 **Benchmark**: Create 10,000 paths.
 
-| Configuration           | Time  | Bottleneck |
-|-------------------------|-------|------------|
-| Basic (no options)      | 0.15s | Path()     |
-| + timestamp             | 0.18s | datetime   |
-| + random_hash_digits=8  | 0.32s | urandom    |
-| + file_exist_ok check   | 2.1s  | stat()     |
+| Configuration          | Time  | Bottleneck |
+| ---------------------- | ----- | ---------- |
+| Basic (no options)     | 0.15s | Path()     |
+| + timestamp            | 0.18s | datetime   |
+| + random_hash_digits=8 | 0.32s | urandom    |
+| + file_exist_ok check  | 2.1s  | stat()     |
 
 **Takeaway**: File existence checks dominate (14x overhead).
 
@@ -249,10 +254,10 @@ This document provides performance benchmarks, optimization guidance, and trade-
 
 **Benchmark**: Process 1,000,000 items.
 
-| Approach              | Peak Memory | Time  |
-|-----------------------|-------------|-------|
-| List comprehension    | 180 MB      | 1.2s  |
-| json_lines_iter       | 12 MB       | 1.5s  |
+| Approach           | Peak Memory | Time |
+| ------------------ | ----------- | ---- |
+| List comprehension | 180 MB      | 1.2s |
+| json_lines_iter    | 12 MB       | 1.5s |
 
 **Trade-off**: Generators save 93% memory for 25% time cost.
 

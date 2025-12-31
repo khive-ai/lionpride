@@ -1,6 +1,7 @@
 # Flow
 
-> Dual-pile workflow state machine with named progression stages and shared item storage.
+> Dual-pile workflow state machine with named progression stages and shared item
+> storage.
 
 ---
 
@@ -11,7 +12,8 @@
 - **`progressions`**: Named workflow stages (Progression instances in ordered sequence)
 - **`items`**: Shared work units (Element instances referenced by UUID)
 
-This dual-pile architecture enables M:N relationships where items can exist in multiple workflow stages simultaneously while maintaining a single source of truth for item data.
+This dual-pile architecture enables M:N relationships where items can exist in multiple
+workflow stages simultaneously while maintaining a single source of truth for item data.
 
 **Thread Safety**: All operations are thread-safe via RLock synchronization.
 
@@ -22,7 +24,8 @@ This dual-pile architecture enables M:N relationships where items can exist in m
 **Use Flow when you need:**
 
 - **Multi-stage workflows**: Task pipelines, deployment stages, approval processes
-- **M:N state relationships**: Items in multiple stages (e.g., task in "testing" and "documentation")
+- **M:N state relationships**: Items in multiple stages (e.g., task in "testing" and
+  "documentation")
 
 - **Named stage access**: Ergonomic `flow.get_progression("pending")` vs UUID lookup
 - **Independent lifecycles**: Items persist when removed from stages
@@ -108,17 +111,22 @@ def __init__(
 **Parameters:**
 
 - `items` (list[E] | Pile[E] | Element | None): Initial items to add to items pile
-- **`progressions` (list[P] | Pile[P] | None)**: Initial workflow stages (progressions). **New in v1.0.0a5**
+- **`progressions` (list[P] | Pile[P] | None)**: Initial workflow stages (progressions).
+  **New in v1.0.0a5**
 - `name` (str | None): Flow identifier (e.g., "deployment_pipeline")
-- `item_type` (type[E] | set[type] | list[type] | None): Type constraint for items pile validation (creates configured Pile with frozen fields)
-- `strict_type` (bool): Enforce exact type match (no subclasses) for items. Default: False
+- `item_type` (type[E] | set[type] | list[type] | None): Type constraint for items pile
+  validation (creates configured Pile with frozen fields)
+- `strict_type` (bool): Enforce exact type match (no subclasses) for items. Default:
+  False
 - `**data`: Additional Element fields (id, created_at, metadata)
 
 **⚠️ BREAKING CHANGE (PR #156):**
 
-- Constructor now accepts `progressions` parameter for initializing workflow stages upfront
+- Constructor now accepts `progressions` parameter for initializing workflow stages
+  upfront
 - `item_type` and `strict_type` are now correctly applied to items Pile (frozen fields)
-- Referential integrity is validated at construction via `@model_validator` (all progression UUIDs must exist in items)
+- Referential integrity is validated at construction via `@model_validator` (all
+  progression UUIDs must exist in items)
 
 **Example:**
 
@@ -160,7 +168,8 @@ flow = Flow[Task, Progression](
 progressions: Pile[P]
 ```
 
-Pile of Progression instances representing workflow stages. Each progression should have a unique `name` for O(1) named access.
+Pile of Progression instances representing workflow stages. Each progression should have
+a unique `name` for O(1) named access.
 
 **Type:** Pile[P] (default: Pile[Progression])
 
@@ -172,7 +181,8 @@ Pile of Progression instances representing workflow stages. Each progression sho
 items: Pile[E]
 ```
 
-Pile of Element instances that progressions reference by UUID. Items are the single source of truth for work unit data.
+Pile of Element instances that progressions reference by UUID. Items are the single
+source of truth for work unit data.
 
 **Type:** Pile[E]
 
@@ -229,7 +239,8 @@ flow.add_progression(Progression(name="completed"))
 print(len(flow.progressions))  # 3
 ```
 
-**Note**: Progression names must be unique. Attempting to add a progression with an existing name raises ExistsError.
+**Note**: Progression names must be unique. Attempting to add a progression with an
+existing name raises ExistsError.
 
 ---
 
@@ -267,7 +278,8 @@ removed = flow.remove_progression("completed")
 removed = flow.remove_progression(prog_uuid)
 ```
 
-**Note**: Removing a progression does NOT remove referenced items from the items pile. Items persist independently.
+**Note**: Removing a progression does NOT remove referenced items from the items pile.
+Items persist independently.
 
 ---
 
@@ -291,7 +303,8 @@ def get_progression(self, key: UUID | str | P) -> P
 
 **Thread Safety:** Synchronized with @synchronized decorator
 
-**Time Complexity:** O(1) for name lookup (via _progression_names index), O(1) for UUID lookup
+**Time Complexity:** O(1) for name lookup (via _progression_names index), O(1) for UUID
+lookup
 
 **Example:**
 
@@ -304,7 +317,8 @@ print(f"Pending items: {len(pending)}")
 prog = flow.get_progression(uuid_obj)
 ```
 
-**Design Note**: Named access is the primary API pattern. The internal `_progression_names` index provides O(1) lookup without scanning.
+**Design Note**: Named access is the primary API pattern. The internal
+`_progression_names` index provides O(1) lookup without scanning.
 
 ---
 
@@ -327,7 +341,8 @@ def add_item(
 **Parameters:**
 
 - `item` (E): Element to add to items pile
-- **`progressions`** (list[UUID | str] | UUID | str | None): Optional progression(s) to add item to (by UUID or name). **Parameter renamed from `progression_ids` in PR #156**
+- **`progressions`** (list[UUID | str] | UUID | str | None): Optional progression(s) to
+  add item to (by UUID or name). **Parameter renamed from `progression_ids` in PR #156**
 
 **Raises:**
 
@@ -353,7 +368,8 @@ flow.add_item(task, progressions="pending")  # Before: progression_ids="pending"
 flow.add_item(task, progressions=["testing", "documentation"])
 ```
 
-**Pattern**: Items exist in pile independently of progression membership. This enables flexible state transitions without data duplication.
+**Pattern**: Items exist in pile independently of progression membership. This enables
+flexible state transitions without data duplication.
 
 ---
 
@@ -380,9 +396,11 @@ def remove_item(
 
 - `NotFoundError`: If item not found in flow
 
-**Time Complexity:** O(p × n) where p = number of progressions, n = items per progression
+**Time Complexity:** O(p × n) where p = number of progressions, n = items per
+progression
 
-**⚠️ BREAKING CHANGE (PR #156):** `remove_from_progressions` parameter removed. Method now **always** removes item from all progressions before removing from pile.
+**⚠️ BREAKING CHANGE (PR #156):** `remove_from_progressions` parameter removed. Method
+now **always** removes item from all progressions before removing from pile.
 
 **Example:**
 
@@ -394,7 +412,8 @@ removed = flow.remove_item(task_id)
 # removed = flow.remove_item(task_id, remove_from_progressions=False)  # No longer supported
 ```
 
-**Migration:** If you need to keep item in progressions (not recommended - creates orphan references), manually remove from pile only:
+**Migration:** If you need to keep item in progressions (not recommended - creates
+orphan references), manually remove from pile only:
 
 ```python
 # Not recommended: Manual pile removal (leaves orphan UUIDs in progressions)
@@ -437,7 +456,8 @@ data = flow.to_dict(mode="json")
 # Contains: id, created_at, metadata, name, items (full pile), progressions (full pile)
 ```
 
-**Implementation Note**: Overrides Element.to_dict() to ensure both `items` and `progressions` Pile fields are fully serialized with their contents, not just metadata.
+**Implementation Note**: Overrides Element.to_dict() to ensure both `items` and
+`progressions` Pile fields are fully serialized with their contents, not just metadata.
 
 ---
 
@@ -468,7 +488,8 @@ restored = Flow.from_dict(data)
 pending = restored.get_progression("pending")
 ```
 
-**Implementation Note**: The `model_post_init()` hook rebuilds the `_progression_names` index from deserialized progressions, ensuring O(1) named access after round-trip.
+**Implementation Note**: The `model_post_init()` hook rebuilds the `_progression_names`
+index from deserialized progressions, ensuring O(1) named access after round-trip.
 
 ---
 
@@ -586,7 +607,8 @@ stage_counts = {
 
 ### Pitfall 1: Forgetting to Remove from Progressions
 
-**Issue**: Removing item from pile but not from progressions creates orphan UUID references.
+**Issue**: Removing item from pile but not from progressions creates orphan UUID
+references.
 
 ```python
 # ❌ WRONG: Manual pile removal leaves orphan references
@@ -594,7 +616,8 @@ removed = flow.items.remove(task_id)
 # progressions still reference task_id, will raise NotFoundError on access
 ```
 
-**Solution**: Use `remove_item()` which ensures clean removal from both pile and progressions.
+**Solution**: Use `remove_item()` which ensures clean removal from both pile and
+progressions.
 
 ```python
 # ✓ CORRECT: Clean removal from everywhere

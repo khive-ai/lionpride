@@ -4,7 +4,9 @@
 
 ## Overview
 
-lionpride leverages Python's type system to provide **compile-time safety with runtime guarantees**. This guide covers type narrowing patterns, TypeGuard usage, and integration with sentinel types for robust type-safe APIs.
+lionpride leverages Python's type system to provide **compile-time safety with runtime
+guarantees**. This guide covers type narrowing patterns, TypeGuard usage, and
+integration with sentinel types for robust type-safe APIs.
 
 **Key Topics:**
 
@@ -26,7 +28,9 @@ lionpride leverages Python's type system to provide **compile-time safety with r
 
 ### What is Type Narrowing?
 
-Type narrowing allows type checkers to **refine types** based on runtime checks. When you test a value's type, the type checker understands the refined type in different code branches.
+Type narrowing allows type checkers to **refine types** based on runtime checks. When
+you test a value's type, the type checker understands the refined type in different code
+branches.
 
 **Example:**
 
@@ -136,7 +140,8 @@ def process(value: MaybeUnset[str]) -> str:
 
 ### What are TypeGuards?
 
-`TypeGuard` functions tell type checkers: "If this returns `True`, narrow the type to `T`".
+`TypeGuard` functions tell type checkers: "If this returns `True`, narrow the type to
+`T`".
 
 **Signature:**
 
@@ -380,7 +385,8 @@ print(real_values)  # [1, 2, 3]
 
 ### Pydantic Integration
 
-lionpride uses **Pydantic V2** for runtime validation. Combine with type narrowing for robust validation:
+lionpride uses **Pydantic V2** for runtime validation. Combine with type narrowing for
+robust validation:
 
 #### Example: Validated configuration
 

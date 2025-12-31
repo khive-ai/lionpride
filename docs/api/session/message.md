@@ -4,17 +4,19 @@
 
 ## Overview
 
-`Message` extends `Node` with **automatic role derivation** from content type via discriminated union pattern. Dict keys determine which `MessageContent` subclass is instantiated.
+`Message` extends `Node` with **automatic role derivation** from content type via
+discriminated union pattern. Dict keys determine which `MessageContent` subclass is
+instantiated.
 
 **Role Inference:**
 
-| Dict Keys | Content Type | Role |
-|-----------|--------------|------|
-| `instruction`, `context`, `request_model`, `images` | `InstructionContent` | `USER` |
-| `assistant_response` | `AssistantResponseContent` | `ASSISTANT` |
-| `function`, `arguments` | `ActionRequestContent` | `ASSISTANT` |
-| `result`, `error` | `ActionResponseContent` | `TOOL` |
-| `system_message` | `SystemContent` | `SYSTEM` |
+| Dict Keys                                           | Content Type               | Role        |
+| --------------------------------------------------- | -------------------------- | ----------- |
+| `instruction`, `context`, `request_model`, `images` | `InstructionContent`       | `USER`      |
+| `assistant_response`                                | `AssistantResponseContent` | `ASSISTANT` |
+| `function`, `arguments`                             | `ActionRequestContent`     | `ASSISTANT` |
+| `result`, `error`                                   | `ActionResponseContent`    | `TOOL`      |
+| `system_message`                                    | `SystemContent`            | `SYSTEM`    |
 
 ## Class Signature
 
@@ -41,22 +43,22 @@ class Message(Node):
 
 ## Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `content` | `MessageContent \| dict` | Required. Dict auto-converts to appropriate subclass |
-| `sender` | `MessageRole \| str \| UUID` | Optional sender identifier |
-| `recipient` | `MessageRole \| str \| UUID` | Optional recipient identifier |
-| `id`, `created_at`, `metadata` | - | Inherited from Element |
+| Parameter                      | Type                         | Description                                          |
+| ------------------------------ | ---------------------------- | ---------------------------------------------------- |
+| `content`                      | `MessageContent \| dict`     | Required. Dict auto-converts to appropriate subclass |
+| `sender`                       | `MessageRole \| str \| UUID` | Optional sender identifier                           |
+| `recipient`                    | `MessageRole \| str \| UUID` | Optional recipient identifier                        |
+| `id`, `created_at`, `metadata` | -                            | Inherited from Element                               |
 
 ## Attributes
 
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `content` | `MessageContent` | Auto-converted from dict |
-| `sender` / `recipient` | `SenderRecipient \| None` | Optional identifiers |
-| `role` | `MessageRole` | **Read-only**, auto-derived from content type |
-| `embedding` | `list[float] \| None` | Optional (from Node) |
-| `id`, `created_at`, `metadata` | - | From Element |
+| Attribute                      | Type                      | Description                                   |
+| ------------------------------ | ------------------------- | --------------------------------------------- |
+| `content`                      | `MessageContent`          | Auto-converted from dict                      |
+| `sender` / `recipient`         | `SenderRecipient \| None` | Optional identifiers                          |
+| `role`                         | `MessageRole`             | **Read-only**, auto-derived from content type |
+| `embedding`                    | `list[float] \| None`     | Optional (from Node)                          |
+| `id`, `created_at`, `metadata` | -                         | From Element                                  |
 
 ```python
 >>> msg = Message(content={"instruction": "Hello"})
@@ -130,11 +132,13 @@ def clone(self, *, sender: SenderRecipient | None = None) -> Message
 
 ## Chat API Format
 
-All content types provide `to_chat()` -> `{"role": "...", "content": "..."}` for LLM API compatibility.
+All content types provide `to_chat()` -> `{"role": "...", "content": "..."}` for LLM API
+compatibility.
 
 ## Protocol Implementations
 
-Inherits: **Observable**, **Serializable**, **Deserializable**, **Hashable**, **Adaptable**
+Inherits: **Observable**, **Serializable**, **Deserializable**, **Hashable**,
+**Adaptable**
 
 ## Usage Patterns
 
@@ -181,15 +185,19 @@ Use `msg.clone()` when adding same message to multiple branches.
 
 ## Design Rationale
 
-**Auto-Derived Role**: Ensures consistency - role always matches content type. Users don't need to remember role constants.
+**Auto-Derived Role**: Ensures consistency - role always matches content type. Users
+don't need to remember role constants.
 
-**Discriminated Union**: Dict key detection enables flexible input without knowing class names, JSON-compatible serialization.
+**Discriminated Union**: Dict key detection enables flexible input without knowing class
+names, JSON-compatible serialization.
 
-**Separate Content from Message**: Enables `content.render()` customization, `content.to_chat()` for LLM APIs, content-specific validation.
+**Separate Content from Message**: Enables `content.render()` customization,
+`content.to_chat()` for LLM APIs, content-specific validation.
 
 ## See Also
 
-- [Node](../base/node.md), [Element](../base/element.md), [Session](session.md), [Branch](branch.md)
+- [Node](../base/node.md), [Element](../base/element.md), [Session](session.md),
+  [Branch](branch.md)
 
 ## Examples
 

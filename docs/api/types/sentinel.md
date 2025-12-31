@@ -4,11 +4,15 @@
 
 ## Overview
 
-Sentinel values provide a type-safe mechanism to distinguish between `None` (intentional null value), **missing keys/fields** (never existed in namespace), and **unset parameters** (key present but value not provided). This is critical for optional parameters, partial updates, and differentiating explicit `None` from absence.
+Sentinel values provide a type-safe mechanism to distinguish between `None` (intentional
+null value), **missing keys/fields** (never existed in namespace), and **unset
+parameters** (key present but value not provided). This is critical for optional
+parameters, partial updates, and differentiating explicit `None` from absence.
 
 **Key Capabilities:**
 
-- **Singleton Identity**: Each sentinel type has exactly one instance, enabling safe `is` comparisons
+- **Singleton Identity**: Each sentinel type has exactly one instance, enabling safe
+  `is` comparisons
 - **Falsy Behavior**: All sentinels evaluate to `False` in boolean context
 - **Serialization Safety**: Identity preserved across copy/deepcopy/pickle
 - **Type Narrowing**: TypeGuard support for type-safe value extraction
@@ -16,7 +20,8 @@ Sentinel values provide a type-safe mechanism to distinguish between `None` (int
 
 **When to Use Sentinel Values:**
 
-- **Optional Parameters**: Distinguish "user passed None" from "user didn't pass anything"
+- **Optional Parameters**: Distinguish "user passed None" from "user didn't pass
+  anything"
 - **Partial Updates**: PATCH endpoints where missing fields ≠ "set to None"
 - **Default Resolution**: Determine if value was explicitly set or should use default
 - **Key Existence**: Differentiate "key missing" from "key present with None value"
@@ -26,7 +31,8 @@ Sentinel values provide a type-safe mechanism to distinguish between `None` (int
 
 - **Simple None Checks**: If `None` adequately represents absence, use `Optional[T]`
 - **Required Fields**: Sentinels are for optional/conditional values only
-- **Performance-Critical Paths**: `is` checks are fast but add overhead vs direct `None` checks
+- **Performance-Critical Paths**: `is` checks are fast but add overhead vs direct `None`
+  checks
 - **Public APIs**: Sentinels may confuse external users; reserve for internal logic
 
 ## Sentinel Types
@@ -94,7 +100,8 @@ class UndefinedType(SingletonType):
 
 **Use Cases:**
 
-- **Dictionary Lookups**: `dict.get(key, Undefined)` - distinguish missing key from `None` value
+- **Dictionary Lookups**: `dict.get(key, Undefined)` - distinguish missing key from
+  `None` value
 - **Optional Fields**: Fields that may not exist in data structure
 - **Schema Validation**: Detect missing required fields vs fields set to `None`
 
@@ -266,7 +273,8 @@ If `True`, treat `None` as a sentinel value.
 
 **empty_as_sentinel** : bool, default False
 
-If `True`, treat empty collections (`()`, `[]`, `{}`, `set()`, `frozenset()`, `""`) as sentinel values.
+If `True`, treat empty collections (`()`, `[]`, `{}`, `set()`, `frozenset()`, `""`) as
+sentinel values.
 
 **Returns:**
 
@@ -379,7 +387,8 @@ print(handle_optional(Unset))   # "Missing"
 
 **Type Safety:**
 
-This is a `TypeGuard` function - type checkers (mypy, pyright) understand that if it returns `True`, the value's type is narrowed from `MaybeSentinel[T]` to `T`.
+This is a `TypeGuard` function - type checkers (mypy, pyright) understand that if it
+returns `True`, the value's type is narrowed from `MaybeSentinel[T]` to `T`.
 
 ## Type Aliases
 
@@ -656,7 +665,8 @@ if value is Undefined:  # Proper identity check
     print("Undefined")
 ```
 
-**Rationale**: Sentinels are singletons. Identity checks (`is`) are faster and more explicit about singleton semantics.
+**Rationale**: Sentinels are singletons. Identity checks (`is`) are faster and more
+explicit about singleton semantics.
 
 ### Pitfall 2: Forgetting Sentinels are Falsy
 
@@ -710,7 +720,8 @@ def update(
     ...
 ```
 
-**Best Practice**: Use `Unset` consistently for "not provided" semantics. Reserve `Undefined` for "missing from namespace" (dictionary lookups, schema validation).
+**Best Practice**: Use `Unset` consistently for "not provided" semantics. Reserve
+`Undefined` for "missing from namespace" (dictionary lookups, schema validation).
 
 ### Pitfall 4: Overusing Sentinels
 
@@ -730,7 +741,8 @@ def greet(name: str | None = None) -> str:
     return f"Hello, {name}"
 ```
 
-**When to use sentinels**: Only when you need to distinguish `None` (valid value) from "not provided".
+**When to use sentinels**: Only when you need to distinguish `None` (valid value) from
+"not provided".
 
 ### Pitfall 5: Forgetting pickle/deepcopy Preservation
 
@@ -751,16 +763,20 @@ assert restored["key"] is Undefined  # True (identity preserved)
 # If you pass Undefined over RPC, receiving side must import from lionpride.types
 ```
 
-**Best Practice**: Sentinel identity is preserved within Python runtime (pickle/deepcopy). For cross-process/cross-language communication, serialize to explicit marker strings (e.g., `"__UNDEFINED__"`).
+**Best Practice**: Sentinel identity is preserved within Python runtime
+(pickle/deepcopy). For cross-process/cross-language communication, serialize to explicit
+marker strings (e.g., `"__UNDEFINED__"`).
 
 ## Design Rationale
 
 ### Why Singleton Pattern?
 
-Sentinels use singleton pattern to enable **identity checks** (`is`) instead of equality checks (`==`). This ensures:
+Sentinels use singleton pattern to enable **identity checks** (`is`) instead of equality
+checks (`==`). This ensures:
 
 1. **Performance**: `is` checks are faster than `==` (single pointer comparison)
-2. **Clarity**: `is Undefined` clearly expresses "is this the sentinel?" vs `== Undefined` (equality)
+2. **Clarity**: `is Undefined` clearly expresses "is this the sentinel?" vs
+   `== Undefined` (equality)
 3. **Safety**: Identity preserved across copy/deepcopy/pickle prevents subtle bugs
 
 ### Why Falsy Sentinels?
@@ -779,7 +795,8 @@ else:
     config = default_config
 ```
 
-Falsy behavior aligns with `None`, empty collections, and other "absent value" types in Python.
+Falsy behavior aligns with `None`, empty collections, and other "absent value" types in
+Python.
 
 ### Why Two Sentinel Types?
 
@@ -840,16 +857,20 @@ def process(value: MaybeSentinel[str]) -> str:
         return str(value)  # Must convert to str
 ```
 
-Without `TypeGuard`, type checkers wouldn't narrow the type, requiring manual type assertions.
+Without `TypeGuard`, type checkers wouldn't narrow the type, requiring manual type
+assertions.
 
 ## See Also
 
 - **Related Types**:
-  - [Optional](https://docs.python.org/3/library/typing.html#typing.Optional): Standard library optional type (use when `None` suffices)
-  - HashableModel (documentation pending): Content-based hashing (sentinels are identity-based)
+  - [Optional](https://docs.python.org/3/library/typing.html#typing.Optional): Standard
+    library optional type (use when `None` suffices)
+  - HashableModel (documentation pending): Content-based hashing (sentinels are
+    identity-based)
 - **Related Guides**:
   - [Type Safety Guide](../../user_guide/type_safety.md): Type narrowing and TypeGuards
-  - [API Design Guide](../../user_guide/api_design.md): When to use sentinels vs Optional
+  - [API Design Guide](../../user_guide/api_design.md): When to use sentinels vs
+    Optional
 - **Related Patterns**:
   - [HTTP Patterns](../../patterns/http.md): PATCH endpoint semantics with `Unset`
 

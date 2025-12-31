@@ -4,13 +4,19 @@
 
 ## Overview
 
-`to_list()` is a utility function that converts any input to a list with optional transformations including recursive flattening, null removal, deduplication, and value extraction from enums and mappings. It handles edge cases like nested iterables, Pydantic models, enums, and unhashable types with intelligent fallback strategies.
+`to_list()` is a utility function that converts any input to a list with optional
+transformations including recursive flattening, null removal, deduplication, and value
+extraction from enums and mappings. It handles edge cases like nested iterables,
+Pydantic models, enums, and unhashable types with intelligent fallback strategies.
 
 **Key Capabilities:**
 
-- **Universal Conversion**: Handles any Python type (primitives, iterables, enums, models, mappings)
-- **Recursive Flattening**: Optional nested iterable flattening with configurable tuple/set handling
-- **Null Removal**: Filters out `None` and sentinel values (`Undefined`, `Unset`, `PydanticUndefined`)
+- **Universal Conversion**: Handles any Python type (primitives, iterables, enums,
+  models, mappings)
+- **Recursive Flattening**: Optional nested iterable flattening with configurable
+  tuple/set handling
+- **Null Removal**: Filters out `None` and sentinel values (`Undefined`, `Unset`,
+  `PydanticUndefined`)
 - **Deduplication**: Removes duplicates with automatic fallback for unhashable types
 - **Value Extraction**: Extracts values from enums and mappings instead of objects
 - **Smart Type Handling**: Preserves strings/bytes as single items (not character lists)
@@ -56,8 +62,10 @@ Value to convert to list. Accepts any Python type.
 - **None/sentinel values**: Converted to empty list `[]`
 - **Lists**: Returned as-is (no copy)
 - **Enum classes**: Converted to list of enum members (or values if `use_values=True`)
-- **Strings/bytes/bytearray**: Treated as single item `[input_]` unless `use_values=True`
-- **Mappings**: Treated as single item `[input_]` unless `use_values=True` (then `list(input_.values())`)
+- **Strings/bytes/bytearray**: Treated as single item `[input_]` unless
+  `use_values=True`
+- **Mappings**: Treated as single item `[input_]` unless `use_values=True` (then
+  `list(input_.values())`)
 - **Pydantic BaseModel**: Treated as single item `[input_]`
 - **Other Iterables**: Converted via `list(input_)`
 - **Non-iterables**: Wrapped as `[input_]`
@@ -68,7 +76,8 @@ Recursively flatten nested iterables.
 
 - `False`: Nested iterables remain as nested lists
 - `True`: Recursively flattens all nested iterables (except skip types)
-- Skip types (not flattened): strings, bytes, bytearray, mappings, Pydantic models, enums
+- Skip types (not flattened): strings, bytes, bytearray, mappings, Pydantic models,
+  enums
 - Use `flatten_tuple_set=True` to also flatten tuples and sets
 
 **dropna** : bool, default False
@@ -83,7 +92,8 @@ Remove `None` and undefined sentinel values.
 Remove duplicate items.
 
 - **Requires**: `flatten=True` (raises `ValueError` otherwise)
-- **Strategy**: Tries direct hash comparison first, falls back to `hash_dict()` for unhashable mappings
+- **Strategy**: Tries direct hash comparison first, falls back to `hash_dict()` for
+  unhashable mappings
 - **Ordering**: Preserves first occurrence order
 - **Raises**: `ValueError` if item is unhashable and not a mapping
 
@@ -91,7 +101,8 @@ Remove duplicate items.
 
 Extract values from enums and mappings instead of treating them as objects.
 
-- **Enum classes**: Returns `[member.value for member in EnumClass]` instead of `[member, ...]`
+- **Enum classes**: Returns `[member.value for member in EnumClass]` instead of
+  `[member, ...]`
 - **Strings/bytes**: Returns `list(input_)` (character/byte list) instead of `[input_]`
 - **Mappings**: Returns `list(mapping.values())` instead of `[mapping]`
 
@@ -107,7 +118,8 @@ Include tuples and sets in flattening (normally they're preserved as items).
 
 **list** : Processed list
 
-Transformed list according to specified parameters. The list contains processed items, potentially flattened, deduplicated, and/or filtered.
+Transformed list according to specified parameters. The list contains processed items,
+potentially flattened, deduplicated, and/or filtered.
 
 ## Raises
 
@@ -316,13 +328,13 @@ class ToListParams(Params):
 
 ### Attributes
 
-| Attribute           | Type   | Description                                         |
-| ------------------- | ------ | --------------------------------------------------- |
-| `flatten`           | `bool` | If True, recursively flatten nested iterables       |
-| `dropna`            | `bool` | If True, remove None and undefined values           |
-| `unique`            | `bool` | If True, remove duplicates (requires flatten=True)  |
-| `use_values`        | `bool` | If True, extract values from enums/mappings         |
-| `flatten_tuple_set` | `bool` | If True, include tuples and sets in flattening      |
+| Attribute           | Type   | Description                                        |
+| ------------------- | ------ | -------------------------------------------------- |
+| `flatten`           | `bool` | If True, recursively flatten nested iterables      |
+| `dropna`            | `bool` | If True, remove None and undefined values          |
+| `unique`            | `bool` | If True, remove duplicates (requires flatten=True) |
+| `use_values`        | `bool` | If True, extract values from enums/mappings        |
+| `flatten_tuple_set` | `bool` | If True, include tuples and sets in flattening     |
 
 ### Methods
 
@@ -379,7 +391,8 @@ to_list(my_data, flatten=True)
 # to_list(input_=my_data, flatten=True)  # Verbose and unnatural
 ```
 
-This follows Python's convention for functions where the first parameter is always the "thing being operated on."
+This follows Python's convention for functions where the first parameter is always the
+"thing being operated on."
 
 ### Why flatten=True Required for unique?
 
@@ -391,11 +404,13 @@ to_list([[1, 2], [1, 2]], unique=True, flatten=False)
 # [1, 2]?  Or [[1, 2]]?  Or error?
 ```
 
-Requiring `flatten=True` makes behavior unambiguous: flatten first, then deduplicate the flattened list.
+Requiring `flatten=True` makes behavior unambiguous: flatten first, then deduplicate the
+flattened list.
 
 ### Why Skip Strings/Bytes in Flattening?
 
-Strings and bytes are technically iterables, but treating them as character/byte sequences is almost never desired:
+Strings and bytes are technically iterables, but treating them as character/byte
+sequences is almost never desired:
 
 ```python
 # Unwanted behavior if strings were flattened
@@ -404,7 +419,8 @@ to_list([["hello", "world"]], flatten=True)
 # If strings flattened: ["h", "e", "l", "l", "o", "w", "o", "r", "l", "d"]
 ```
 
-`use_values=True` provides opt-in character splitting for the rare cases where it's needed.
+`use_values=True` provides opt-in character splitting for the rare cases where it's
+needed.
 
 ### Why Separate flatten_tuple_set Flag?
 
@@ -425,7 +441,8 @@ Separate flag gives fine-grained control over flattening behavior.
 
 ### Why Hash Fallback for Deduplication?
 
-Python's set-based deduplication fails for unhashable types (dicts, lists). The fallback strategy:
+Python's set-based deduplication fails for unhashable types (dicts, lists). The fallback
+strategy:
 
 1. **Tries direct hashing first** (fast path for hashable items)
 2. **Switches to hash_dict() on first TypeError** (handles mappings)
@@ -448,7 +465,8 @@ def to_list(...):
         _INITIALIZED = True
 ```
 
-Avoids circular import issues and reduces startup overhead for modules that import but don't immediately use `to_list()`.
+Avoids circular import issues and reduces startup overhead for modules that import but
+don't immediately use `to_list()`.
 
 ## See Also
 

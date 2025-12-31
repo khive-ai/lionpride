@@ -4,12 +4,16 @@
 
 ## Overview
 
-`lcall` is a synchronous list processing utility that applies a callable to each element in an iterable with extensive control over input normalization and output transformation. It provides a unified interface for mapping operations with built-in flattening, null filtering, deduplication, and value extraction.
+`lcall` is a synchronous list processing utility that applies a callable to each element
+in an iterable with extensive control over input normalization and output
+transformation. It provides a unified interface for mapping operations with built-in
+flattening, null filtering, deduplication, and value extraction.
 
 **Key Capabilities:**
 
 - **Synchronous Mapping**: Apply function to each element sequentially
-- **Input Processing**: Flatten, dropna, unique, value extraction before function application
+- **Input Processing**: Flatten, dropna, unique, value extraction before function
+  application
 - **Output Processing**: Flatten, dropna, unique after function application
 - **Flexible Input**: Accepts single items, iterables, or nested structures
 - **Type Safety**: Full type hints with generics for input and output types
@@ -26,12 +30,15 @@
 
 **When NOT to Use lcall:**
 
-- **Async operations**: Use `alcall` for async/await functions (planned in `lionpride.ln`)
-- **Simple transformations**: Use built-in `map()` or list comprehensions for straightforward cases
+- **Async operations**: Use `alcall` for async/await functions (planned in
+  `lionpride.ln`)
+- **Simple transformations**: Use built-in `map()` or list comprehensions for
+  straightforward cases
 - **Parallel execution**: Use `concurrent.futures` or multiprocessing for CPU-bound work
 - **Streaming large datasets**: Use generators or iterators to avoid memory overhead
 
-For async list operations, see [async_call()](./async_call.md) for concurrent execution patterns.
+For async list operations, see [async_call()](./async_call.md) for concurrent execution
+patterns.
 
 ## Function Signature
 
@@ -63,7 +70,8 @@ def lcall(
 
 **input_** : Iterable[T] or T (positional-only)
 
-Items to process. Can be a single item (auto-converted to list), an iterable, or nested structures.
+Items to process. Can be a single item (auto-converted to list), an iterable, or nested
+structures.
 
 - Single items are wrapped in a list: `5` → `[5]`
 - Iterables are converted to list: `(1, 2, 3)` → `[1, 2, 3]`
@@ -72,7 +80,8 @@ Items to process. Can be a single item (auto-converted to list), an iterable, or
 
 **func** : Callable[[T], R] or Iterable[Callable[[T], R]] (positional-only)
 
-Callable to apply to each element. If an iterable of callables is provided, it must contain exactly one callable (extracted automatically).
+Callable to apply to each element. If an iterable of callables is provided, it must
+contain exactly one callable (extracted automatically).
 
 - Signature: Must accept input element as first positional argument
 - Additional arguments passed via `*args` and `**kwargs`
@@ -99,7 +108,8 @@ Keyword arguments passed to `func`.
 
 Flatten nested input structures before applying function.
 
-- Recursively flattens lists, tuples (if `input_flatten_tuple_set=True`), sets (if enabled)
+- Recursively flattens lists, tuples (if `input_flatten_tuple_set=True`), sets (if
+  enabled)
 - Does NOT flatten strings (treated as atomic values)
 - Use case: Normalize nested data structures before processing
 - See: `to_list(..., flatten=True)` for flattening behavior
@@ -164,7 +174,8 @@ Remove duplicate output elements after applying function.
 - Deduplication: Set-based uniqueness (requires hashable results)
 - Order: Preserves first occurrence order
 - Use case: Function produces duplicate results, need unique set
-- Requires: `output_flatten=True` or `output_dropna=True` (raises `ValueError` otherwise)
+- Requires: `output_flatten=True` or `output_dropna=True` (raises `ValueError`
+  otherwise)
 
 **output_flatten_tuple_set** : bool, default False
 
@@ -179,10 +190,12 @@ Include tuples and sets when flattening output structures.
 
 **list[R]**
 
-List of results from applying `func` to each input element, with optional processing applied.
+List of results from applying `func` to each input element, with optional processing
+applied.
 
 - Type: Generic type `R` (function return type)
-- Length: Depends on input size and processing options (may shrink with `dropna`/`unique`, grow with `flatten`)
+- Length: Depends on input size and processing options (may shrink with
+  `dropna`/`unique`, grow with `flatten`)
 - Order: Preserves input order (unless flattening changes structure)
 - Early termination: Returns partial results if `InterruptedError` raised
 
@@ -209,7 +222,8 @@ Propagates any exception raised by `func` during execution (except `InterruptedE
 
 **InterruptedError** (caught)
 
-If `func` raises `InterruptedError`, returns partial results collected so far instead of propagating.
+If `func` raises `InterruptedError`, returns partial results collected so far instead of
+propagating.
 
 ## Usage Patterns
 
@@ -385,27 +399,37 @@ Different processing requirements exist at different pipeline stages:
 
 1. **Input normalization**: Flatten heterogeneous data structures before processing
 2. **Output transformation**: Handle nested results from function execution
-3. **Independent control**: Some use cases need input flattening but not output (or vice versa)
+3. **Independent control**: Some use cases need input flattening but not output (or vice
+   versa)
 
-Separate `input_*` and `output_*` flags provide fine-grained control without complex flag interactions.
+Separate `input_*` and `output_*` flags provide fine-grained control without complex
+flag interactions.
 
 ### Why Require `flatten` or `dropna` for `unique`?
 
 The `unique` operation requires `flatten` or `dropna` because:
 
-1. **Efficiency**: Uniqueness checks on raw nested structures are expensive and ambiguous
-2. **Semantics**: "Unique nested lists" is ill-defined - should `[[1, 2]]` and `[[2, 1]]` be considered equal?
-3. **Consistency**: `to_list` enforces this constraint, `lcall` inherits it for consistency
+1. **Efficiency**: Uniqueness checks on raw nested structures are expensive and
+   ambiguous
+2. **Semantics**: "Unique nested lists" is ill-defined - should `[[1, 2]]` and
+   `[[2, 1]]` be considered equal?
+3. **Consistency**: `to_list` enforces this constraint, `lcall` inherits it for
+   consistency
 
-Users must explicitly choose whether to flatten before deduplication or remove nulls first.
+Users must explicitly choose whether to flatten before deduplication or remove nulls
+first.
 
 ### Why InterruptedError Special Handling?
 
-`InterruptedError` is treated specially (returns partial results instead of propagating) because:
+`InterruptedError` is treated specially (returns partial results instead of propagating)
+because:
 
-1. **Graceful degradation**: Allows controlled early termination without losing completed work
-2. **User signals**: Applications can signal "stop processing" without exception handling overhead
-3. **Partial results utility**: In many cases, partial results are valuable even if processing didn't complete
+1. **Graceful degradation**: Allows controlled early termination without losing
+   completed work
+2. **User signals**: Applications can signal "stop processing" without exception
+   handling overhead
+3. **Partial results utility**: In many cases, partial results are valuable even if
+   processing didn't complete
 
 All other exceptions propagate normally for standard error handling.
 
@@ -413,18 +437,23 @@ All other exceptions propagate normally for standard error handling.
 
 Supporting `func` as `Iterable[Callable]` (with exactly one element) enables:
 
-1. **Higher-order composition**: Functions that wrap callables can pass them through consistently
+1. **Higher-order composition**: Functions that wrap callables can pass them through
+   consistently
 2. **API uniformity**: Callers don't need special-case logic for "list of one function"
-3. **Validation layer**: Explicit error if multiple callables passed (catches mistakes early)
+3. **Validation layer**: Explicit error if multiple callables passed (catches mistakes
+   early)
 
-This pattern appears in functional programming contexts where callables are passed through layers.
+This pattern appears in functional programming contexts where callables are passed
+through layers.
 
 ### Why Use `to_list` for Processing?
 
 Delegating to `to_list` for input/output processing ensures:
 
-1. **Single source of truth**: Flattening/filtering logic defined once, tested thoroughly
-2. **Consistency**: Same behavior across `to_list`, `lcall`, `alcall`, and future utilities
+1. **Single source of truth**: Flattening/filtering logic defined once, tested
+   thoroughly
+2. **Consistency**: Same behavior across `to_list`, `lcall`, `alcall`, and future
+   utilities
 3. **Maintainability**: Bug fixes and improvements automatically benefit all consumers
 4. **Type safety**: Shared validation logic prevents inconsistent parameter combinations
 
@@ -433,7 +462,8 @@ See [to_list](to_list.md) for detailed processing semantics.
 ## See Also
 
 - **Related Utilities**:
-  - [to_list](to_list.md): Core list conversion/processing utility (underlying implementation)
+  - [to_list](to_list.md): Core list conversion/processing utility (underlying
+    implementation)
   - [async_call()](./async_call.md): Async/await execution for concurrent operations
 - **Related Patterns**:
   - Built-in `map()`: Simple synchronous mapping without processing
