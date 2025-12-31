@@ -8,8 +8,8 @@
 credential handling (environment variable resolution), multiple authentication schemes,
 resilience patterns (circuit breaker, retry with backoff), and SSE streaming.
 
-**Use for**: LLM provider APIs (OpenAI, Anthropic, Gemini), REST APIs, webhooks.
-**Skip for**: Local function execution (use [Tool](tool.md)).
+**Use for**: LLM provider APIs (OpenAI, Anthropic, Gemini), REST APIs, webhooks. **Skip
+for**: Local function execution (use [Tool](tool.md)).
 
 This module provides:
 
@@ -63,39 +63,39 @@ class EndpointConfig(ServiceConfig):
 
 ### Parameters
 
-| Parameter          | Type               | Default              | Description                                                        |
-| ------------------ | ------------------ | -------------------- | ------------------------------------------------------------------ |
-| `provider`         | `str`              | Required             | Provider identifier (inherited from ServiceConfig).                |
-| `name`             | `str`              | Required             | Service name for registry lookup (inherited from ServiceConfig).   |
-| `endpoint`         | `str`              | Required             | API endpoint path (e.g., `"chat/completions"`).                    |
-| `base_url`         | `str or None`      | `None`               | Base URL for API (e.g., `"https://api.openai.com/v1"`).            |
-| `endpoint_params`  | `list[str] or None`| `None`               | URL template parameters (e.g., `["model_id"]` for `models/{model_id}`). |
-| `method`           | `str`              | `"POST"`             | HTTP method.                                                       |
-| `params`           | `dict[str, str]`   | `{}`                 | Values for `endpoint_params` template substitution.                |
-| `content_type`     | `str or None`      | `"application/json"` | Content-Type header. Set to `None` to omit.                        |
-| `auth_type`        | `AUTH_TYPES`       | `"bearer"`           | Authentication type: `"bearer"`, `"x-api-key"`, or `"none"`.       |
-| `default_headers`  | `dict`             | `{}`                 | Additional headers merged into all requests.                       |
-| `api_key`          | `str or None`      | `None`               | API key or environment variable name (see Security section).       |
-| `openai_compatible`| `bool`             | `False`              | Flag for OpenAI-compatible APIs.                                   |
-| `requires_tokens`  | `bool`             | `False`              | Enable token tracking for rate limiting.                           |
-| `client_kwargs`    | `dict`             | `{}`                 | Extra kwargs passed to `httpx.AsyncClient`.                        |
+| Parameter           | Type                | Default              | Description                                                             |
+| ------------------- | ------------------- | -------------------- | ----------------------------------------------------------------------- |
+| `provider`          | `str`               | Required             | Provider identifier (inherited from ServiceConfig).                     |
+| `name`              | `str`               | Required             | Service name for registry lookup (inherited from ServiceConfig).        |
+| `endpoint`          | `str`               | Required             | API endpoint path (e.g., `"chat/completions"`).                         |
+| `base_url`          | `str or None`       | `None`               | Base URL for API (e.g., `"https://api.openai.com/v1"`).                 |
+| `endpoint_params`   | `list[str] or None` | `None`               | URL template parameters (e.g., `["model_id"]` for `models/{model_id}`). |
+| `method`            | `str`               | `"POST"`             | HTTP method.                                                            |
+| `params`            | `dict[str, str]`    | `{}`                 | Values for `endpoint_params` template substitution.                     |
+| `content_type`      | `str or None`       | `"application/json"` | Content-Type header. Set to `None` to omit.                             |
+| `auth_type`         | `AUTH_TYPES`        | `"bearer"`           | Authentication type: `"bearer"`, `"x-api-key"`, or `"none"`.            |
+| `default_headers`   | `dict`              | `{}`                 | Additional headers merged into all requests.                            |
+| `api_key`           | `str or None`       | `None`               | API key or environment variable name (see Security section).            |
+| `openai_compatible` | `bool`              | `False`              | Flag for OpenAI-compatible APIs.                                        |
+| `requires_tokens`   | `bool`              | `False`              | Enable token tracking for rate limiting.                                |
+| `client_kwargs`     | `dict`              | `{}`                 | Extra kwargs passed to `httpx.AsyncClient`.                             |
 
 ### Properties
 
-| Property       | Type            | Description                              |
-| -------------- | --------------- | ---------------------------------------- |
-| `full_url`     | `str`           | Constructed URL: `{base_url}/{endpoint}` |
-| `api_key_env`  | `str or None`   | Alias for `api_key` (env var semantics)  |
+| Property      | Type          | Description                              |
+| ------------- | ------------- | ---------------------------------------- |
+| `full_url`    | `str`         | Constructed URL: `{base_url}/{endpoint}` |
+| `api_key_env` | `str or None` | Alias for `api_key` (env var semantics)  |
 
 ### Authentication Types
 
 The `auth_type` parameter controls how credentials are included in requests:
 
-| Type         | Header Generated                      | Use Case                           |
-| ------------ | ------------------------------------- | ---------------------------------- |
-| `"bearer"`   | `Authorization: Bearer {api_key}`     | OpenAI, most OAuth2 APIs           |
-| `"x-api-key"`| `x-api-key: {api_key}`                | Anthropic, AWS API Gateway         |
-| `"none"`     | No auth header                        | Public APIs, custom auth in headers|
+| Type          | Header Generated                  | Use Case                            |
+| ------------- | --------------------------------- | ----------------------------------- |
+| `"bearer"`    | `Authorization: Bearer {api_key}` | OpenAI, most OAuth2 APIs            |
+| `"x-api-key"` | `x-api-key: {api_key}`            | Anthropic, AWS API Gateway          |
+| `"none"`      | No auth header                    | Public APIs, custom auth in headers |
 
 ### API Key Security Model
 
@@ -165,12 +165,12 @@ class Endpoint(ServiceBackend):
 
 ### Parameters
 
-| Parameter         | Type                        | Default | Description                                       |
-| ----------------- | --------------------------- | ------- | ------------------------------------------------- |
-| `config`          | `dict or EndpointConfig`    | Required| Endpoint configuration.                           |
-| `circuit_breaker` | `CircuitBreaker or None`    | `None`  | Circuit breaker for fail-fast behavior.           |
-| `retry_config`    | `RetryConfig or None`       | `None`  | Retry configuration with exponential backoff.     |
-| `**kwargs`        | `Any`                       | -       | Merged into config if config is dict.             |
+| Parameter         | Type                     | Default  | Description                                   |
+| ----------------- | ------------------------ | -------- | --------------------------------------------- |
+| `config`          | `dict or EndpointConfig` | Required | Endpoint configuration.                       |
+| `circuit_breaker` | `CircuitBreaker or None` | `None`   | Circuit breaker for fail-fast behavior.       |
+| `retry_config`    | `RetryConfig or None`    | `None`   | Retry configuration with exponential backoff. |
+| `**kwargs`        | `Any`                    | -        | Merged into config if config is dict.         |
 
 ### Attributes
 
@@ -185,13 +185,13 @@ class Endpoint(ServiceBackend):
 
 ### Properties
 
-| Property          | Type                      | Description                                      |
-| ----------------- | ------------------------- | ------------------------------------------------ |
-| `full_url`        | `str`                     | Full URL from config (`{base_url}/{endpoint}`).  |
-| `event_type`      | `type[APICalling]`        | Returns `APICalling` class.                      |
-| `name`            | `str`                     | Service name from config.                        |
-| `provider`        | `str`                     | Provider from config.                            |
-| `request_options` | `type[BaseModel] or None` | Request validation schema from config.           |
+| Property          | Type                      | Description                                     |
+| ----------------- | ------------------------- | ----------------------------------------------- |
+| `full_url`        | `str`                     | Full URL from config (`{base_url}/{endpoint}`). |
+| `event_type`      | `type[APICalling]`        | Returns `APICalling` class.                     |
+| `name`            | `str`                     | Service name from config.                       |
+| `provider`        | `str`                     | Provider from config.                           |
+| `request_options` | `type[BaseModel] or None` | Request validation schema from config.          |
 
 ### Methods
 
@@ -291,22 +291,22 @@ class APICalling(Calling):
 
 ### Parameters
 
-| Parameter   | Type             | Description                                             |
-| ----------- | ---------------- | ------------------------------------------------------- |
-| `backend`   | `Endpoint`       | Endpoint instance (excluded from serialization).        |
-| `payload`   | `dict[str, Any]` | Request payload.                                        |
-| `headers`   | `dict`           | Request headers (excluded from serialization).          |
-| `timeout`   | `float or None`  | Event timeout in seconds (inherited from Event).        |
-| `streaming` | `bool`           | Enable streaming mode (inherited from Event).           |
+| Parameter   | Type             | Description                                      |
+| ----------- | ---------------- | ------------------------------------------------ |
+| `backend`   | `Endpoint`       | Endpoint instance (excluded from serialization). |
+| `payload`   | `dict[str, Any]` | Request payload.                                 |
+| `headers`   | `dict`           | Request headers (excluded from serialization).   |
+| `timeout`   | `float or None`  | Event timeout in seconds (inherited from Event). |
+| `streaming` | `bool`           | Enable streaming mode (inherited from Event).    |
 
 ### Properties
 
-| Property          | Type                          | Description                                           |
-| ----------------- | ----------------------------- | ----------------------------------------------------- |
+| Property          | Type                          | Description                                              |
+| ----------------- | ----------------------------- | -------------------------------------------------------- |
 | `required_tokens` | `int or None`                 | Estimated tokens for rate limiting. None skips tracking. |
-| `request`         | `dict`                        | Permission data for Processor rate limiting.          |
-| `call_args`       | `dict`                        | Arguments for `backend.call(**self.call_args)`.       |
-| `response`        | `NormalizedResponse or Unset` | Response after execution (inherited from Calling).    |
+| `request`         | `dict`                        | Permission data for Processor rate limiting.             |
+| `call_args`       | `dict`                        | Arguments for `backend.call(**self.call_args)`.          |
+| `response`        | `NormalizedResponse or Unset` | Response after execution (inherited from Calling).       |
 
 ### Token Estimation
 
@@ -344,11 +344,11 @@ endpoint = Endpoint(
 
 **States**:
 
-| State       | Behavior                                        |
-| ----------- | ----------------------------------------------- |
-| `CLOSED`    | Normal operation, tracking failures.            |
+| State       | Behavior                                                   |
+| ----------- | ---------------------------------------------------------- |
+| `CLOSED`    | Normal operation, tracking failures.                       |
 | `OPEN`      | Rejecting all requests, raising `CircuitBreakerOpenError`. |
-| `HALF_OPEN` | Allowing limited test requests.                 |
+| `HALF_OPEN` | Allowing limited test requests.                            |
 
 ### Retry with Backoff
 
@@ -538,9 +538,9 @@ config = EndpointConfig(
 - **Missing request_options**: `create_payload()` requires `request_options` schema.
   Define a Pydantic model for request validation.
 
-- **API key not found**: If env var pattern matches but env var doesn't exist, credential
-  is treated as raw and cleared. Ensure env var is set or use `SecretStr` for explicit
-  raw credentials.
+- **API key not found**: If env var pattern matches but env var doesn't exist,
+  credential is treated as raw and cleared. Ensure env var is set or use `SecretStr` for
+  explicit raw credentials.
 
 - **System env var collision**: Using `HOME`, `PATH`, etc. as `api_key` raises
   `ValueError`. Use a different env var name.
