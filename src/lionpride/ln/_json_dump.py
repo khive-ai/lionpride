@@ -148,15 +148,13 @@ def get_orjson_default(
                         break
             else:
                 # Duck-typed support for common data holders
-                md = getattr(obj, "model_dump", None)
-                if callable(md):
-                    with contextlib.suppress(Exception):
-                        return md()
+                methods = ("model_dump", "to_dict", "dict")
+                for m in methods:
+                    md = getattr(obj, m, None)
+                    if callable(md):
+                        with contextlib.suppress(Exception):
+                            return md()
 
-                dd = getattr(obj, "dict", None)
-                if callable(dd):
-                    with contextlib.suppress(Exception):
-                        return dd()
                 if safe_fallback:
                     if isinstance(obj, Exception):
                         return _safe_exception_payload(obj)

@@ -8,16 +8,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, field_serializer, field_validator
 from pydantic_core.core_schema import SerializationInfo
-from pydapter import (
-    Adaptable as PydapterAdaptable,
-    AsyncAdaptable as PydapterAsyncAdaptable,
-)
 
 from ..protocols import (
-    Adaptable,
-    AdapterRegisterable,
-    AsyncAdaptable,
-    AsyncAdapterRegisterable,
     Deserializable,
     Serializable,
     implements,
@@ -28,19 +20,14 @@ NODE_REGISTRY: dict[str, type[Node]] = {}
 
 
 @implements(
-    Adaptable,
-    AdapterRegisterable,
-    AsyncAdaptable,
-    AsyncAdapterRegisterable,
     Deserializable,
     Serializable,
 )
-class Node(Element, PydapterAdaptable, PydapterAsyncAdaptable):
+class Node(Element):
     """Polymorphic container for structured, composable data with embeddings.
 
     Enables graph-of-graphs, JSONB query-ability, and type-safe composition.
     Auto-registers subclasses for polymorphic deserialization via NODE_REGISTRY.
-    Base Node includes toml/yaml adapters; subclasses use isolated registries.
     """
 
     content: dict[str, Any] | Serializable | BaseModel | None = None
@@ -48,16 +35,10 @@ class Node(Element, PydapterAdaptable, PydapterAsyncAdaptable):
 
     @classmethod
     def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
-        """Register subclass in NODE_REGISTRY with isolated adapter registry."""
+        """Register subclass in NODE_REGISTRY."""
         super().__pydantic_init_subclass__(**kwargs)
         NODE_REGISTRY[cls.__name__] = cls
         NODE_REGISTRY[f"{cls.__module__}.{cls.__name__}"] = cls
-
-        # Force creation of isolated registry for subclass (prevents parent inheritance)
-        # This ensures each subclass has its own registry, not inheriting from Node
-        if cls is not Node:
-            # Access _registry() to trigger creation of isolated registry
-            _ = cls._registry()
 
     @field_serializer("content")
     def _serialize_content(self, value: Any) -> Any:
@@ -292,51 +273,8 @@ class Node(Element, PydapterAdaptable, PydapterAsyncAdaptable):
 
         return cls.model_validate(data, **kwargs)
 
-    @classmethod
-    def register_adapter(cls, adapter: Any) -> None:  # pragma: no cover
-        """Register adapter for this class."""
-        super().register_adapter(adapter)
-
-    @classmethod
-    def register_async_adapter(cls, adapter: Any) -> None:  # pragma: no cover
-        """Register async adapter for this class."""
-        super().register_async_adapter(adapter)
-
-    def adapt_to(self, obj_key: str, many: bool = False, **kwargs: Any) -> Any:
-        """Convert to external format via pydapter (defaults to mode='db')."""
-        kwargs.setdefault("adapt_meth", "to_dict")
-        kwargs.setdefault("adapt_kw", {"mode": "db"})
-        return super().adapt_to(obj_key=obj_key, many=many, **kwargs)
-
-    @classmethod
-    def adapt_from(cls, obj: Any, obj_key: str, many: bool = False, **kwargs: Any) -> Node:
-        """Create from external format via pydapter (polymorphic)."""
-        kwargs.setdefault("adapt_meth", "from_dict")
-        return super().adapt_from(obj, obj_key=obj_key, many=many, **kwargs)
-
-    async def adapt_to_async(
-        self, obj_key: str, many: bool = False, **kwargs: Any
-    ) -> Any:  # pragma: no cover
-        """Async convert to external format via pydapter (defaults to mode='db')."""
-        kwargs.setdefault("adapt_meth", "to_dict")
-        kwargs.setdefault("adapt_kw", {"mode": "db"})
-        return await super().adapt_to_async(obj_key=obj_key, many=many, **kwargs)
-
-    @classmethod
-    async def adapt_from_async(  # pragma: no cover
-        cls, obj: Any, obj_key: str, many: bool = False, **kwargs: Any
-    ) -> Node:
-        """Async create from external format via pydapter (polymorphic)."""
-        kwargs.setdefault("adapt_meth", "from_dict")
-        return await super().adapt_from_async(obj, obj_key=obj_key, many=many, **kwargs)
-
 
 NODE_REGISTRY[Node.__name__] = Node
 NODE_REGISTRY[Node.class_name(full=True)] = Node
-
-from pydapter.adapters import TomlAdapter, YamlAdapter
-
-Node.register_adapter(TomlAdapter)  # type: ignore[type-abstract]
-Node.register_adapter(YamlAdapter)  # type: ignore[type-abstract]
 
 __all__ = ("NODE_REGISTRY", "Node")
