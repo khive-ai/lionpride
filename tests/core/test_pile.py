@@ -1273,69 +1273,6 @@ class TestPileTypeConstraintsEdgeCases:
         with pytest.raises(TypeError, match="is not a subclass of any allowed type"):
             Pile.from_dict(data)
 
-    def test_isolated_registry_per_subclass(self):
-        """
-        Test that each Pile subclass has its own isolated adapter registry.
-
-        Pattern:
-            Rust-like explicit adapter pattern (no implicit inheritance)
-
-        Edge Case:
-            Adapter registration is per-class, not shared across hierarchy
-
-        Scenario:
-            1. Create two Pile subclasses (PileA, PileB)
-            2. Verify neither has adapters initially
-            3. Attempt to use unregistered adapter (toml)
-            4. Verify AdapterNotFoundError raised for both
-
-        Expected:
-            Both subclasses have independent registries (no shared state)
-
-        Design Rationale:
-            Why explicit adapters?
-                - Prevents adapter pollution across hierarchy
-                - Explicit registration required (Rust-like safety)
-                - Each subclass controls its own adapter set
-
-        Architecture:
-            pydapter creates unique registry attribute per class using id(cls).
-            This ensures complete isolation between subclasses.
-
-        Use Case:
-            Domain-specific Pile subclasses with different serialization needs
-            (e.g., FilePile with file:// adapters, DBPile with db:// adapters).
-
-        Complexity:
-            Registry lookup: O(1) via class ID-based attribute name
-        """
-
-        # Create two Pile subclasses
-        class PileA(Pile):
-            pass
-
-        class PileB(Pile):
-            pass
-
-        # Both should have independent registries (no adapters initially)
-        from pydapter.exceptions import AdapterNotFoundError
-
-        pile_a = PileA([Element()])
-        pile_b = PileB([Element()])
-
-        # Neither has toml adapter (isolated registries)
-        try:
-            pile_a.adapt_to("toml")
-            raise AssertionError("PileA should not have toml adapter")
-        except AdapterNotFoundError:
-            pass  # Expected
-
-        try:
-            pile_b.adapt_to("toml")
-            raise AssertionError("PileB should not have toml adapter")
-        except AdapterNotFoundError:
-            pass  # Expected
-
 
 # =============================================================================
 # Serialization Tests
@@ -1368,7 +1305,7 @@ class TestPileTypeConstraintsEdgeCases:
 #
 # 3. db:
 #    - Like json, but metadata → node_metadata (db column naming)
-#    - For PostgreSQL/Qdrant storage via pydapter
+#    - For PostgreSQL/Qdrant storage
 #
 # Progression Preservation:
 # --------------------------

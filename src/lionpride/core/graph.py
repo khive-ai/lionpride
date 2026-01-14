@@ -9,18 +9,10 @@ from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import Field, PrivateAttr, field_validator, model_validator
-from pydapter import (
-    Adaptable as PydapterAdaptable,
-    AsyncAdaptable as PydapterAsyncAdaptable,
-)
 from typing_extensions import override
 
 from ..errors import NotFoundError
 from ..protocols import (
-    Adaptable,
-    AdapterRegisterable,
-    AsyncAdaptable,
-    AsyncAdapterRegisterable,
     Containable,
     Deserializable,
     Serializable,
@@ -96,12 +88,8 @@ class Edge(Element):
     Serializable,
     Deserializable,
     Containable,
-    Adaptable,
-    AdapterRegisterable,
-    AsyncAdaptable,
-    AsyncAdapterRegisterable,
 )
-class Graph(Element, PydapterAdaptable, PydapterAsyncAdaptable):
+class Graph(Element):
     """Directed graph with Pile-backed storage, O(1) operations, graph algorithms.
 
     Adjacency lists (_out_edges, _in_edges) provide O(1) node/edge queries.
@@ -498,41 +486,3 @@ class Graph(Element, PydapterAdaptable, PydapterAsyncAdaptable):
         graph = cls.model_validate(data, **kwargs)
 
         return graph
-
-    # ==================== Adapter Methods ====================
-
-    @classmethod
-    def register_adapter(cls, adapter: Any) -> None:  # pragma: no cover
-        """Register adapter for this class."""
-        super().register_adapter(adapter)
-
-    @classmethod
-    def register_async_adapter(cls, adapter: Any) -> None:  # pragma: no cover
-        """Register async adapter for this class."""
-        super().register_async_adapter(adapter)
-
-    def adapt_to(self, obj_key: str, many: bool = False, **kwargs: Any) -> Any:
-        """Convert to external format via pydapter adapter."""
-        kwargs.setdefault("adapt_meth", "to_dict")
-        kwargs.setdefault("adapt_kw", {"mode": "db"})
-        return super().adapt_to(obj_key=obj_key, many=many, **kwargs)
-
-    @classmethod
-    def adapt_from(cls, obj: Any, obj_key: str, many: bool = False, **kwargs: Any) -> Graph:
-        """Create from external format via pydapter adapter."""
-        kwargs.setdefault("adapt_meth", "from_dict")
-        return super().adapt_from(obj, obj_key=obj_key, many=many, **kwargs)
-
-    async def adapt_to_async(self, obj_key: str, many: bool = False, **kwargs: Any) -> Any:
-        """Async convert to external format via pydapter adapter."""
-        kwargs.setdefault("adapt_meth", "to_dict")
-        kwargs.setdefault("adapt_kw", {"mode": "db"})
-        return await super().adapt_to_async(obj_key=obj_key, many=many, **kwargs)
-
-    @classmethod
-    async def adapt_from_async(
-        cls, obj: Any, obj_key: str, many: bool = False, **kwargs: Any
-    ) -> Graph:
-        """Async create from external format via pydapter adapter."""
-        kwargs.setdefault("adapt_meth", "from_dict")
-        return await super().adapt_from_async(obj, obj_key=obj_key, many=many, **kwargs)

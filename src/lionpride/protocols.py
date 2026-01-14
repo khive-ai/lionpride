@@ -7,11 +7,7 @@ from typing import Any, Literal, Protocol, runtime_checkable
 from uuid import UUID
 
 __all__ = (
-    "Adaptable",
-    "AdapterRegisterable",
     "Allowable",
-    "AsyncAdaptable",
-    "AsyncAdapterRegisterable",
     "Communicatable",
     "Containable",
     "Deserializable",
@@ -56,56 +52,6 @@ class Deserializable(Protocol):
     @classmethod
     def from_dict(cls, data: dict[str, Any], **kwargs: Any) -> Any:
         """Deserialize from dict. Args: data dict, deserialization options."""
-        ...
-
-
-@runtime_checkable
-class Adaptable(Protocol):
-    """Sync adapter protocol for format conversion (TOML/YAML/JSON/SQL). Use AsyncAdaptable for async."""
-
-    def adapt_to(self, obj_key: str, many: bool = False, **kwargs: Any) -> Any:
-        """Convert to external format. Args: adapter key, many flag, adapter kwargs."""
-        ...
-
-    @classmethod
-    def adapt_from(cls, obj: Any, obj_key: str, many: bool = False, **kwargs: Any) -> Any:
-        """Create from external format. Args: source object, adapter key, many flag."""
-        ...
-
-
-@runtime_checkable
-class AdapterRegisterable(Protocol):
-    """Mutable adapter registry. Compose with Adaptable for configurable adapters."""
-
-    @classmethod
-    def register_adapter(cls, adapter: Any) -> None:
-        """Register adapter for this class."""
-        ...
-
-
-@runtime_checkable
-class AsyncAdaptable(Protocol):
-    """Async adapter protocol for I/O-bound format conversion (DBs, network, files). Use Adaptable for sync."""
-
-    async def adapt_to_async(self, obj_key: str, many: bool = False, **kwargs: Any) -> Any:
-        """Async convert to external format. Args: adapter key, many flag, adapter kwargs."""
-        ...
-
-    @classmethod
-    async def adapt_from_async(
-        cls, obj: Any, obj_key: str, many: bool = False, **kwargs: Any
-    ) -> Any:
-        """Async create from external format. Args: source object, adapter key, many flag."""
-        ...
-
-
-@runtime_checkable
-class AsyncAdapterRegisterable(Protocol):
-    """Mutable async adapter registry. Compose with AsyncAdaptable for configurable async adapters."""
-
-    @classmethod
-    def register_async_adapter(cls, adapter: Any) -> None:
-        """Register async adapter for this class."""
         ...
 
 

@@ -10,19 +10,11 @@ from typing import Any, Generic, Literal, TypeVar, overload
 from uuid import UUID
 
 from pydantic import Field, PrivateAttr, field_serializer, field_validator
-from pydapter import (
-    Adaptable as PydapterAdaptable,
-    AsyncAdaptable as PydapterAsyncAdaptable,
-)
 from typing_extensions import override
 
 from ..errors import ExistsError, NotFoundError
 from ..libs.concurrency import Lock as AsyncLock
 from ..protocols import (
-    Adaptable,
-    AdapterRegisterable,
-    AsyncAdaptable,
-    AsyncAdapterRegisterable,
     Containable,
     Deserializable,
     Serializable,
@@ -43,14 +35,10 @@ T = TypeVar("T", bound=Element)
 
 @implements(
     Containable,
-    Adaptable,
-    AdapterRegisterable,
-    AsyncAdaptable,
-    AsyncAdapterRegisterable,
     Serializable,
     Deserializable,
 )
-class Pile(Element, PydapterAdaptable, PydapterAsyncAdaptable, Generic[T]):
+class Pile(Element, Generic[T]):
     """Thread-safe typed collection with rich query interface.
 
     Type-dispatched __getitem__:
@@ -749,44 +737,6 @@ class Pile(Element, PydapterAdaptable, PydapterAsyncAdaptable, Generic[T]):
             pile.add(item)  # type: ignore[arg-type]  # Adds to _items dict + _progression (maintains order)
 
         return pile
-
-    # ==================== Adapter Methods ====================
-
-    @classmethod
-    def register_adapter(cls, adapter: Any) -> None:
-        """Register adapter for this class."""
-        super().register_adapter(adapter)
-
-    @classmethod
-    def register_async_adapter(cls, adapter: Any) -> None:
-        """Register async adapter for this class."""
-        super().register_async_adapter(adapter)
-
-    def adapt_to(self, obj_key: str, many: bool = False, **kwargs: Any) -> Any:
-        """Convert to external format via pydapter adapter."""
-        kwargs.setdefault("adapt_meth", "to_dict")
-        kwargs.setdefault("adapt_kw", {"mode": "db"})
-        return super().adapt_to(obj_key=obj_key, many=many, **kwargs)
-
-    @classmethod
-    def adapt_from(cls, obj: Any, obj_key: str, many: bool = False, **kwargs: Any) -> Pile:
-        """Create from external format via pydapter adapter."""
-        kwargs.setdefault("adapt_meth", "from_dict")
-        return super().adapt_from(obj, obj_key=obj_key, many=many, **kwargs)
-
-    async def adapt_to_async(self, obj_key: str, many: bool = False, **kwargs: Any) -> Any:
-        """Async convert to external format via pydapter adapter."""
-        kwargs.setdefault("adapt_meth", "to_dict")
-        kwargs.setdefault("adapt_kw", {"mode": "db"})
-        return await super().adapt_to_async(obj_key=obj_key, many=many, **kwargs)
-
-    @classmethod
-    async def adapt_from_async(
-        cls, obj: Any, obj_key: str, many: bool = False, **kwargs: Any
-    ) -> Pile:
-        """Async create from external format via pydapter adapter."""
-        kwargs.setdefault("adapt_meth", "from_dict")
-        return await super().adapt_from_async(obj, obj_key=obj_key, many=many, **kwargs)
 
     def __repr__(self) -> str:
         return f"Pile(len={len(self)})"

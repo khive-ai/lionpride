@@ -1,6 +1,6 @@
 [project]
 name = "lionpride"
-version = "1.0.0a10"
+version = "1.0.0a11"
 description = "The kernel layer for production AI agents - protocol-based, type-safe, zero framework lock-in"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -30,11 +30,12 @@ classifiers = [
   "Typing :: Typed",
 ]
 dependencies = [
-  "pydapter>=1.2.0",
   "anyio>=4.7.0",
   "httpx>=0.27.0",
   "python-dotenv>=1.2.1",
   "tiktoken>=0.8.0",
+  "pydantic>=2.10.0",
+  "orjson>=3.10.0",
 ]
 
 [project.optional-dependencies]
