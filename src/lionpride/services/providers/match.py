@@ -1,4 +1,4 @@
-# Copyright (c) 2025, HaiyangLi <quantocean.li at gmail dot com>
+# Copyright (c) 2025 - 2026, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
@@ -13,6 +13,7 @@ KNOWN_PROVIDERS = frozenset(
         "openrouter",
         "nvidia_nim",
         "claude_code",
+        "gemini_code",
     }
 )
 
@@ -25,7 +26,7 @@ def match_endpoint(
     """Match provider and endpoint to appropriate Endpoint class.
 
     Args:
-        provider: Provider name (e.g., "anthropic", "openai", "groq", "openrouter", "nvidia_nim", "claude_code")
+        provider: Provider name (e.g., "anthropic", "openai", "claude_code")
         endpoint: Endpoint name (e.g., "messages", "chat/completions", "query_cli")
         **kwargs: Additional kwargs passed to Endpoint constructor
 
