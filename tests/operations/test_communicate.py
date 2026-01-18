@@ -9,7 +9,7 @@ Tests:
 - Capability enforcement
 - Message persistence
 
-Note: Uses MockNormalizedResponse, mock_model, and session_with_model fixtures from conftest.py.
+Note: Uses mock_normalized_response, mock_model, and session_with_model fixtures from conftest.py.
 """
 
 from unittest.mock import AsyncMock
@@ -26,7 +26,7 @@ from lionpride.operations.operate.types import (
 )
 from lionpride.session import Session
 from lionpride.types import Operable, Spec
-from tests.operations.conftest import MockNormalizedResponse
+from tests.operations.conftest import mock_normalized_response
 
 
 class TestCommunicateValidation:
@@ -165,7 +165,7 @@ class TestIPUPath:
                 def __init__(self):
                     super().__init__()
                     self.status = EventStatus.COMPLETED
-                    self.execution.response = MockNormalizedResponse(
+                    self.execution.response = mock_normalized_response(
                         data='{"name": "test", "value": 42}'
                     )
 
@@ -208,7 +208,7 @@ class TestIPUPath:
                 def __init__(self):
                     super().__init__()
                     self.status = EventStatus.COMPLETED
-                    self.execution.response = MockNormalizedResponse(
+                    self.execution.response = mock_normalized_response(
                         data='{"name": "test", "value": 42}'
                     )
 

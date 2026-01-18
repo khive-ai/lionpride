@@ -28,6 +28,7 @@ from lionpride.errors import (
     ValidationError,
 )
 from lionpride.operations.operate.parse import _direct_parse, _llm_reparse, parse
+from lionpride.types._sentinel import Unset
 from lionpride.operations.operate.types import ParseParams
 
 
@@ -240,7 +241,9 @@ class TestParse:
         """Test that sentinel text raises ValidationError."""
         session, branch = mock_session_branch
 
-        params = ParseParams()  # text is sentinel (not provided)
+        params = ParseParams(text="placeholder", target_keys=["key"])
+        # Force set text to a sentinel value
+        object.__setattr__(params, "text", Unset)
 
         with pytest.raises(ValidationError) as exc_info:
             await parse(session, branch, params)
