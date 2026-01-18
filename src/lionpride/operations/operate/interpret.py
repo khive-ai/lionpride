@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from lionpride.services.types import iModel
 
 from .generate import generate
-from .phrases import name_must_exist_in_branch_resources, text_must_be_provided
+from .phrases import resource_must_be_accessible_by_branch, text_must_be_provided
 from .types import GenerateParams, InterpretParams
 
 if TYPE_CHECKING:
@@ -45,7 +45,7 @@ async def interpret(
 
     # Resource access check
     model_name = params.imodel.name if isinstance(params.imodel, iModel) else params.imodel
-    name_must_exist_in_branch_resources(branch, model_name)
+    resource_must_be_accessible_by_branch(branch, model_name)
 
     # Build interpretation prompt
     system_instruction = (

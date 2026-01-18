@@ -15,8 +15,8 @@ from lionpride.session.messages import (
 
 from .phrases import (
     action_request_must_have_function,
-    tool_must_be_accessible_by_branch,
-    tool_must_exist_in_registry,
+    resource_must_be_accessible_by_branch,
+    resource_must_exist_in_session,
 )
 
 if TYPE_CHECKING:
@@ -55,8 +55,8 @@ async def act(
     # Validate upfront using phrases
     for req in action_requests:
         action_request_must_have_function(req)
-        tool_must_exist_in_registry(session, req.function)
-        tool_must_be_accessible_by_branch(branch, req.function)
+        resource_must_exist_in_session(session, req.function)
+        resource_must_be_accessible_by_branch(branch, req.function)
 
     async def execute_single(req: ActionRequest) -> ActionResponse:
         try:

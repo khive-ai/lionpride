@@ -17,9 +17,10 @@ from lionpride.services.types import NormalizedResponse
 from lionpride.session.session import Branch
 from lionpride.types import is_sentinel
 
-from .types import GenerateParams
+from .types import GenerateParams, ParseParams
 
 if TYPE_CHECKING:
+    from lionpride.rules import ActionRequest
     from lionpride.services.types import Calling, iModel
     from lionpride.session import Session
     from lionpride.types import Operable
@@ -151,3 +152,36 @@ def resolve_generate_params(params: Any) -> GenerateParams:
     if not isinstance(params.generate, GenerateParams):
         raise ValidationError("'generate' field is not of type GenerateParams")
     return params.generate
+
+
+def resolve_parse_params(params: Any) -> ParseParams:
+    """Extract ParseParams from composite or raise ValidationError."""
+    if not hasattr(params, "parse"):
+        raise ValidationError("Params object missing 'parse'")
+    if not isinstance(params.parse, ParseParams):
+        raise ValidationError("'parse' field is not of type ParseParams")
+    return params.parse
+
+
+def text_must_be_provided(params: Any, *, operation: str = "operation") -> str:
+    """Return text or raise ValidationError if missing."""
+    if not hasattr(params, "text") or is_sentinel(params.text):
+        raise ValidationError(f"{operation} requires 'text' parameter")
+    return params.text
+
+
+def generate_params_must_be_provided(params: Any, *, operation: str = "operation") -> GenerateParams:
+    """Return GenerateParams or raise ValidationError if missing."""
+    if not hasattr(params, "generate") or is_sentinel(params.generate):
+        raise ValidationError(f"{operation} requires 'generate' params")
+    if not isinstance(params.generate, GenerateParams):
+        raise ValidationError(f"{operation} 'generate' must be GenerateParams")
+    return params.generate
+
+
+def action_request_must_have_function(request: ActionRequest) -> None:
+    """Raises ValidationError if ActionRequest has no function."""
+    if not request.function:
+        raise ValidationError("ActionRequest must have a 'function' name")
+
+

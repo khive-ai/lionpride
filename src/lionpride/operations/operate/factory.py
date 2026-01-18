@@ -16,8 +16,8 @@ from .communicate import communicate
 from .phrases import (
     capabilities_must_be_subset_of_branch,
     capabilities_must_be_subset_of_operable,
+    genai_model_must_be_configured,
     generate_params_must_be_provided,
-    imodel_must_be_configured,
     resolve_branch_exists_in_session,
     resolve_parse_params,
 )
@@ -63,7 +63,7 @@ async def operate(
     """
     # 1. Validate required params
     gen_params = generate_params_must_be_provided(params, operation="operate")
-    imodel_must_be_configured(session, gen_params, operation="operate")
+    genai_model_must_be_configured(session, gen_params, operation="operate")
 
     # 2. Resolve branch
     b_ = resolve_branch_exists_in_session(session, branch)

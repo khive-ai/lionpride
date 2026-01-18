@@ -15,8 +15,8 @@ from lionpride.types import Operable, Spec
 
 from .phrases import (
     capabilities_must_be_subset_of_branch,
+    genai_model_must_be_configured,
     generate_params_must_be_provided,
-    imodel_must_be_configured,
     resolve_branch_exists_in_session,
 )
 from .types import GenerateParams, OperateParams, ParseParams, ReactParams
@@ -187,7 +187,7 @@ async def react_stream(
     imodel_kwargs = gen_params.imodel_kwargs or {}
     context = gen_params.context
 
-    imodel_must_be_configured(session, gen_params, operation="react")
+    genai_model_must_be_configured(session, gen_params, operation="react")
 
     # Extract model_name for API calls
     model_name = imodel_kwargs.get("model_name") or imodel_kwargs.get("model")

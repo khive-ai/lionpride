@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING, Any
 from lionpride.session.messages import prepare_messages_for_chat
 
 from .phrases import (
-    name_must_exist_in_branch_resources,
     resolve_branch_exists_in_session,
     resolve_genai_model_exists_in_session,
     resolve_response_is_normalized,
+    resource_must_be_accessible_by_branch,
     response_must_be_completed,
 )
 from .types import GenerateParams, ReturnAs
@@ -32,7 +32,7 @@ async def generate(
 ):
     b_ = resolve_branch_exists_in_session(session, branch)
     imodel_, imodel_kw = resolve_genai_model_exists_in_session(session, params)
-    name_must_exist_in_branch_resources(b_, imodel_.name)
+    resource_must_be_accessible_by_branch(b_, imodel_.name)
 
     msgs = session.messages[b_]
 
