@@ -54,9 +54,7 @@ class TestInterpretValidation:
             await interpret(session, branch, params)
 
     @pytest.mark.asyncio
-    async def test_model_not_in_branch_resources_raises_access_error(
-        self, session_with_model
-    ):
+    async def test_model_not_in_branch_resources_raises_access_error(self, session_with_model):
         """Line 50-55: Model not in branch.resources raises AccessError."""
         session, model = session_with_model
         # Branch without any resources
@@ -71,9 +69,7 @@ class TestInterpretValidation:
             await interpret(session, branch, params)
 
     @pytest.mark.asyncio
-    async def test_imodel_object_not_in_resources_raises_access_error(
-        self, session_with_model
-    ):
+    async def test_imodel_object_not_in_resources_raises_access_error(self, session_with_model):
         """Line 50: Test with iModel object (not string) - extracts name."""
         session, model = session_with_model
         # Branch without any resources

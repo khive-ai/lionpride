@@ -70,8 +70,10 @@ import pytest
 # Test Event and Processor Subclasses (Minimal implementations for testing)
 # ============================================================================
 # Import reusable Event and Processor from testing module
-from conftest import SimpleTestEvent as ExecTestEvent
-from conftest import TestProcessor as ExecTestProcessor
+from conftest import (
+    SimpleTestEvent as ExecTestEvent,
+    TestProcessor as ExecTestProcessor,
+)
 
 from lionpride.core import Event, EventStatus, Executor, Pile, Processor
 

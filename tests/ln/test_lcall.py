@@ -2,8 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-from hypothesis import given, settings
-from hypothesis import strategies as st
+from hypothesis import (
+    given,
+    settings,
+    strategies as st,
+)
 
 from lionpride.ln import lcall
 

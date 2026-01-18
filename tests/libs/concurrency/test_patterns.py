@@ -10,8 +10,11 @@ from lionpride.libs.concurrency import bounded_map, fail_after, gather, race, re
 
 # Optional hypothesis import for property-based testing
 try:
-    from hypothesis import given, settings
-    from hypothesis import strategies as st
+    from hypothesis import (
+        given,
+        settings,
+        strategies as st,
+    )
 
     HAS_HYPOTHESIS = True
 except ImportError:

@@ -13,13 +13,18 @@ Focus areas:
 from unittest.mock import AsyncMock
 
 import pytest
-from tests.operations.conftest import mock_normalized_response
 
 from lionpride import Event, EventStatus
-from lionpride.errors import AccessError, ConfigurationError, ExecutionError, ValidationError
+from lionpride.errors import (
+    AccessError,
+    ConfigurationError,
+    ExecutionError,
+    ValidationError,
+)
 from lionpride.operations.operate.generate import generate
 from lionpride.operations.operate.types import GenerateParams
 from lionpride.session.messages import Message
+from tests.operations.conftest import mock_normalized_response
 
 
 class TestGenerateValidation:

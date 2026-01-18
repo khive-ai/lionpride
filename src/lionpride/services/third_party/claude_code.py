@@ -11,8 +11,10 @@ import json  # Required for JSONDecoder.raw_decode() (streaming JSON parsing)
 import logging
 import shutil
 from collections.abc import AsyncIterator, Callable
-from dataclasses import dataclass
-from dataclasses import field as datafield
+from dataclasses import (
+    dataclass,
+    field as datafield,
+)
 from pathlib import Path
 from textwrap import shorten
 from typing import Any, Literal

@@ -45,11 +45,13 @@ import pytest
 # Test Event Subclasses (Concrete implementations for testing)
 # ============================================================================
 # Import reusable Event classes from testing module
-from conftest import FailingTestEvent as FailingEvent
-from conftest import SimpleTestEvent as SimpleEvent
-from conftest import SlowTestEvent as SlowEvent
-from conftest import StreamingTestEvent as StreamingEvent
-from conftest import TestProcessor as SimpleProcessor
+from conftest import (
+    FailingTestEvent as FailingEvent,
+    SimpleTestEvent as SimpleEvent,
+    SlowTestEvent as SlowEvent,
+    StreamingTestEvent as StreamingEvent,
+    TestProcessor as SimpleProcessor,
+)
 
 from lionpride.core.event import Event, EventStatus
 from lionpride.core.pile import Pile

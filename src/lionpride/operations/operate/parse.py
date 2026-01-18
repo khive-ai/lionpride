@@ -14,8 +14,8 @@ from lionpride.errors import (
 from lionpride.libs.string_handlers import extract_json
 from lionpride.ln import fuzzy_validate_mapping
 from lionpride.session.messages import InstructionContent, Message
-
 from lionpride.types import is_sentinel
+
 from .types import CustomParser, GenerateParams, HandleUnmatched, ParseParams
 
 if TYPE_CHECKING:

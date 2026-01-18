@@ -28,8 +28,8 @@ from lionpride.errors import (
     ValidationError,
 )
 from lionpride.operations.operate.parse import _direct_parse, _llm_reparse, parse
-from lionpride.types._sentinel import Unset
 from lionpride.operations.operate.types import ParseParams
+from lionpride.types._sentinel import Unset
 
 
 class TestDirectParse:

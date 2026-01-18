@@ -6,10 +6,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from lionpride.services.types import iModel
-
-from .generate import generate
 from lionpride.types import is_sentinel
 
+from .generate import generate
 from .phrases import resource_must_be_accessible_by_branch
 from .types import GenerateParams, InterpretParams
 
