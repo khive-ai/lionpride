@@ -17,8 +17,8 @@ from .phrases import (
     capabilities_must_be_subset_of_branch,
     capabilities_must_be_subset_of_operable,
     genai_model_must_be_configured,
-    generate_params_must_be_provided,
     resolve_branch_exists_in_session,
+    resolve_generate_params,
     resolve_parse_params,
 )
 from .types import CommunicateParams, OperateParams
@@ -62,7 +62,7 @@ async def operate(
         AccessError: If branch lacks required capabilities.
     """
     # 1. Validate required params
-    gen_params = generate_params_must_be_provided(params, operation="operate")
+    gen_params = resolve_generate_params(params)
     genai_model_must_be_configured(session, gen_params, operation="operate")
 
     # 2. Resolve branch

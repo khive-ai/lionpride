@@ -16,8 +16,8 @@ from lionpride.types import Operable, Spec
 from .phrases import (
     capabilities_must_be_subset_of_branch,
     genai_model_must_be_configured,
-    generate_params_must_be_provided,
     resolve_branch_exists_in_session,
+    resolve_generate_params,
 )
 from .types import GenerateParams, OperateParams, ParseParams, ReactParams
 
@@ -177,7 +177,7 @@ async def react_stream(
     from .factory import operate
 
     # 1. Validate params using phrases
-    gen_params = generate_params_must_be_provided(params, operation="react")
+    gen_params = resolve_generate_params(params)
 
     instruction = gen_params.instruction
     if not instruction:

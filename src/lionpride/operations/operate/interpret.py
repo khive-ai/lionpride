@@ -8,7 +8,9 @@ from typing import TYPE_CHECKING
 from lionpride.services.types import iModel
 
 from .generate import generate
-from .phrases import resource_must_be_accessible_by_branch, text_must_be_provided
+from lionpride.types import is_sentinel
+
+from .phrases import resource_must_be_accessible_by_branch
 from .types import GenerateParams, InterpretParams
 
 if TYPE_CHECKING:
@@ -36,9 +38,13 @@ async def interpret(
         ValidationError: If required params missing
         ConfigurationError: If branch doesn't have access to imodel
     """
-    text = text_must_be_provided(params, operation="interpret")
+    if is_sentinel(params.text):
+        from lionpride.errors import ValidationError
 
-    if params._is_sentinel(params.imodel):
+        raise ValidationError("interpret requires 'text' parameter")
+    text = params.text
+
+    if is_sentinel(params.imodel):
         from lionpride.errors import ValidationError
 
         raise ValidationError("interpret requires 'imodel' parameter")

@@ -14,7 +14,6 @@ from lionpride.session.messages import (
 )
 
 from .phrases import (
-    action_request_must_have_function,
     resource_must_be_accessible_by_branch,
     resource_must_exist_in_session,
 )
@@ -54,7 +53,6 @@ async def act(
 
     # Validate upfront using phrases
     for req in action_requests:
-        action_request_must_have_function(req)
         resource_must_exist_in_session(session, req.function)
         resource_must_be_accessible_by_branch(branch, req.function)
 

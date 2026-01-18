@@ -15,7 +15,7 @@ from lionpride.libs.string_handlers import extract_json
 from lionpride.ln import fuzzy_validate_mapping
 from lionpride.session.messages import InstructionContent, Message
 
-from .phrases import text_must_be_provided
+from lionpride.types import is_sentinel
 from .types import CustomParser, GenerateParams, HandleUnmatched, ParseParams
 
 if TYPE_CHECKING:
@@ -31,7 +31,9 @@ async def parse(
     poll_timeout: float | None = None,
     poll_interval: float | None = None,
 ):
-    text = text_must_be_provided(params, operation="parse")
+    if is_sentinel(params.text):
+        raise ValidationError("parse requires 'text' parameter")
+    text = params.text
 
     try:
         return _direct_parse(
