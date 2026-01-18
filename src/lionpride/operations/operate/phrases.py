@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 def genai_model_must_be_configured(
     session: Session, params: GenerateParams, *, operation: str = "operation"
 ) -> None:
-    """Assert generative model is configured in params or session."""
+    """Raises ConfigurationError if no imodel in params or session default."""
     if is_sentinel(params.imodel) and session.default_generate_model is None:
         raise ConfigurationError(
             f"{operation} requires 'imodel' in generate params or session.default_generate_model"
@@ -36,6 +36,7 @@ def genai_model_must_be_configured(
 
 
 def resource_must_exist_in_session(session: Session, name: str) -> None:
+    """Raises NotFoundError if service not registered in session."""
     if not session.services.has(name):
         raise NotFoundError(
             f"Service '{name}' not found in session services",
@@ -44,6 +45,7 @@ def resource_must_exist_in_session(session: Session, name: str) -> None:
 
 
 def resource_must_be_accessible_by_branch(branch: Branch, name: str) -> None:
+    """Raises AccessError if branch lacks access to named resource."""
     if name not in branch.resources:
         raise AccessError(
             f"Branch '{branch.name}' has no access to resource '{name}'",
@@ -56,6 +58,7 @@ def resource_must_be_accessible_by_branch(branch: Branch, name: str) -> None:
 
 
 def capabilities_must_be_subset_of_branch(branch: Branch, capabilities: set[str]) -> None:
+    """Raises AccessError if branch missing required capabilities."""
     if not capabilities.issubset(branch.capabilities):
         missing = capabilities - branch.capabilities
         raise AccessError(
@@ -68,6 +71,7 @@ def capabilities_must_be_subset_of_branch(branch: Branch, capabilities: set[str]
 
 
 def capabilities_must_be_subset_of_operable(operable: Operable, capabilities: set[str]) -> None:
+    """Raises ValidationError if capabilities exceed operable's allowed set."""
     allowed = operable.allowed()
     if not capabilities.issubset(allowed):
         missing = capabilities - allowed
@@ -81,6 +85,7 @@ def capabilities_must_be_subset_of_operable(operable: Operable, capabilities: se
 
 
 def response_must_be_completed(calling: Calling) -> None:
+    """Raises ExecutionError if calling status is not COMPLETED."""
     if calling.execution.status != EventStatus.COMPLETED:
         raise ExecutionError(
             "Generation did not complete successfully",
@@ -90,7 +95,7 @@ def response_must_be_completed(calling: Calling) -> None:
 
 
 def resolve_branch_exists_in_session(session: Session, branch: Branch | str) -> Branch:
-    """Validate branch exists in session and return it."""
+    """Return Branch or raise NotFoundError if not in session."""
     if (b_ := session.get_branch(branch, None)) is None:
         raise NotFoundError(f"Branch '{branch}' does not exist in session")
     return b_
@@ -99,6 +104,7 @@ def resolve_branch_exists_in_session(session: Session, branch: Branch | str) -> 
 def resolve_genai_model_exists_in_session(
     session: Session, params: GenerateParams
 ) -> tuple[iModel, dict[str, Any]]:
+    """Return (iModel, kwargs) or raise ConfigurationError/ValidationError."""
     genai_model_must_be_configured(session, params, operation="generate")
 
     imodel_kw = params.imodel_kwargs or {}
@@ -113,6 +119,7 @@ def resolve_genai_model_exists_in_session(
 
 
 def resolve_response_is_normalized(calling: Calling) -> NormalizedResponse:
+    """Return NormalizedResponse or raise ExecutionError if coercion fails."""
     from lionpride.ln import to_dict
 
     response = calling.response
@@ -138,6 +145,7 @@ def resolve_response_is_normalized(calling: Calling) -> NormalizedResponse:
 
 
 def resolve_generate_params(params: Any) -> GenerateParams:
+    """Extract GenerateParams from composite or raise ValidationError."""
     if not hasattr(params, "generate"):
         raise ValidationError("Params object missing 'generate'")
     if not isinstance(params.generate, GenerateParams):
