@@ -18,7 +18,6 @@ Covers:
 - Referential integrity violations
 """
 
-import warnings
 from uuid import uuid4
 
 import pytest
@@ -1318,8 +1317,8 @@ class TestSessionRequestAccessControl:
         with pytest.raises(AccessError) as exc_info:
             await session.request("restricted_model", branch=branch)
 
-        assert "doesn't have access to service" in str(exc_info.value)
-        assert "restricted_model" in str(exc_info.value.details.get("requested", ""))
+        assert "has no access to resource" in str(exc_info.value)
+        assert "restricted_model" in str(exc_info.value.details.get("resource", ""))
         assert exc_info.value.details.get("available") == []
 
     @pytest.mark.asyncio
@@ -1364,54 +1363,6 @@ class TestSessionRequestAccessControl:
 
         # Should succeed
         result = await session.request("allowed_model", branch=branch)
-        assert result.status == EventStatus.COMPLETED
-
-    @pytest.mark.asyncio
-    async def test_request_without_branch_emits_deprecation_warning(self):
-        """Test session.request() without branch emits deprecation warning.
-
-        For backward compatibility, calling without branch still works but
-        emits a DeprecationWarning to encourage migration.
-        """
-        from dataclasses import dataclass
-        from unittest.mock import AsyncMock
-
-        from lionpride import Event, EventStatus
-        from lionpride.services.providers.oai_chat import OAIChatEndpoint
-        from lionpride.services.types.imodel import iModel
-
-        endpoint = OAIChatEndpoint(config=None, name="legacy_model", api_key="test")
-        model = iModel(backend=endpoint)
-
-        @dataclass
-        class MockResponse:
-            data: str = "legacy"
-
-        async def mock_invoke(**kwargs):
-            class MockCalling(Event):
-                def __init__(self):
-                    super().__init__()
-                    self.status = EventStatus.COMPLETED
-                    self.execution.response = MockResponse()
-
-            return MockCalling()
-
-        object.__setattr__(model, "invoke", AsyncMock(side_effect=mock_invoke))
-
-        session = Session()
-        session.services.register(model)
-
-        # Call without branch - should warn but still work
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            result = await session.request("legacy_model")
-
-            # Verify deprecation warning was emitted
-            assert len(w) == 1
-            assert issubclass(w[0].category, DeprecationWarning)
-            assert "without a branch parameter is deprecated" in str(w[0].message)
-
-        # Should still succeed
         assert result.status == EventStatus.COMPLETED
 
     @pytest.mark.asyncio
