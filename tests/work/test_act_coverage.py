@@ -97,14 +97,14 @@ class TestAct:
 
         assert responses == []
 
-    async def test_missing_function_name_raises_validation_error(self, session_with_tools):
-        """Test that empty function string raises ValidationError."""
+    async def test_missing_function_name_raises_not_found_error(self, session_with_tools):
+        """Test that empty function string raises NotFoundError (service not found)."""
         session, tool_names = session_with_tools
         branch = session.create_branch(resources=set(tool_names))
 
         requests = [ActionRequest(function="", arguments={})]
 
-        with pytest.raises(ValidationError, match="Action request missing function name"):
+        with pytest.raises(NotFoundError, match="not found in session"):
             await act(requests, session, branch)
 
     async def test_tool_not_in_registry_raises_not_found_error(self, session_with_tools):
@@ -114,7 +114,7 @@ class TestAct:
 
         requests = [ActionRequest(function="nonexistent", arguments={})]
 
-        with pytest.raises(NotFoundError, match="Tool 'nonexistent' not found"):
+        with pytest.raises(NotFoundError, match="'nonexistent' not found in session"):
             await act(requests, session, branch)
 
     async def test_tool_not_in_branch_resources_raises_access_error(self, session_with_tools):
@@ -124,7 +124,7 @@ class TestAct:
 
         requests = [ActionRequest(function="adder", arguments={"a": 1, "b": 2})]
 
-        with pytest.raises(AccessError, match="doesn't have access to tool 'adder'"):
+        with pytest.raises(AccessError, match="has no access to resource 'adder'"):
             await act(requests, session, branch)
 
     async def test_single_tool_execution_success(self, session_with_tools):
