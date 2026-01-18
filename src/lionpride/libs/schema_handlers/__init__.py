@@ -3,7 +3,10 @@
 
 from typing import TYPE_CHECKING
 
-from ._breakdown_pydantic_annotation import breakdown_pydantic_annotation, is_pydantic_model
+from ._breakdown_pydantic_annotation import (
+    breakdown_pydantic_annotation,
+    is_pydantic_model,
+)
 from ._minimal_yaml import minimal_yaml
 from ._typescript import typescript_schema
 

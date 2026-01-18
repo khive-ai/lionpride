@@ -373,7 +373,9 @@ class TestRapidfuzzIntegration:
 
     def test_rapidfuzz_available_exported(self):
         """Test that RAPIDFUZZ_AVAILABLE flag is exported."""
-        from lionpride.libs.string_handlers._string_similarity import RAPIDFUZZ_AVAILABLE
+        from lionpride.libs.string_handlers._string_similarity import (
+            RAPIDFUZZ_AVAILABLE,
+        )
 
         assert isinstance(RAPIDFUZZ_AVAILABLE, bool)
 

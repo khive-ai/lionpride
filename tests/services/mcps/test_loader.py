@@ -16,7 +16,11 @@ from unittest.mock import AsyncMock, Mock, PropertyMock, patch
 
 import pytest
 
-from lionpride.services.mcps.loader import create_mcp_callable, load_mcp_config, load_mcp_tools
+from lionpride.services.mcps.loader import (
+    create_mcp_callable,
+    load_mcp_config,
+    load_mcp_tools,
+)
 
 
 # Helper function for creating mock results

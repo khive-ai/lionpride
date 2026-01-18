@@ -66,15 +66,23 @@ class TestHeaderFactory:
     def test_get_header_x_api_key_with_string(self):
         """Test get_header with x-api-key auth and string API key."""
         result = HeaderFactory.get_header(
-            auth_type="x-api-key", api_key="my-api-key-789", content_type="application/json"
+            auth_type="x-api-key",
+            api_key="my-api-key-789",
+            content_type="application/json",
         )
-        assert result == {"Content-Type": "application/json", "x-api-key": "my-api-key-789"}
+        assert result == {
+            "Content-Type": "application/json",
+            "x-api-key": "my-api-key-789",
+        }
 
     def test_get_header_x_api_key_with_secret_str(self):
         """Test get_header with x-api-key auth and SecretStr API key."""
         secret_key = SecretStr("my-api-key-789")
         result = HeaderFactory.get_header(auth_type="x-api-key", api_key=secret_key)
-        assert result == {"Content-Type": "application/json", "x-api-key": "my-api-key-789"}
+        assert result == {
+            "Content-Type": "application/json",
+            "x-api-key": "my-api-key-789",
+        }
 
     def test_get_header_bearer_missing_api_key(self):
         """Test get_header with bearer auth but missing API key."""

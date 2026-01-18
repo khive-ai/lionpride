@@ -19,7 +19,11 @@ import pytest
 from lionpride import Event, EventStatus
 from lionpride.errors import AccessError, ValidationError
 from lionpride.operations.operate.communicate import communicate
-from lionpride.operations.operate.types import CommunicateParams, GenerateParams, ParseParams
+from lionpride.operations.operate.types import (
+    CommunicateParams,
+    GenerateParams,
+    ParseParams,
+)
 from lionpride.session import Session
 from lionpride.types import Operable, Spec
 from tests.operations.conftest import MockNormalizedResponse

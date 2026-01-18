@@ -7,35 +7,30 @@ This module provides reusable mock models and session fixtures for testing
 operations without making actual API calls.
 
 Fixtures:
-    mock_model: A mock iModel that returns MockNormalizedResponse on invoke.
+    mock_model: A mock iModel that returns mock_normalized_response on invoke.
     session_with_model: A Session with a registered mock model.
 
-Classes:
-    MockNormalizedResponse: Mock response for testing API calls.
+Functions:
+    mock_normalized_response: Factory for test NormalizedResponse objects.
 """
 
-from dataclasses import dataclass
 from unittest.mock import AsyncMock
 
 import pytest
 
 from lionpride import Event, EventStatus
+from lionpride.services.types import NormalizedResponse
 from lionpride.session import Session
 
 
-@dataclass
-class MockNormalizedResponse:
-    """Mock NormalizedResponse for testing."""
-
-    data: str = "mock response text"
-    raw_response: dict = None
-    metadata: dict = None
-
-    def __post_init__(self):
-        if self.raw_response is None:
-            self.raw_response = {"id": "mock-id", "choices": [{"message": {"content": self.data}}]}
-        if self.metadata is None:
-            self.metadata = {"usage": {"prompt_tokens": 10, "completion_tokens": 20}}
+def mock_normalized_response(data: str = "mock response text") -> NormalizedResponse:
+    """Create a real NormalizedResponse for testing."""
+    return NormalizedResponse(
+        data=data,
+        status="completed",
+        raw_response={"id": "mock-id", "choices": [{"message": {"content": data}}]},
+        metadata={"usage": {"prompt_tokens": 10, "completion_tokens": 20}},
+    )
 
 
 @pytest.fixture
@@ -52,7 +47,7 @@ def mock_model():
             def __init__(self):
                 super().__init__()
                 self.status = EventStatus.COMPLETED
-                self.execution.response = MockNormalizedResponse()
+                self.execution.response = mock_normalized_response()
 
         return MockCalling()
 

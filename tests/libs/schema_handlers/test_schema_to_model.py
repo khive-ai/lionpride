@@ -169,7 +169,9 @@ class TestGetPythonVersionEnum:
 
     def test_current_version_detected(self):
         """Test current Python version is properly mapped."""
-        from lionpride.libs.schema_handlers._schema_to_model import _get_python_version_enum
+        from lionpride.libs.schema_handlers._schema_to_model import (
+            _get_python_version_enum,
+        )
 
         # Create mock module with all versions
         class MockPythonVersion:
@@ -184,7 +186,9 @@ class TestGetPythonVersionEnum:
 
     def test_unsupported_version_fallback(self, monkeypatch):
         """Test fallback to PY_312 for unsupported versions."""
-        from lionpride.libs.schema_handlers._schema_to_model import _get_python_version_enum
+        from lionpride.libs.schema_handlers._schema_to_model import (
+            _get_python_version_enum,
+        )
 
         class MockVersionInfo:
             major = 3
@@ -200,7 +204,9 @@ class TestGetPythonVersionEnum:
 
     def test_python_311(self, monkeypatch):
         """Test Python 3.11 detection."""
-        from lionpride.libs.schema_handlers._schema_to_model import _get_python_version_enum
+        from lionpride.libs.schema_handlers._schema_to_model import (
+            _get_python_version_enum,
+        )
 
         class MockVersionInfo:
             major = 3
@@ -217,7 +223,9 @@ class TestGetPythonVersionEnum:
 
     def test_python_312(self, monkeypatch):
         """Test Python 3.12 detection."""
-        from lionpride.libs.schema_handlers._schema_to_model import _get_python_version_enum
+        from lionpride.libs.schema_handlers._schema_to_model import (
+            _get_python_version_enum,
+        )
 
         class MockVersionInfo:
             major = 3
@@ -233,7 +241,9 @@ class TestGetPythonVersionEnum:
 
     def test_python_313(self, monkeypatch):
         """Test Python 3.13 detection."""
-        from lionpride.libs.schema_handlers._schema_to_model import _get_python_version_enum
+        from lionpride.libs.schema_handlers._schema_to_model import (
+            _get_python_version_enum,
+        )
 
         class MockVersionInfo:
             major = 3
@@ -250,7 +260,9 @@ class TestGetPythonVersionEnum:
 
     def test_python_314(self, monkeypatch):
         """Test Python 3.14 detection."""
-        from lionpride.libs.schema_handlers._schema_to_model import _get_python_version_enum
+        from lionpride.libs.schema_handlers._schema_to_model import (
+            _get_python_version_enum,
+        )
 
         class MockVersionInfo:
             major = 3
@@ -267,7 +279,9 @@ class TestGetPythonVersionEnum:
 
     def test_fallback_when_enum_missing(self, monkeypatch):
         """Test fallback when specific enum value is missing."""
-        from lionpride.libs.schema_handlers._schema_to_model import _get_python_version_enum
+        from lionpride.libs.schema_handlers._schema_to_model import (
+            _get_python_version_enum,
+        )
 
         class MockVersionInfo:
             major = 3
@@ -287,9 +301,15 @@ class TestPrepareSchemaInput:
 
     def test_dict_schema(self):
         """Test preparation of dict schema."""
-        from lionpride.libs.schema_handlers._schema_to_model import _prepare_schema_input
+        from lionpride.libs.schema_handlers._schema_to_model import (
+            _prepare_schema_input,
+        )
 
-        schema = {"title": "User", "type": "object", "properties": {"name": {"type": "string"}}}
+        schema = {
+            "title": "User",
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+        }
 
         schema_json, schema_dict, name = _prepare_schema_input(schema, "Default")
 
@@ -299,7 +319,9 @@ class TestPrepareSchemaInput:
 
     def test_string_schema(self):
         """Test preparation of JSON string schema."""
-        from lionpride.libs.schema_handlers._schema_to_model import _prepare_schema_input
+        from lionpride.libs.schema_handlers._schema_to_model import (
+            _prepare_schema_input,
+        )
 
         schema_str = '{"title": "Product", "type": "object"}'
 
@@ -311,7 +333,9 @@ class TestPrepareSchemaInput:
 
     def test_dict_without_title_uses_default(self):
         """Test dict without title uses default name."""
-        from lionpride.libs.schema_handlers._schema_to_model import _prepare_schema_input
+        from lionpride.libs.schema_handlers._schema_to_model import (
+            _prepare_schema_input,
+        )
 
         schema = {"type": "object", "properties": {}}
 
@@ -321,7 +345,9 @@ class TestPrepareSchemaInput:
 
     def test_invalid_dict_raises(self):
         """Test invalid dict (non-serializable) raises ValueError."""
-        from lionpride.libs.schema_handlers._schema_to_model import _prepare_schema_input
+        from lionpride.libs.schema_handlers._schema_to_model import (
+            _prepare_schema_input,
+        )
 
         # Non-serializable dict
         schema = {"func": lambda x: x}
@@ -331,7 +357,9 @@ class TestPrepareSchemaInput:
 
     def test_invalid_json_string_raises(self):
         """Test invalid JSON string raises ValueError."""
-        from lionpride.libs.schema_handlers._schema_to_model import _prepare_schema_input
+        from lionpride.libs.schema_handlers._schema_to_model import (
+            _prepare_schema_input,
+        )
 
         invalid_json = "{not valid json"
 
@@ -340,7 +368,9 @@ class TestPrepareSchemaInput:
 
     def test_invalid_type_raises(self):
         """Test invalid schema type raises TypeError."""
-        from lionpride.libs.schema_handlers._schema_to_model import _prepare_schema_input
+        from lionpride.libs.schema_handlers._schema_to_model import (
+            _prepare_schema_input,
+        )
 
         with pytest.raises(TypeError, match="Schema must be"):
             _prepare_schema_input(123, "Default")
@@ -353,7 +383,9 @@ class TestPrepareSchemaInput:
 
     def test_schema_size_limit(self):
         """Test that schemas exceeding size limit are rejected."""
-        from lionpride.libs.schema_handlers._schema_to_model import _prepare_schema_input
+        from lionpride.libs.schema_handlers._schema_to_model import (
+            _prepare_schema_input,
+        )
 
         # Create a schema that exceeds a small limit
         schema = {"title": "Test", "type": "object", "description": "x" * 1000}
@@ -363,7 +395,9 @@ class TestPrepareSchemaInput:
 
     def test_schema_depth_limit(self):
         """Test that deeply nested schemas are rejected."""
-        from lionpride.libs.schema_handlers._schema_to_model import _prepare_schema_input
+        from lionpride.libs.schema_handlers._schema_to_model import (
+            _prepare_schema_input,
+        )
 
         # Create deeply nested schema
         nested = {"value": "leaf"}
@@ -375,9 +409,15 @@ class TestPrepareSchemaInput:
 
     def test_schema_within_limits_passes(self):
         """Test that schemas within limits are processed correctly."""
-        from lionpride.libs.schema_handlers._schema_to_model import _prepare_schema_input
+        from lionpride.libs.schema_handlers._schema_to_model import (
+            _prepare_schema_input,
+        )
 
-        schema = {"title": "User", "type": "object", "properties": {"name": {"type": "string"}}}
+        schema = {
+            "title": "User",
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+        }
 
         # Should not raise with reasonable limits
         _schema_json, _schema_dict, name = _prepare_schema_input(
@@ -440,7 +480,9 @@ class TestLoadGeneratedModule:
 
     def test_file_not_exists_raises(self, tmp_path):
         """Test FileNotFoundError when file doesn't exist."""
-        from lionpride.libs.schema_handlers._schema_to_model import _load_generated_module
+        from lionpride.libs.schema_handlers._schema_to_model import (
+            _load_generated_module,
+        )
 
         non_existent = tmp_path / "nonexistent.py"
         with pytest.raises(FileNotFoundError, match="Generated model file not created"):
@@ -448,7 +490,9 @@ class TestLoadGeneratedModule:
 
     def test_spec_creation_failure(self, tmp_path, monkeypatch):
         """Test ImportError when spec creation fails."""
-        from lionpride.libs.schema_handlers._schema_to_model import _load_generated_module
+        from lionpride.libs.schema_handlers._schema_to_model import (
+            _load_generated_module,
+        )
 
         test_file = tmp_path / "test.py"
         test_file.write_text("# empty")
@@ -461,7 +505,9 @@ class TestLoadGeneratedModule:
 
     def test_spec_loader_none(self, tmp_path, monkeypatch):
         """Test ImportError when spec.loader is None."""
-        from lionpride.libs.schema_handlers._schema_to_model import _load_generated_module
+        from lionpride.libs.schema_handlers._schema_to_model import (
+            _load_generated_module,
+        )
 
         test_file = tmp_path / "test.py"
         test_file.write_text("# empty")
@@ -471,7 +517,9 @@ class TestLoadGeneratedModule:
             loader = None
 
         monkeypatch.setattr(
-            importlib.util, "spec_from_file_location", lambda *args, **kwargs: MockSpec()
+            importlib.util,
+            "spec_from_file_location",
+            lambda *args, **kwargs: MockSpec(),
         )
 
         with pytest.raises(ImportError, match="Could not create module spec"):
@@ -479,7 +527,9 @@ class TestLoadGeneratedModule:
 
     def test_exec_module_failure(self, tmp_path):
         """Test RuntimeError when module execution fails."""
-        from lionpride.libs.schema_handlers._schema_to_model import _load_generated_module
+        from lionpride.libs.schema_handlers._schema_to_model import (
+            _load_generated_module,
+        )
 
         # Create a file with invalid syntax
         test_file = tmp_path / "bad_syntax.py"
@@ -490,7 +540,9 @@ class TestLoadGeneratedModule:
 
     def test_successful_load(self, tmp_path):
         """Test successful module loading."""
-        from lionpride.libs.schema_handlers._schema_to_model import _load_generated_module
+        from lionpride.libs.schema_handlers._schema_to_model import (
+            _load_generated_module,
+        )
 
         test_file = tmp_path / "valid_module.py"
         test_file.write_text("x = 42\ndef hello(): return 'world'\n")
@@ -502,7 +554,9 @@ class TestLoadGeneratedModule:
 
     def test_load_module_with_basemodel(self, tmp_path):
         """Test loading module containing BaseModel."""
-        from lionpride.libs.schema_handlers._schema_to_model import _load_generated_module
+        from lionpride.libs.schema_handlers._schema_to_model import (
+            _load_generated_module,
+        )
 
         test_file = tmp_path / "model_module.py"
         test_file.write_text(
@@ -829,7 +883,11 @@ class User(BaseModel):
 
         from lionpride.libs.schema_handlers import load_pydantic_model_from_schema
 
-        schema = {"title": "User", "type": "object", "properties": {"name": {"type": "string"}}}
+        schema = {
+            "title": "User",
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+        }
 
         # The function uses tempfile, so we need to ensure our mock generate writes there
         # Patch tempfile to use our tmp_path
@@ -1070,7 +1128,10 @@ class TestLoadPydanticModelFromSchemaIntegration:
             "type": "object",
             "properties": {
                 "title": {"type": "string"},
-                "status": {"type": "string", "enum": ["pending", "in_progress", "completed"]},
+                "status": {
+                    "type": "string",
+                    "enum": ["pending", "in_progress", "completed"],
+                },
             },
         }
 

@@ -11,17 +11,18 @@ from unittest.mock import AsyncMock
 import pytest
 
 from lionpride import Event, EventStatus
+from lionpride.errors import ConfigurationError, ValidationError
 from lionpride.operations.operate.interpret import interpret
 from lionpride.operations.operate.types import InterpretParams
-from tests.operations.conftest import MockNormalizedResponse
+from tests.operations.conftest import mock_normalized_response
 
 
 class TestInterpretValidation:
     """Test parameter validation (lines 43-55)."""
 
     @pytest.mark.asyncio
-    async def test_missing_text_raises_valueerror(self, session_with_model):
-        """Line 43-44: Missing text parameter raises ValueError."""
+    async def test_missing_text_raises_validation_error(self, session_with_model):
+        """Line 43-44: Missing text parameter raises ValidationError."""
         session, model = session_with_model
         branch = session.create_branch(resources={model.name})
 
@@ -30,12 +31,12 @@ class TestInterpretValidation:
             # text is sentinel (missing)
         )
 
-        with pytest.raises(ValueError, match="interpret requires 'text' parameter"):
+        with pytest.raises(ValidationError, match="interpret requires 'text' parameter"):
             await interpret(session, branch, params)
 
     @pytest.mark.asyncio
-    async def test_missing_imodel_raises_valueerror(self, session_with_model):
-        """Line 46-47: Missing imodel parameter raises ValueError."""
+    async def test_missing_imodel_raises_validation_error(self, session_with_model):
+        """Line 46-47: Missing imodel parameter raises ValidationError."""
         session, model = session_with_model
         branch = session.create_branch(resources={model.name})
 
@@ -44,12 +45,14 @@ class TestInterpretValidation:
             # imodel is sentinel (missing)
         )
 
-        with pytest.raises(ValueError, match="interpret requires 'imodel' parameter"):
+        with pytest.raises(ValidationError, match="interpret requires 'imodel' parameter"):
             await interpret(session, branch, params)
 
     @pytest.mark.asyncio
-    async def test_model_not_in_branch_resources_raises_permissionerror(self, session_with_model):
-        """Line 50-55: Model not in branch.resources raises PermissionError."""
+    async def test_model_not_in_branch_resources_raises_configuration_error(
+        self, session_with_model
+    ):
+        """Line 50-55: Model not in branch.resources raises ConfigurationError."""
         session, model = session_with_model
         # Branch without any resources
         branch = session.create_branch(resources=set())
@@ -59,11 +62,13 @@ class TestInterpretValidation:
             imodel=model.name,
         )
 
-        with pytest.raises(PermissionError, match="cannot access model"):
+        with pytest.raises(ConfigurationError, match="has no access to resource"):
             await interpret(session, branch, params)
 
     @pytest.mark.asyncio
-    async def test_imodel_object_not_in_resources_raises_permissionerror(self, session_with_model):
+    async def test_imodel_object_not_in_resources_raises_configuration_error(
+        self, session_with_model
+    ):
         """Line 50: Test with iModel object (not string) - extracts name."""
         session, model = session_with_model
         # Branch without any resources
@@ -74,7 +79,7 @@ class TestInterpretValidation:
             imodel=model,  # Pass iModel object, not string
         )
 
-        with pytest.raises(PermissionError, match="cannot access model"):
+        with pytest.raises(ConfigurationError, match="has no access to resource"):
             await interpret(session, branch, params)
 
 

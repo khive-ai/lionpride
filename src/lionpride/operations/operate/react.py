@@ -9,10 +9,16 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
-from lionpride.errors import AccessError, ConfigurationError, ValidationError
+from lionpride.errors import ValidationError
 from lionpride.rules import ActionRequest, ActionResponse
 from lionpride.types import Operable, Spec
 
+from .phrases import (
+    capabilities_must_be_subset_of_branch,
+    generate_params_must_be_provided,
+    imodel_must_be_configured,
+    resolve_branch_exists_in_session,
+)
 from .types import GenerateParams, OperateParams, ParseParams, ReactParams
 
 if TYPE_CHECKING:
@@ -170,13 +176,9 @@ async def react_stream(
     """
     from .factory import operate
 
-    # 1. Validate params
-    if params._is_sentinel(params.generate):
-        raise ValidationError("react requires 'generate' params")
+    # 1. Validate params using phrases
+    gen_params = generate_params_must_be_provided(params, operation="react")
 
-    # Type narrowing - assert generate is not None after validation
-    assert params.generate is not None
-    gen_params = params.generate
     instruction = gen_params.instruction
     if not instruction:
         raise ValidationError("react requires 'instruction' in generate params")
@@ -185,22 +187,19 @@ async def react_stream(
     imodel_kwargs = gen_params.imodel_kwargs or {}
     context = gen_params.context
 
-    if params._is_sentinel(imodel) and session.default_generate_model is None:
-        raise ConfigurationError(
-            "react requires 'imodel' in generate params or session.default_generate_model"
-        )
+    imodel_must_be_configured(session, gen_params, operation="react")
 
     # Extract model_name for API calls
     model_name = imodel_kwargs.get("model_name") or imodel_kwargs.get("model")
     if not model_name and imodel is not None and hasattr(imodel, "name"):
         model_name = imodel.name
     if not model_name:
-        raise ConfigurationError(
+        raise ValidationError(
             "react requires 'model_name' in imodel_kwargs or imodel with .name attribute"
         )
 
     # 2. Resolve branch
-    b_ = session.get_branch(branch)
+    b_ = resolve_branch_exists_in_session(session, branch)
 
     # 3. Build step operable and determine required capabilities
     step_operable = build_step_operable(
@@ -213,15 +212,7 @@ async def react_stream(
     required_capabilities = step_operable.allowed()
 
     # 4. Validate capabilities against branch (security gate)
-    if not required_capabilities.issubset(b_.capabilities):
-        missing = required_capabilities - b_.capabilities
-        raise AccessError(
-            f"Branch '{b_.name}' missing react capabilities: {missing}",
-            details={
-                "requested": sorted(required_capabilities),
-                "available": sorted(b_.capabilities),
-            },
-        )
+    capabilities_must_be_subset_of_branch(b_, required_capabilities)
 
     # 5. Prepare step kwargs
     step_kwargs = {k: v for k, v in imodel_kwargs.items() if k not in ("model_name", "model")}

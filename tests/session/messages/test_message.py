@@ -78,8 +78,14 @@ from lionpride.session.messages.content import (
     [
         (SystemContent.create(system_message="test"), MessageRole.SYSTEM),
         (InstructionContent.create(instruction="test"), MessageRole.USER),
-        (AssistantResponseContent.create(assistant_response="test"), MessageRole.ASSISTANT),
-        (ActionRequestContent.create(function="f", arguments={}), MessageRole.ASSISTANT),
+        (
+            AssistantResponseContent.create(assistant_response="test"),
+            MessageRole.ASSISTANT,
+        ),
+        (
+            ActionRequestContent.create(function="f", arguments={}),
+            MessageRole.ASSISTANT,
+        ),
         (ActionResponseContent.create(result={"ok": True}), MessageRole.TOOL),
     ],
 )
@@ -136,12 +142,24 @@ def test_message_accepts_content_instance(instruction_content):
     [
         ({"instruction": "test"}, InstructionContent, MessageRole.USER),
         ({"context": ["a", "b"]}, InstructionContent, MessageRole.USER),
-        ({"assistant_response": "test"}, AssistantResponseContent, MessageRole.ASSISTANT),
+        (
+            {"assistant_response": "test"},
+            AssistantResponseContent,
+            MessageRole.ASSISTANT,
+        ),
         ({"result": {"ok": True}}, ActionResponseContent, MessageRole.TOOL),
         ({"error": "failed"}, ActionResponseContent, MessageRole.TOOL),
-        ({"function": "f", "arguments": {}}, ActionRequestContent, MessageRole.ASSISTANT),
+        (
+            {"function": "f", "arguments": {}},
+            ActionRequestContent,
+            MessageRole.ASSISTANT,
+        ),
         ({"system_message": "test"}, SystemContent, MessageRole.SYSTEM),
-        ({}, InstructionContent, MessageRole.USER),  # Empty dict defaults to Instruction
+        (
+            {},
+            InstructionContent,
+            MessageRole.USER,
+        ),  # Empty dict defaults to Instruction
     ],
 )
 def test_message_infers_content_type_from_dict(content_dict, expected_type, expected_role):

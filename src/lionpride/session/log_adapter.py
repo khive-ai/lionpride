@@ -199,7 +199,8 @@ class SQLiteWALLogAdapter(LogAdapter):
 
         # Create table if needed - general schema with JSON content
         if self.auto_create:
-            await self._connection.execute("""
+            await self._connection.execute(
+                """
                 CREATE TABLE IF NOT EXISTS logs (
                     id TEXT PRIMARY KEY,
                     created_at TEXT NOT NULL,
@@ -208,7 +209,8 @@ class SQLiteWALLogAdapter(LogAdapter):
                     content TEXT NOT NULL,
                     metadata TEXT
                 )
-            """)
+            """
+            )
             await self._connection.execute(
                 "CREATE INDEX IF NOT EXISTS idx_logs_created_at ON logs(created_at)"
             )
@@ -246,7 +248,7 @@ class SQLiteWALLogAdapter(LogAdapter):
                 (
                     str(log.id),
                     log_dict.get("created_at"),
-                    log.log_type.value if hasattr(log.log_type, "value") else log.log_type,
+                    (log.log_type.value if hasattr(log.log_type, "value") else log.log_type),
                     log.source,
                     content,
                     metadata,
@@ -351,7 +353,8 @@ class PostgresLogAdapter(LogAdapter):
             async with self._engine.begin() as conn:
                 # General schema with JSONB content
                 await conn.execute(
-                    text(f"""
+                    text(
+                        f"""
                     CREATE TABLE IF NOT EXISTS {self.table} (
                         id UUID PRIMARY KEY,
                         created_at TIMESTAMPTZ NOT NULL,
@@ -360,7 +363,8 @@ class PostgresLogAdapter(LogAdapter):
                         content JSONB NOT NULL,
                         metadata JSONB
                     )
-                    """)
+                    """
+                    )
                 )
                 await conn.execute(
                     text(
@@ -404,19 +408,23 @@ class PostgresLogAdapter(LogAdapter):
                     metadata = json_dumps(log_dict.get("metadata", {}))
 
                     await conn.execute(
-                        text(f"""
+                        text(
+                            f"""
                             INSERT INTO {self.table} (id, created_at, log_type, source, content, metadata)
                             VALUES (:id, :created_at, :log_type, :source, CAST(:content AS jsonb), CAST(:metadata AS jsonb))
                             ON CONFLICT (id) DO UPDATE SET
                                 content = EXCLUDED.content,
                                 metadata = EXCLUDED.metadata
-                        """),
+                        """
+                        ),
                         {
                             "id": str(log.id),
                             "created_at": log.created_at,  # Use actual datetime, not string
-                            "log_type": log.log_type.value
-                            if hasattr(log.log_type, "value")
-                            else log.log_type,
+                            "log_type": (
+                                log.log_type.value
+                                if hasattr(log.log_type, "value")
+                                else log.log_type
+                            ),
                             "source": log.source,
                             "content": content,
                             "metadata": metadata,
@@ -462,12 +470,14 @@ class PostgresLogAdapter(LogAdapter):
                     params["since"] = since
 
             where_clause = " AND ".join(conditions)
-            query = text(f"""
+            query = text(
+                f"""
                 SELECT content FROM {self.table}
                 WHERE {where_clause}
                 ORDER BY created_at DESC
                 LIMIT :limit OFFSET :offset
-            """)
+            """
+            )
 
             async with self._engine.connect() as conn:
                 result = await conn.execute(query, params)

@@ -3,7 +3,17 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Final, Literal, Self, TypeAlias, TypeGuard, TypeVar, Union
+from typing import (
+    Any,
+    ClassVar,
+    Final,
+    Literal,
+    Self,
+    TypeAlias,
+    TypeGuard,
+    TypeVar,
+    Union,
+)
 
 __all__ = (
     "MaybeSentinel",

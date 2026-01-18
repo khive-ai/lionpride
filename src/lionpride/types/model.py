@@ -59,7 +59,10 @@ class HashableModel(BaseModel):
 
     @classmethod
     def from_dict(
-        cls, data: dict[str, Any] | str | bytes, mode: ConversionMode = "python", **kwargs: Any
+        cls,
+        data: dict[str, Any] | str | bytes,
+        mode: ConversionMode = "python",
+        **kwargs: Any,
     ) -> Self:
         """Deserialize from dict or JSON string/bytes."""
         if mode == "python":

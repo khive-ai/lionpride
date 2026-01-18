@@ -1790,7 +1790,10 @@ def test_node_content_deserializer_encryption_roundtrip():
     def toy_encrypt(content_dict, key=42):
         json_str = str(content_dict)
         encrypted_bytes = bytes(ord(c) ^ key for c in json_str)
-        return {"encrypted": base64.b64encode(encrypted_bytes).decode(), "algorithm": "toy_xor"}
+        return {
+            "encrypted": base64.b64encode(encrypted_bytes).decode(),
+            "algorithm": "toy_xor",
+        }
 
     def toy_decrypt(encrypted_dict, key=42):
         if encrypted_dict.get("algorithm") != "toy_xor":
@@ -1804,7 +1807,11 @@ def test_node_content_deserializer_encryption_roundtrip():
 
     # Original node with sensitive content
     original = Node(
-        content={"patient_id": "12345", "diagnosis": "confidential", "ssn": "***-**-****"}
+        content={
+            "patient_id": "12345",
+            "diagnosis": "confidential",
+            "ssn": "***-**-****",
+        }
     )
 
     # Serialize with encryption

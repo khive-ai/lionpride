@@ -757,7 +757,11 @@ class TestTimeoutWithoutTriggering:
 
         # Test with return_exceptions to catch the TimeoutError
         results = await alcall(
-            [1], slow_sync_func, retry_timeout=0.001, return_exceptions=True, retry_attempts=0
+            [1],
+            slow_sync_func,
+            retry_timeout=0.001,
+            return_exceptions=True,
+            retry_attempts=0,
         )
         # With a very short timeout, should get TimeoutError
         assert len(results) == 1

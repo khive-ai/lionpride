@@ -34,7 +34,17 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
-from lionpride.core import Edge, Element, Event, Flow, Graph, Node, Pile, Processor, Progression
+from lionpride.core import (
+    Edge,
+    Element,
+    Event,
+    Flow,
+    Graph,
+    Node,
+    Pile,
+    Processor,
+    Progression,
+)
 from lionpride.core.event import EventStatus
 
 # =============================================================================

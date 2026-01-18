@@ -236,7 +236,11 @@ class Exchange(Element):
     # Convenience methods for working with entity Flows
 
     def send(
-        self, sender: UUID, recipient: UUID | None, content: Any, channel: str | None = None
+        self,
+        sender: UUID,
+        recipient: UUID | None,
+        content: Any,
+        channel: str | None = None,
     ) -> Mail:
         """Create and queue mail from sender to recipient.
 

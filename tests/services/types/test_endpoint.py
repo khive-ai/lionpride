@@ -160,7 +160,10 @@ class TestEndpointConfig:
         # schema-gen is available and working, test should succeed
         schema = {
             "type": "object",
-            "properties": {"message": {"type": "string"}, "temperature": {"type": "number"}},
+            "properties": {
+                "message": {"type": "string"},
+                "temperature": {"type": "number"},
+            },
             "required": ["message"],
         }
         config = EndpointConfig(
@@ -334,7 +337,10 @@ class TestEndpointConfig:
         try:
             with pytest.raises(ValueError, match="is empty or whitespace"):
                 EndpointConfig(
-                    name="test", provider="test", endpoint="/test", api_key="WHITESPACE_VAR"
+                    name="test",
+                    provider="test",
+                    endpoint="/test",
+                    api_key="WHITESPACE_VAR",
                 )
         finally:
             del os.environ["WHITESPACE_VAR"]

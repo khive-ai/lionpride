@@ -864,12 +864,10 @@ def test_python_type_to_json_type_when_union_with_none():
     # The origin of Union[None, str] is typing.Union
     # Line 94 was dead code checking `if origin is type(None)` (now removed)
     # This is dead code since get_origin(None) returns None, not type(None)
-
     # Actually, let's test what line 94 is really checking
     # Line 94: if origin is type(None): return "null"
     # This would only trigger if we had origin == type(None)
     # But get_origin never returns type(None), it returns None or a typing construct
-
     # Skip this - line 94 appears to be dead code
     pass
 
@@ -930,7 +928,10 @@ def test_tool_required_fields_frozenset_comprehension():
         return req1 + req2 + opt1 + opt2
 
     # Create tool without request_options and empty tool_schema to force signature path
-    tool = Tool(func_callable=func_with_mixed_params, config={"provider": "tool", "name": "test"})
+    tool = Tool(
+        func_callable=func_with_mixed_params,
+        config={"provider": "tool", "name": "test"},
+    )
 
     # Clear tool_schema to force signature inspection path
     tool.tool_schema = {}

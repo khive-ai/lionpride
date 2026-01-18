@@ -4,15 +4,10 @@
 from __future__ import annotations
 
 from collections.abc import MutableMapping, MutableSequence, MutableSet, Sequence
-from dataclasses import (
-    MISSING as DATACLASS_MISSING,
-    dataclass,
-    fields,
-)
-from enum import (
-    Enum as _Enum,
-    StrEnum,
-)
+from dataclasses import MISSING as DATACLASS_MISSING
+from dataclasses import dataclass, fields
+from enum import Enum as _Enum
+from enum import StrEnum
 from typing import Any, ClassVar, Literal, Self, TypedDict
 
 from typing_extensions import override

@@ -17,9 +17,15 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "move_on_after": ("lionpride.libs.concurrency._cancel", "move_on_after"),
     "move_on_at": ("lionpride.libs.concurrency._cancel", "move_on_at"),
     # _errors
-    "get_cancelled_exc_class": ("lionpride.libs.concurrency._errors", "get_cancelled_exc_class"),
+    "get_cancelled_exc_class": (
+        "lionpride.libs.concurrency._errors",
+        "get_cancelled_exc_class",
+    ),
     "is_cancelled": ("lionpride.libs.concurrency._errors", "is_cancelled"),
-    "non_cancel_subgroup": ("lionpride.libs.concurrency._errors", "non_cancel_subgroup"),
+    "non_cancel_subgroup": (
+        "lionpride.libs.concurrency._errors",
+        "non_cancel_subgroup",
+    ),
     "shield": ("lionpride.libs.concurrency._errors", "shield"),
     # _patterns
     "CompletionStream": ("lionpride.libs.concurrency._patterns", "CompletionStream"),
@@ -41,8 +47,14 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     # _resource_tracker
     "LeakInfo": ("lionpride.libs.concurrency._resource_tracker", "LeakInfo"),
     "LeakTracker": ("lionpride.libs.concurrency._resource_tracker", "LeakTracker"),
-    "track_resource": ("lionpride.libs.concurrency._resource_tracker", "track_resource"),
-    "untrack_resource": ("lionpride.libs.concurrency._resource_tracker", "untrack_resource"),
+    "track_resource": (
+        "lionpride.libs.concurrency._resource_tracker",
+        "track_resource",
+    ),
+    "untrack_resource": (
+        "lionpride.libs.concurrency._resource_tracker",
+        "untrack_resource",
+    ),
     # _run_async
     "run_async": ("lionpride.libs.concurrency._run_async", "run_async"),
     # _task
@@ -99,11 +111,21 @@ if TYPE_CHECKING:
         move_on_after,
         move_on_at,
     )
-    from ._errors import get_cancelled_exc_class, is_cancelled, non_cancel_subgroup, shield
+    from ._errors import (
+        get_cancelled_exc_class,
+        is_cancelled,
+        non_cancel_subgroup,
+        shield,
+    )
     from ._patterns import CompletionStream, bounded_map, gather, race, retry
     from ._primitives import CapacityLimiter, Condition, Event, Lock, Queue, Semaphore
     from ._priority_queue import PriorityQueue, QueueEmpty, QueueFull
-    from ._resource_tracker import LeakInfo, LeakTracker, track_resource, untrack_resource
+    from ._resource_tracker import (
+        LeakInfo,
+        LeakTracker,
+        track_resource,
+        untrack_resource,
+    )
     from ._run_async import run_async
     from ._task import TaskGroup, create_task_group
     from ._utils import current_time, is_coro_func, run_sync, sleep

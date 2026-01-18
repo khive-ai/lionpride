@@ -12,10 +12,8 @@ import logging
 import shutil
 import warnings
 from collections.abc import AsyncIterator, Callable
-from dataclasses import (
-    dataclass,
-    field as datafield,
-)
+from dataclasses import dataclass
+from dataclasses import field as datafield
 from pathlib import Path
 from textwrap import shorten
 from typing import Any, Literal

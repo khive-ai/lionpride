@@ -321,7 +321,10 @@ class TestRetryWithBackoff:
         # Only retry ValueError, so KeyError should not be retried
         with pytest.raises(KeyError):
             await retry_with_backoff(
-                raises_excluded, max_retries=3, initial_delay=0.01, retry_on=(ValueError,)
+                raises_excluded,
+                max_retries=3,
+                initial_delay=0.01,
+                retry_on=(ValueError,),
             )
 
         assert call_count == 1  # No retries
@@ -491,7 +494,10 @@ class TestCircuitBreakerCoveragePush:
         # NOTE: Circuit transitions HALF_OPEN → CLOSED on first success,
         # so we need concurrent calls to hit the capacity limit
         cb = CircuitBreaker(
-            failure_threshold=1, recovery_time=0.05, half_open_max_calls=1, name="capacity_test"
+            failure_threshold=1,
+            recovery_time=0.05,
+            half_open_max_calls=1,
+            name="capacity_test",
         )
 
         async def failing_func():
@@ -541,7 +547,11 @@ class TestRetryConfigCoveragePush:
     def test_retry_config_to_dict(self):
         """Test RetryConfig.to_dict() serialization."""
         config = RetryConfig(
-            max_retries=5, initial_delay=2.0, max_delay=120.0, exponential_base=3.0, jitter=True
+            max_retries=5,
+            initial_delay=2.0,
+            max_delay=120.0,
+            exponential_base=3.0,
+            jitter=True,
         )
 
         config_dict = config.to_dict()

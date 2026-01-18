@@ -117,7 +117,10 @@ class Processor:
         if self.queue.qsize() >= self.max_queue_size:
             raise QueueFullError(
                 f"Queue size ({self.queue.qsize()}) exceeds max ({self.max_queue_size})",
-                details={"queue_size": self.queue.qsize(), "max_size": self.max_queue_size},
+                details={
+                    "queue_size": self.queue.qsize(),
+                    "max_size": self.max_queue_size,
+                },
             )
 
         if priority is None:

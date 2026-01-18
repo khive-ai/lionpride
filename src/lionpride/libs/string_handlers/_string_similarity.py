@@ -368,7 +368,7 @@ class MatchResult:
 def string_similarity(
     word: str,
     correct_words: "Sequence[str]",
-    algorithm: SIMILARITY_TYPE | SimilarityAlgo | Callable[[str, str], float] = "jaro_winkler",
+    algorithm: (SIMILARITY_TYPE | SimilarityAlgo | Callable[[str, str], float]) = "jaro_winkler",
     threshold: float = 0.0,
     case_sensitive: bool = False,
     return_most_similar: bool = False,

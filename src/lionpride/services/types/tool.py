@@ -53,7 +53,10 @@ def _extract_json_schema_from_callable(
 
     for name, param in sig.parameters.items():
         # Skip variadic args
-        if param.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+        if param.kind in (
+            inspect.Parameter.VAR_POSITIONAL,
+            inspect.Parameter.VAR_KEYWORD,
+        ):
             continue
 
         # Determine type - prefer type_hints over param.annotation
@@ -271,7 +274,10 @@ class Tool(ServiceBackend):
                     for name, param in sig.parameters.items()
                     if param.default == inspect.Parameter.empty
                     and param.kind
-                    not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+                    not in (
+                        inspect.Parameter.VAR_POSITIONAL,
+                        inspect.Parameter.VAR_KEYWORD,
+                    )
                 }
             )
         except Exception:

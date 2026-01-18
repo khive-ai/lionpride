@@ -224,7 +224,10 @@ class TestCalling:
         mock_calling._pre_invoke_hook_event = mock_hook
 
         # Mock HookBroadcaster to prevent actual broadcast calls
-        with patch("lionpride.services.types.backend.HookBroadcaster.broadcast", new=AsyncMock()):
+        with patch(
+            "lionpride.services.types.backend.HookBroadcaster.broadcast",
+            new=AsyncMock(),
+        ):
             await mock_calling.invoke()
 
         assert mock_calling.execution.status == EventStatus.COMPLETED
@@ -294,7 +297,10 @@ class TestCalling:
         mock_calling._pre_invoke_hook_event = mock_hook
 
         # Mock HookBroadcaster to prevent actual broadcast calls
-        with patch("lionpride.services.types.backend.HookBroadcaster.broadcast", new=AsyncMock()):
+        with patch(
+            "lionpride.services.types.backend.HookBroadcaster.broadcast",
+            new=AsyncMock(),
+        ):
             await mock_calling.invoke()
 
         # Exception caught and converted to FAILED status
@@ -316,7 +322,10 @@ class TestCalling:
         mock_calling._pre_invoke_hook_event = mock_hook
 
         # Mock HookBroadcaster to prevent actual broadcast calls
-        with patch("lionpride.services.types.backend.HookBroadcaster.broadcast", new=AsyncMock()):
+        with patch(
+            "lionpride.services.types.backend.HookBroadcaster.broadcast",
+            new=AsyncMock(),
+        ):
             await mock_calling.invoke()
 
         # Exception caught and converted to FAILED status
@@ -338,7 +347,10 @@ class TestCalling:
         mock_calling._post_invoke_hook_event = mock_hook
 
         # Mock HookBroadcaster to prevent actual broadcast calls
-        with patch("lionpride.services.types.backend.HookBroadcaster.broadcast", new=AsyncMock()):
+        with patch(
+            "lionpride.services.types.backend.HookBroadcaster.broadcast",
+            new=AsyncMock(),
+        ):
             await mock_calling.invoke()
 
         assert mock_calling.execution.status == EventStatus.COMPLETED
@@ -365,7 +377,10 @@ class TestCalling:
         mock_calling._post_invoke_hook_event = mock_hook
 
         # Mock HookBroadcaster to prevent validation error on mock_hook
-        with patch("lionpride.services.types.backend.HookBroadcaster.broadcast", new=AsyncMock()):
+        with patch(
+            "lionpride.services.types.backend.HookBroadcaster.broadcast",
+            new=AsyncMock(),
+        ):
             await mock_calling.invoke()
 
         # Post-hook failure only logs warning when _should_exit=False
@@ -422,7 +437,10 @@ class TestCalling:
         mock_calling._post_invoke_hook_event = mock_hook
 
         # Mock HookBroadcaster to prevent actual broadcast calls
-        with patch("lionpride.services.types.backend.HookBroadcaster.broadcast", new=AsyncMock()):
+        with patch(
+            "lionpride.services.types.backend.HookBroadcaster.broadcast",
+            new=AsyncMock(),
+        ):
             await mock_calling.invoke()
 
         # Exception caught and converted to FAILED status
@@ -444,7 +462,10 @@ class TestCalling:
         mock_calling._post_invoke_hook_event = mock_hook
 
         # Mock HookBroadcaster to prevent actual broadcast calls
-        with patch("lionpride.services.types.backend.HookBroadcaster.broadcast", new=AsyncMock()):
+        with patch(
+            "lionpride.services.types.backend.HookBroadcaster.broadcast",
+            new=AsyncMock(),
+        ):
             await mock_calling.invoke()
 
         # Exception caught and converted to FAILED status

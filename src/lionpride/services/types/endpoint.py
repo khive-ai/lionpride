@@ -69,7 +69,9 @@ class EndpointConfig(ServiceConfig):
     auth_type: AUTH_TYPES = "bearer"
     default_headers: dict = Field(default_factory=dict)
     api_key: str | None = Field(
-        None, description="API key environment variable name, not the key itself.", frozen=True
+        None,
+        description="API key environment variable name, not the key itself.",
+        frozen=True,
     )
     api_key_is_env: bool = Field(
         False,

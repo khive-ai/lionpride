@@ -17,11 +17,7 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import BaseModel
 
-from lionpride.core._utils import (
-    coerce_created_at,
-    get_json_serializable,
-    to_uuid,
-)
+from lionpride.core._utils import coerce_created_at, get_json_serializable, to_uuid
 from lionpride.ln import json_dict
 from lionpride.protocols import Observable, ObservableProto
 from tests.conftest import mock_element
@@ -245,7 +241,9 @@ class TestLoadTypeFromString:
         with pytest.raises(ValueError, match="not in the allowed module prefixes"):
             load_type_from_string("nonexistent.module.Type")
 
-    def test_load_type_from_string_when_invalid_lionpride_module_then_raises_valueerror(self):
+    def test_load_type_from_string_when_invalid_lionpride_module_then_raises_valueerror(
+        self,
+    ):
         """Test load_type_from_string() raises ValueError for non-existent lionpride module."""
         from lionpride.core._utils import load_type_from_string
 
@@ -412,7 +410,9 @@ class TestGetElementSerializerConfig:
         assert isinstance(result, tuple)
         assert len(result) == 2
 
-    def test_get_element_serializer_config_order_contains_serializable_and_basemodel(self):
+    def test_get_element_serializer_config_order_contains_serializable_and_basemodel(
+        self,
+    ):
         """Test get_element_serializer_config() order list contains Serializable and BaseModel."""
         from pydantic import BaseModel
 
@@ -780,7 +780,9 @@ class TestGetJsonSerializable:
         assert result == model
         assert isinstance(result, ModelWithEnum)
 
-    def test_get_json_serializable_when_unserializable_object_then_attempts_conversion(self):
+    def test_get_json_serializable_when_unserializable_object_then_attempts_conversion(
+        self,
+    ):
         """Test get_json_serializable() converts complex objects via to_dict() (lambdas → empty dicts)."""
         from lionpride.types._sentinel import Unset
 

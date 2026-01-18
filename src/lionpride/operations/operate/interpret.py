@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from lionpride.services.types import iModel
 
 from .generate import generate
+from .phrases import name_must_exist_in_branch_resources, text_must_be_provided
 from .types import GenerateParams, InterpretParams
 
 if TYPE_CHECKING:
@@ -32,22 +33,19 @@ async def interpret(
         Refined instruction string
 
     Raises:
-        ValueError: If required params missing
-        PermissionError: If branch doesn't have access to imodel
+        ValidationError: If required params missing
+        ConfigurationError: If branch doesn't have access to imodel
     """
-    if params._is_sentinel(params.text):
-        raise ValueError("interpret requires 'text' parameter")
+    text = text_must_be_provided(params, operation="interpret")
 
     if params._is_sentinel(params.imodel):
-        raise ValueError("interpret requires 'imodel' parameter")
+        from lionpride.errors import ValidationError
+
+        raise ValidationError("interpret requires 'imodel' parameter")
 
     # Resource access check
     model_name = params.imodel.name if isinstance(params.imodel, iModel) else params.imodel
-    if model_name not in branch.resources:
-        raise PermissionError(
-            f"Branch '{branch.name}' cannot access model '{model_name}'. "
-            f"Allowed: {branch.resources or 'none'}"
-        )
+    name_must_exist_in_branch_resources(branch, model_name)
 
     # Build interpretation prompt
     system_instruction = (
@@ -61,7 +59,7 @@ async def interpret(
     if params.sample_writing:
         guidance += f" Sample writing style: {params.sample_writing}"
 
-    user_content = f"{guidance}\n\nUser input to refine:\n{params.text}"
+    user_content = f"{guidance}\n\nUser input to refine:\n{text}"
 
     # Build combined instruction
     instruction = f"{system_instruction}\n\n{user_content}"

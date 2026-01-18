@@ -513,7 +513,8 @@ class TestFactoryUncoveredLines:
             return a + b
 
         tool = Tool(
-            func_callable=add_numbers, config=ToolConfig(name="add_numbers", provider="tool")
+            func_callable=add_numbers,
+            config=ToolConfig(name="add_numbers", provider="tool"),
         )
         session.services.register(iModel(backend=tool))
 
@@ -763,7 +764,8 @@ class TestActCoverage:
             return ToolResult()
 
         tool = Tool(
-            func_callable=custom_tool, config=ToolConfig(name="custom_tool", provider="tool")
+            func_callable=custom_tool,
+            config=ToolConfig(name="custom_tool", provider="tool"),
         )
         session.services.register(iModel(backend=tool))
 
@@ -821,7 +823,10 @@ class TestActCoverage:
         async def data_tool() -> dict:
             return ResultWithData()
 
-        tool = Tool(func_callable=data_tool, config=ToolConfig(name="data_tool", provider="tool"))
+        tool = Tool(
+            func_callable=data_tool,
+            config=ToolConfig(name="data_tool", provider="tool"),
+        )
         session.services.register(iModel(backend=tool))
 
         class ResponseModel(BaseModel):
@@ -874,7 +879,10 @@ class TestActCoverage:
         async def error_tool() -> dict:
             raise RuntimeError("Tool execution failed")
 
-        tool = Tool(func_callable=error_tool, config=ToolConfig(name="error_tool", provider="tool"))
+        tool = Tool(
+            func_callable=error_tool,
+            config=ToolConfig(name="error_tool", provider="tool"),
+        )
         session.services.register(iModel(backend=tool))
 
         class ResponseModel(BaseModel):

@@ -250,14 +250,18 @@ class TestCreateClient:
     async def test_create_client_no_url_or_command(self):
         """Test _create_client raises ValueError when neither url nor command present."""
         with pytest.raises(
-            ValueError, match="Config must have either 'url' or 'command' with non-None value"
+            ValueError,
+            match="Config must have either 'url' or 'command' with non-None value",
         ):
             await MCPConnectionPool._create_client({"invalid": "config"})
 
     async def test_create_client_fastmcp_not_installed(self):
         """Test _create_client raises ImportError when fastmcp not installed."""
         with (
-            patch("builtins.__import__", side_effect=ImportError("No module named 'fastmcp'")),
+            patch(
+                "builtins.__import__",
+                side_effect=ImportError("No module named 'fastmcp'"),
+            ),
             pytest.raises(ImportError, match="FastMCP not installed"),
         ):
             await MCPConnectionPool._create_client({"url": "http://localhost:8000"})

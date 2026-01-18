@@ -58,7 +58,9 @@ class Broadcaster:
                 return
 
     @classmethod
-    def _cleanup_dead_refs(cls) -> list[Callable[[Any], None] | Callable[[Any], Awaitable[None]]]:
+    def _cleanup_dead_refs(
+        cls,
+    ) -> list[Callable[[Any], None] | Callable[[Any], Awaitable[None]]]:
         """Remove dead weakrefs and return list of live callbacks."""
         callbacks = []
         alive_refs = []

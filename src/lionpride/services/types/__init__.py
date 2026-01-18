@@ -25,7 +25,10 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "HookRegistry": ("lionpride.services.types.hook", "HookRegistry"),
     "get_handler": ("lionpride.services.types.hook", "get_handler"),
     "validate_hooks": ("lionpride.services.types.hook", "validate_hooks"),
-    "validate_stream_handlers": ("lionpride.services.types.hook", "validate_stream_handlers"),
+    "validate_stream_handlers": (
+        "lionpride.services.types.hook",
+        "validate_stream_handlers",
+    ),
     # imodel
     "iModel": ("lionpride.services.types.imodel", "iModel"),
     # registry
@@ -63,12 +66,7 @@ def __dir__() -> list[str]:
 
 # TYPE_CHECKING block for static analysis
 if TYPE_CHECKING:
-    from .backend import (
-        Calling,
-        NormalizedResponse,
-        ServiceBackend,
-        ServiceConfig,
-    )
+    from .backend import Calling, NormalizedResponse, ServiceBackend, ServiceConfig
     from .endpoint import APICalling, Endpoint, EndpointConfig
     from .hook import (
         HookBroadcaster,

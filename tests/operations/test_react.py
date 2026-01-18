@@ -18,11 +18,7 @@ import pytest
 from pydantic import BaseModel
 
 from lionpride.errors import AccessError, ConfigurationError, ValidationError
-from lionpride.operations.operate.types import (
-    GenerateParams,
-    ParseParams,
-    ReactParams,
-)
+from lionpride.operations.operate.types import GenerateParams, ParseParams, ReactParams
 from lionpride.rules import ActionRequest
 
 # React protocol capabilities required on branch
@@ -290,7 +286,10 @@ class TestReactCoverage:
             mock_result.is_done = call_count >= 2
             return mock_result
 
-        with patch("lionpride.operations.operate.factory.operate", side_effect=mock_operate_multi):
+        with patch(
+            "lionpride.operations.operate.factory.operate",
+            side_effect=mock_operate_multi,
+        ):
             params = _make_react_params(
                 instruction="Test",
                 imodel=model,

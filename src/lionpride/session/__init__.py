@@ -20,11 +20,20 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "SQLiteWALLogAdapter": ("lionpride.session.log_adapter", "SQLiteWALLogAdapter"),
     # log_broadcaster
     "LogBroadcaster": ("lionpride.session.log_broadcaster", "LogBroadcaster"),
-    "LogBroadcasterConfig": ("lionpride.session.log_broadcaster", "LogBroadcasterConfig"),
+    "LogBroadcasterConfig": (
+        "lionpride.session.log_broadcaster",
+        "LogBroadcasterConfig",
+    ),
     "LogSubscriber": ("lionpride.session.log_broadcaster", "LogSubscriber"),
-    "PostgresLogSubscriber": ("lionpride.session.log_broadcaster", "PostgresLogSubscriber"),
+    "PostgresLogSubscriber": (
+        "lionpride.session.log_broadcaster",
+        "PostgresLogSubscriber",
+    ),
     "S3LogSubscriber": ("lionpride.session.log_broadcaster", "S3LogSubscriber"),
-    "WebhookLogSubscriber": ("lionpride.session.log_broadcaster", "WebhookLogSubscriber"),
+    "WebhookLogSubscriber": (
+        "lionpride.session.log_broadcaster",
+        "WebhookLogSubscriber",
+    ),
     # logs
     "Log": ("lionpride.session.logs", "Log"),
     "LogStore": ("lionpride.session.logs", "LogStore"),
@@ -33,14 +42,20 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     # messages
     "ActionRequestContent": ("lionpride.session.messages", "ActionRequestContent"),
     "ActionResponseContent": ("lionpride.session.messages", "ActionResponseContent"),
-    "AssistantResponseContent": ("lionpride.session.messages", "AssistantResponseContent"),
+    "AssistantResponseContent": (
+        "lionpride.session.messages",
+        "AssistantResponseContent",
+    ),
     "InstructionContent": ("lionpride.session.messages", "InstructionContent"),
     "Message": ("lionpride.session.messages", "Message"),
     "MessageContent": ("lionpride.session.messages", "MessageContent"),
     "MessageRole": ("lionpride.session.messages", "MessageRole"),
     "SenderRecipient": ("lionpride.session.messages", "SenderRecipient"),
     "SystemContent": ("lionpride.session.messages", "SystemContent"),
-    "prepare_messages_for_chat": ("lionpride.session.messages", "prepare_messages_for_chat"),
+    "prepare_messages_for_chat": (
+        "lionpride.session.messages",
+        "prepare_messages_for_chat",
+    ),
     # session
     "Branch": ("lionpride.session.session", "Branch"),
     "Session": ("lionpride.session.session", "Session"),

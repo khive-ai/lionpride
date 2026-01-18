@@ -72,14 +72,18 @@ def test_validate_sender_recipient_when_role_string_then_converts_to_enum(role_s
     assert result.value == role_string
 
 
-def test_validate_sender_recipient_when_uuid_string_then_converts_to_uuid(sample_uuid_str):
+def test_validate_sender_recipient_when_uuid_string_then_converts_to_uuid(
+    sample_uuid_str,
+):
     """Test validate_sender_recipient converts valid UUID strings to UUID objects."""
     result = validate_sender_recipient(sample_uuid_str)
     assert isinstance(result, UUID)
     assert str(result) == sample_uuid_str
 
 
-def test_validate_sender_recipient_when_arbitrary_string_then_returns_string(non_uuid_string):
+def test_validate_sender_recipient_when_arbitrary_string_then_returns_string(
+    non_uuid_string,
+):
     """Test validate_sender_recipient returns arbitrary strings unchanged."""
     result = validate_sender_recipient(non_uuid_string)
     assert result == non_uuid_string
@@ -295,7 +299,9 @@ def test_validate_sender_recipient_when_very_long_string_then_returns_string():
     assert result == long_string
 
 
-def test_serialize_sender_recipient_when_uuid_with_uppercase_then_normalizes(sample_uuid):
+def test_serialize_sender_recipient_when_uuid_with_uppercase_then_normalizes(
+    sample_uuid,
+):
     """Test serialize_sender_recipient converts UUID to lowercase string."""
     result = serialize_sender_recipient(sample_uuid)
     # UUIDs are typically lowercase in string form

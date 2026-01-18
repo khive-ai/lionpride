@@ -4,16 +4,21 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
-from lionpride.errors import AccessError, ExecutionError, ValidationError
+from lionpride.errors import ValidationError
 from lionpride.rules import Validator
 from lionpride.session.messages import AssistantResponseContent, Message
-from lionpride.types import is_sentinel
 
 from .generate import generate
 from .parse import parse
-from .types import CommunicateParams, GenerateParams, ParseParams
+from .phrases import (
+    capabilities_must_be_subset_of_branch,
+    resolve_branch_exists_in_session,
+    resolve_parse_params,
+    resolve_response_is_normalized,
+)
+from .types import CommunicateParams, GenerateParams
 
 if TYPE_CHECKING:
     from lionpride.services.types import Calling, NormalizedResponse
@@ -33,7 +38,7 @@ async def communicate(
     poll_interval: float | None = None,
     validator: Validator | None = None,
 ) -> str | Any:
-    b_ = session.get_branch(branch)
+    b_ = resolve_branch_exists_in_session(session, branch)
 
     if params._is_sentinel(params.generate):
         raise ValidationError("communicate requires 'generate' params")
@@ -88,17 +93,14 @@ async def _communicate_text(
         poll_interval=poll_interval,
     )
 
-    # Get response, handling potential UnsetType
-    response = gen_calling.response
-    if is_sentinel(response):
-        raise ExecutionError("Generation completed but no response was returned", retryable=False)
-    response = cast("NormalizedResponse", response)
+    # 2. Validate and extract response
+    response = resolve_response_is_normalized(gen_calling)
     response_text = response.data
 
-    # 2. Persist messages
+    # 3. Persist messages
     _persist_messages(session, branch, gen_params, gen_calling)
 
-    # 3. Return text
+    # 4. Return text
     return response_text
 
 
@@ -121,12 +123,7 @@ async def _communicate_with_operable(
     # At this point capabilities is known to be not None/sentinel
     assert params.capabilities is not None
     capabilities = set(params.capabilities)
-    if not capabilities.issubset(branch.capabilities):
-        missing = capabilities - branch.capabilities
-        raise AccessError(
-            f"Branch '{branch.name}' missing capabilities: {missing}",
-            details={"requested": list(capabilities), "available": list(branch.capabilities)},
-        )
+    capabilities_must_be_subset_of_branch(branch, capabilities)
 
     # 2. Build request_model from operable + capabilities
     # params.operable is validated to be non-sentinel in the caller
@@ -150,18 +147,11 @@ async def _communicate_with_operable(
         poll_interval=poll_interval,
     )
 
-    # Get response, handling potential UnsetType
-    response = gen_calling.response
-    if is_sentinel(response):
-        raise ExecutionError("Generation completed but no response was returned", retryable=False)
-    response = cast("NormalizedResponse", response)
+    # 4. Validate and extract response
+    response = resolve_response_is_normalized(gen_calling)
 
-    # 4. Parse (extract structured data) - raises ExecutionError on failure
-    parse_params: ParseParams = (
-        params.parse
-        if params.parse is not None and not params._is_sentinel(params.parse)
-        else ParseParams()
-    )
+    # 5. Parse (extract structured data) - raises ExecutionError on failure
+    parse_params = resolve_parse_params(params)
     parsed = await parse(
         session=session,
         branch=branch,
@@ -176,7 +166,7 @@ async def _communicate_with_operable(
         poll_interval=poll_interval,
     )
 
-    # 5. Validate (security microkernel) - raises ValidationError on failure
+    # 6. Validate (security microkernel) - raises ValidationError on failure
     val_ = validator or Validator()
     validated = await val_.validate(
         parsed,
@@ -186,7 +176,7 @@ async def _communicate_with_operable(
         params.strict_validation,
     )
 
-    # 6. Persist messages (only on success)
+    # 7. Persist messages (only on success)
     _persist_messages(session, branch, gen_params, gen_calling)
 
     return validated
@@ -208,12 +198,8 @@ def _persist_messages(
             branches=branch,
         )
 
-    # Get response, handling potential UnsetType
-    response = gen_calling.response
-    if is_sentinel(response):
-        # This shouldn't happen if we reach this point, but handle gracefully
-        return
-    response = cast("NormalizedResponse", response)
+    # Get response - already validated by caller
+    response: NormalizedResponse = gen_calling.response  # type: ignore
 
     # Build metadata dict
     metadata_dict: dict[str, Any] = {"raw_response": response.raw_response}

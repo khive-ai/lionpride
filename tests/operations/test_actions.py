@@ -60,15 +60,26 @@ class TestAct:
 
         # Register tools (wrapped in iModel)
         tools = [
-            Tool(func_callable=mock_multiply, config=ToolConfig(name="multiply", provider="tool")),
-            Tool(func_callable=mock_add_tool, config=ToolConfig(name="add_tool", provider="tool")),
             Tool(
-                func_callable=mock_error_tool, config=ToolConfig(name="error_tool", provider="tool")
+                func_callable=mock_multiply,
+                config=ToolConfig(name="multiply", provider="tool"),
             ),
             Tool(
-                func_callable=mock_slow_tool, config=ToolConfig(name="slow_tool", provider="tool")
+                func_callable=mock_add_tool,
+                config=ToolConfig(name="add_tool", provider="tool"),
             ),
-            Tool(func_callable=sync_tool, config=ToolConfig(name="sync_tool", provider="tool")),
+            Tool(
+                func_callable=mock_error_tool,
+                config=ToolConfig(name="error_tool", provider="tool"),
+            ),
+            Tool(
+                func_callable=mock_slow_tool,
+                config=ToolConfig(name="slow_tool", provider="tool"),
+            ),
+            Tool(
+                func_callable=sync_tool,
+                config=ToolConfig(name="sync_tool", provider="tool"),
+            ),
         ]
 
         for tool in tools:
@@ -388,7 +399,8 @@ class TestExecuteTools:
         """Create session with multiply tool."""
         session = Session()
         tool = Tool(
-            func_callable=mock_multiply, config=ToolConfig(name="multiply", provider="tool")
+            func_callable=mock_multiply,
+            config=ToolConfig(name="multiply", provider="tool"),
         )
         session.services.register(iModel(backend=tool))
         return session
@@ -463,7 +475,8 @@ class TestActionMessagePersistence:
         """Create session with a simple tool."""
         session = Session()
         tool = Tool(
-            func_callable=mock_multiply, config=ToolConfig(name="multiply", provider="tool")
+            func_callable=mock_multiply,
+            config=ToolConfig(name="multiply", provider="tool"),
         )
         session.services.register(iModel(backend=tool))
         return session

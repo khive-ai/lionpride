@@ -12,7 +12,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import BaseModel, Field
 
-from lionpride.work import FormResult, Report, ReportExecutor, execute_report, stream_report
+from lionpride.work import (
+    FormResult,
+    Report,
+    ReportExecutor,
+    execute_report,
+    stream_report,
+)
 
 
 class SimpleOutput(BaseModel):

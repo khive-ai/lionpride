@@ -27,7 +27,14 @@ __all__ = ("Message",)
 # Valid keys for each content type's create() method
 # Used to filter ambiguous dicts and prevent TypeError on unexpected kwargs
 _INSTRUCTION_KEYS = frozenset(
-    {"instruction", "context", "tool_schemas", "request_model", "images", "image_detail"}
+    {
+        "instruction",
+        "context",
+        "tool_schemas",
+        "request_model",
+        "images",
+        "image_detail",
+    }
 )
 _ASSISTANT_RESPONSE_KEYS = frozenset({"assistant_response"})
 _ACTION_RESPONSE_KEYS = frozenset({"request_id", "result", "error"})
@@ -75,7 +82,14 @@ class Message(Node):
         # Infer content type from dict keys and filter to valid keys only
         # This prevents TypeError when dict has keys from multiple content types
         if any(
-            k in v for k in ("instruction", "context", "request_model", "tool_schemas", "images")
+            k in v
+            for k in (
+                "instruction",
+                "context",
+                "request_model",
+                "tool_schemas",
+                "images",
+            )
         ):
             filtered = {k: v[k] for k in v if k in _INSTRUCTION_KEYS}
             return InstructionContent.create(**filtered)

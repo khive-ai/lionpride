@@ -292,7 +292,12 @@ class HookRegistry:
             return (e, exit, EventStatus.ABORTED)
 
     async def handle_streaming_chunk(
-        self, chunk_type: str | type | None, chunk: Any, /, exit: bool = False, **kw: Any
+        self,
+        chunk_type: str | type | None,
+        chunk: Any,
+        /,
+        exit: bool = False,
+        **kw: Any,
     ) -> tuple[Any, bool, EventStatus | None]:
         """Process streaming chunk. Raise to abort stream."""
         if chunk_type is None:

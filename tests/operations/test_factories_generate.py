@@ -13,7 +13,7 @@ Focus areas:
 from unittest.mock import AsyncMock
 
 import pytest
-from conftest import MockNormalizedResponse
+from tests.operations.conftest import mock_normalized_response
 
 from lionpride import Event, EventStatus
 from lionpride.errors import ConfigurationError, ExecutionError, ValidationError
@@ -209,7 +209,7 @@ class TestBranchResourceAccess:
             instruction="test",
         )
 
-        with pytest.raises(ConfigurationError, match="has no access to model"):
+        with pytest.raises(ConfigurationError, match="has no access to resource"):
             await generate(session, branch, params)
 
 

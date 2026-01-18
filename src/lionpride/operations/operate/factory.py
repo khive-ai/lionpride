@@ -7,13 +7,21 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
-from lionpride.errors import AccessError, ConfigurationError, ValidationError
+from lionpride.errors import ValidationError
 from lionpride.rules import ActionRequest, ActionResponse, Reason, Validator
 from lionpride.types import Operable, Spec
 
 from .act import execute_tools, has_action_requests
 from .communicate import communicate
-from .types import CommunicateParams, OperateParams, ParseParams
+from .phrases import (
+    capabilities_must_be_subset_of_branch,
+    capabilities_must_be_subset_of_operable,
+    generate_params_must_be_provided,
+    imodel_must_be_configured,
+    resolve_branch_exists_in_session,
+    resolve_parse_params,
+)
+from .types import CommunicateParams, OperateParams
 
 if TYPE_CHECKING:
     from lionpride.session import Branch, Session
@@ -54,20 +62,11 @@ async def operate(
         AccessError: If branch lacks required capabilities.
     """
     # 1. Validate required params
-    if params._is_sentinel(params.generate):
-        raise ValidationError("operate requires 'generate' params")
-
-    # Type narrowing - generate is not None after validation
-    assert params.generate is not None
-    gen_params = params.generate
-
-    if params._is_sentinel(gen_params.imodel) and session.default_generate_model is None:
-        raise ConfigurationError(
-            "operate requires 'imodel' in generate params or session.default_generate_model"
-        )
+    gen_params = generate_params_must_be_provided(params, operation="operate")
+    imodel_must_be_configured(session, gen_params, operation="operate")
 
     # 2. Resolve branch
-    b_ = session.get_branch(branch)
+    b_ = resolve_branch_exists_in_session(session, branch)
 
     # 3. Handle skip_validation (text path - no structured output)
     if params.skip_validation:
@@ -112,33 +111,17 @@ async def operate(
         required_capabilities.add("reason")
 
     # 6. Validate capabilities against branch (security gate)
-    if not required_capabilities.issubset(b_.capabilities):
-        missing = required_capabilities - b_.capabilities
-        raise AccessError(
-            f"Branch '{b_.name}' missing capabilities: {missing}",
-            details={
-                "requested": sorted(required_capabilities),
-                "available": sorted(b_.capabilities),
-            },
-        )
+    capabilities_must_be_subset_of_branch(b_, required_capabilities)
 
     # 7. Build operable (if not provided)
     if operable is None:
         operable = _build_operable(response_model, params.actions, params.reason)
 
     # 8. Validate capabilities against operable (can only request what exists)
-    if not required_capabilities.issubset(operable.allowed()):
-        missing = required_capabilities - operable.allowed()
-        raise ValidationError(
-            f"Requested capabilities not in operable: {missing}",
-            details={
-                "requested": sorted(required_capabilities),
-                "available": sorted(operable.allowed()),
-            },
-        )
+    capabilities_must_be_subset_of_operable(operable, required_capabilities)
 
     # 9. Call communicate with validated capabilities
-    parse_params = params.parse if not params._is_sentinel(params.parse) else ParseParams()
+    parse_params = resolve_parse_params(params)
     communicate_params = CommunicateParams(
         generate=gen_params,
         parse=parse_params,

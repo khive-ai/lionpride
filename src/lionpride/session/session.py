@@ -375,10 +375,10 @@ class Session(Element):
         forked = self.create_branch(
             name=name or f"{source.name}_fork",
             messages=source.order,
-            capabilities={*source.capabilities}
-            if capabilities is True
-            else (capabilities or set()),
-            resources={*source.resources} if resources is True else (resources or set()),
+            capabilities=(
+                {*source.capabilities} if capabilities is True else (capabilities or set())
+            ),
+            resources=({*source.resources} if resources is True else (resources or set())),
             system=source.system_message if system is True else system,
         )
 
@@ -495,7 +495,10 @@ class Session(Element):
         """
         resolved = self._resolve_branch(branch)
         op = Operation(
-            operation_type=operation_type, parameters=params, timeout=None, streaming=False
+            operation_type=operation_type,
+            parameters=params,
+            timeout=None,
+            streaming=False,
         )
         op.bind(self, resolved)
         await op.invoke()

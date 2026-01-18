@@ -10,10 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from lionpride.services.providers.oai_chat import (
-    OAIChatEndpoint,
-    create_oai_chat,
-)
+from lionpride.services.providers.oai_chat import OAIChatEndpoint, create_oai_chat
 from lionpride.services.types import NormalizedResponse
 
 
@@ -185,7 +182,10 @@ class TestOAIChatEndpointNormalizeResponse:
                             {
                                 "id": "call_123",
                                 "type": "function",
-                                "function": {"name": "calculator", "arguments": '{"a":1,"b":2}'},
+                                "function": {
+                                    "name": "calculator",
+                                    "arguments": '{"a":1,"b":2}',
+                                },
                             }
                         ],
                     },
@@ -211,8 +211,16 @@ class TestOAIChatEndpointNormalizeResponse:
                     "message": {
                         "content": None,
                         "tool_calls": [
-                            {"id": "call_1", "type": "function", "function": {"name": "tool1"}},
-                            {"id": "call_2", "type": "function", "function": {"name": "tool2"}},
+                            {
+                                "id": "call_1",
+                                "type": "function",
+                                "function": {"name": "tool1"},
+                            },
+                            {
+                                "id": "call_2",
+                                "type": "function",
+                                "function": {"name": "tool2"},
+                            },
                         ],
                     }
                 }
@@ -244,7 +252,10 @@ class TestOAIChatEndpointNormalizeResponse:
 
         assert normalized.metadata["id"] == "chatcmpl-123"
         assert normalized.metadata["model"] == "gpt-4o"
-        assert normalized.metadata["usage"] == {"prompt_tokens": 10, "completion_tokens": 5}
+        assert normalized.metadata["usage"] == {
+            "prompt_tokens": 10,
+            "completion_tokens": 5,
+        }
         assert normalized.metadata["finish_reason"] == "stop"
 
     def test_normalize_response_extracts_first_choice_only(self):

@@ -328,7 +328,12 @@ def load_pydantic_model_from_schema(
         module_name = output_file.stem
 
         _generate_model_code(
-            schema_json, output_file, pydantic_version, python_version, generate, InputFileType
+            schema_json,
+            output_file,
+            pydantic_version,
+            python_version,
+            generate,
+            InputFileType,
         )
         module = _load_generated_module(output_file, module_name)
         model_class = _extract_model_class(module, resolved_name, output_file)

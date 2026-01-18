@@ -15,11 +15,7 @@ import pytest
 from pydantic import BaseModel
 
 from lionpride.errors import AccessError, NotFoundError, ValidationError
-from lionpride.operations.operate.act import (
-    act,
-    execute_tools,
-    has_action_requests,
-)
+from lionpride.operations.operate.act import act, execute_tools, has_action_requests
 from lionpride.rules import ActionRequest, ActionResponse
 from lionpride.services import iModel
 from lionpride.services.types.tool import Tool, ToolConfig
@@ -62,10 +58,19 @@ def session_with_tools():
     tool_names = []
 
     tools = [
-        Tool(func_callable=mock_multiply, config=ToolConfig(name="multiply", provider="tool")),
+        Tool(
+            func_callable=mock_multiply,
+            config=ToolConfig(name="multiply", provider="tool"),
+        ),
         Tool(func_callable=mock_adder, config=ToolConfig(name="adder", provider="tool")),
-        Tool(func_callable=mock_error_tool, config=ToolConfig(name="error_tool", provider="tool")),
-        Tool(func_callable=sync_tool, config=ToolConfig(name="sync_tool", provider="tool")),
+        Tool(
+            func_callable=mock_error_tool,
+            config=ToolConfig(name="error_tool", provider="tool"),
+        ),
+        Tool(
+            func_callable=sync_tool,
+            config=ToolConfig(name="sync_tool", provider="tool"),
+        ),
     ]
 
     for tool in tools:

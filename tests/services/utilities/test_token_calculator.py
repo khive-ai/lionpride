@@ -64,7 +64,10 @@ class TestTokenCalculator:
         messages = [
             {
                 "role": "user",
-                "content": [{"type": "text", "text": "Hello"}, {"type": "text", "text": "World"}],
+                "content": [
+                    {"type": "text", "text": "Hello"},
+                    {"type": "text", "text": "World"},
+                ],
             }
         ]
 
@@ -79,7 +82,10 @@ class TestTokenCalculator:
                 "role": "user",
                 "content": [
                     {"type": "text", "text": "What's in this image?"},
-                    {"type": "image_url", "image_url": {"url": "https://example.com/image.jpg"}},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "https://example.com/image.jpg"},
+                    },
                 ],
             }
         ]
@@ -112,9 +118,7 @@ class TestTokenCalculator:
     def test_calculate_embed_token_empty_inputs(self):
         """Test that empty inputs list raises ValueError."""
         with pytest.raises(ValueError, match="inputs must be a non-empty list"):
-            TokenCalculator.calculate_embed_token(
-                []  # Empty list
-            )
+            TokenCalculator.calculate_embed_token([])  # Empty list
 
     def test_calculate_embed_token_exception_handling(self):
         """Test that exceptions in embed calculation raise TokenCalculationError."""
@@ -164,7 +168,10 @@ class TestTokenCalculator:
     def test_tokenize_return_decoded(self):
         """Test tokenizing with return_tokens=True and return_decoded=True."""
         result = TokenCalculator.tokenize(
-            "Hello world", encoding_name="cl100k_base", return_tokens=True, return_decoded=True
+            "Hello world",
+            encoding_name="cl100k_base",
+            return_tokens=True,
+            return_decoded=True,
         )
         assert isinstance(result, tuple)
         assert len(result) == 2
@@ -205,7 +212,10 @@ class TestTokenCalculator:
         """Test _calculate_chatitem with dict containing 'image_url'."""
         encoding = tiktoken.get_encoding("o200k_base")
         result = TokenCalculator._calculate_chatitem(
-            {"type": "image_url", "image_url": {"url": "https://example.com/image.jpg"}},
+            {
+                "type": "image_url",
+                "image_url": {"url": "https://example.com/image.jpg"},
+            },
             encoding.encode,
             "gpt-4o",
         )

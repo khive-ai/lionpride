@@ -4,11 +4,8 @@
 from datetime import UTC
 
 import pytest
-from hypothesis import (
-    given,
-    settings,
-    strategies as st,
-)
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from lionpride.ln import (
     acreate_path,
