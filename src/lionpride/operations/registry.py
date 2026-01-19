@@ -29,11 +29,9 @@ class OperationRegistry:
 
     Default operations are auto-registered on creation:
     - operate: Structured output with optional actions
-    - react: Multi-step reasoning with tool calling
     - communicate: Stateful chat with optional structured output
     - generate: Stateless text generation
     - parse: JSON extraction with LLM fallback
-    - interpret: Instruction refinement
 
     Usage:
         # Session creates registry automatically
@@ -64,15 +62,13 @@ class OperationRegistry:
         Imports are deferred to avoid circular imports.
         Factories are registered directly - they expect typed Params objects.
         """
-        from .operate import communicate, generate, interpret, operate, parse, react
+        from .operate import communicate, generate, operate, parse
 
         # Register factories directly - they expect typed params
         self._factories["operate"] = operate
-        self._factories["react"] = react
         self._factories["communicate"] = communicate
         self._factories["generate"] = generate
         self._factories["parse"] = parse
-        self._factories["interpret"] = interpret
 
     def register(
         self,
