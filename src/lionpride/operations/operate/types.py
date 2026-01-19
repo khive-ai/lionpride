@@ -22,10 +22,8 @@ __all__ = (
     "CustomRenderer",
     "GenerateParams",
     "HandleUnmatched",
-    "InterpretParams",
     "OperateParams",
     "ParseParams",
-    "ReactParams",
     "ReturnAs",
 )
 
@@ -207,34 +205,6 @@ class ActParams(Params):
     """Timeout for tool execution."""
 
 
-@dataclass(frozen=True, slots=True)
-class InterpretParams(Params):
-    """Parameters for interpret operation (refine user instructions).
-
-    Rewrites raw user input into clearer, more structured prompts.
-    """
-
-    _config = ModelConfig(none_as_sentinel=True, empty_as_sentinel=True)
-
-    text: str | None = None
-    """Raw user instruction to refine."""
-
-    imodel: iModel | str | None = None
-    """Model to use for interpretation."""
-
-    domain: str = "general"
-    """Domain hint for interpretation."""
-
-    style: str = "concise"
-    """Desired style of output."""
-
-    sample_writing: str | None = None
-    """Example of desired output style."""
-
-    temperature: float = 0.1
-    """Temperature for generation."""
-
-
 # =============================================================================
 # Inherited Params (flat hierarchy)
 # =============================================================================
@@ -345,58 +315,4 @@ class OperateParams(CommunicateParams):
             capabilities=self.capabilities,
             auto_fix=self.auto_fix,
             strict_validation=self.strict_validation,
-        )
-
-
-@dataclass(frozen=True)
-class ReactParams(OperateParams):
-    """Parameters for react operation (multi-step reasoning loop).
-
-    Inherits from OperateParams - access everything directly:
-        react.generate.instruction  (1 level)
-        react.tools                 (direct)
-        react.max_steps             (direct)
-
-    React is a pure loop: reasoning + actions + optional intermediate outputs.
-    """
-
-    max_steps: int = 10
-    """Maximum react steps."""
-
-    return_trace: bool = False
-    """Return full execution trace."""
-
-    # Intermediate response options
-    intermediate_response_options: list[type[BaseModel]] | type[BaseModel] | None = None
-    """Models for intermediate deliverables (e.g., ProgressReport, PartialResult).
-
-    Each model becomes a nullable field in step responses. The model can
-    populate these during multi-step reasoning to provide structured
-    intermediate outputs.
-    """
-
-    intermediate_listable: bool = False
-    """Whether intermediate options can be lists (e.g., list[CodeBlock])."""
-
-    intermediate_nullable: bool = True
-    """Whether intermediate options default to None (usually True)."""
-
-    @property
-    def operate(self) -> OperateParams:
-        """Get OperateParams for operate operation."""
-        return OperateParams(
-            generate=self.generate,
-            parse=self.parse,
-            operable=self.operable,
-            capabilities=self.capabilities,
-            auto_fix=self.auto_fix,
-            strict_validation=self.strict_validation,
-            tools=self.tools,
-            tool_schemas=self.tool_schemas,
-            tool_concurrent=self.tool_concurrent,
-            tool_timeout=self.tool_timeout,
-            actions=self.actions,
-            reason=self.reason,
-            skip_validation=self.skip_validation,
-            return_message=self.return_message,
         )

@@ -5,13 +5,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from lionpride.errors import ValidationError
 from lionpride.session.messages import prepare_messages_for_chat
 
 from .phrases import (
-    resolve_branch_exists_in_session,
-    resolve_genai_model_exists_in_session,
+    resolve_generate_branch_model,
     resolve_response_is_normalized,
-    resource_must_be_accessible_by_branch,
     response_must_be_completed,
 )
 from .types import GenerateParams, ReturnAs
@@ -30,10 +29,7 @@ async def generate(
     poll_timeout: float | None = None,
     poll_interval: float | None = None,
 ):
-    b_ = resolve_branch_exists_in_session(session, branch)
-    imodel_, imodel_kw = resolve_genai_model_exists_in_session(session, params)
-    resource_must_be_accessible_by_branch(b_, imodel_.name)
-
+    b_, imodel_, imodel_kw = resolve_generate_branch_model(session, branch, params)
     msgs = session.messages[b_]
 
     prepared_msgs = prepare_messages_for_chat(
@@ -70,7 +66,6 @@ def _handle_return(calling: Calling, return_as: ReturnAs) -> Any:
         case "response":
             return response
         case "message":
-            from lionpride.errors import ValidationError
             from lionpride.session.messages import AssistantResponseContent, Message
 
             metadata_dict: dict[str, Any] = {"raw_response": response.raw_response}
@@ -84,6 +79,4 @@ def _handle_return(calling: Calling, return_as: ReturnAs) -> Any:
                 metadata=metadata_dict,
             )
         case _:
-            from lionpride.errors import ValidationError
-
             raise ValidationError(f"Unsupported return_as: {return_as}")

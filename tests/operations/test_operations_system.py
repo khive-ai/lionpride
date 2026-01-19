@@ -155,9 +155,9 @@ class TestOperationRegistry:
 
         # Default operations should be registered
         assert registry.has("operate")
-        assert registry.has("react")
         assert registry.has("communicate")
         assert registry.has("generate")
+        assert registry.has("parse")
 
 
 # -------------------------------------------------------------------------

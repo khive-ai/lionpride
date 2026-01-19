@@ -20,7 +20,7 @@ from .types import GenerateParams, ParseParams
 
 if TYPE_CHECKING:
     from lionpride.services.types import Calling, iModel
-    from lionpride.session import Session
+    from lionpride.session import Branch, Session
     from lionpride.types import Operable
 
 
@@ -130,3 +130,14 @@ def resolve_response_is_normalized(calling: Calling) -> NormalizedResponse:
             f"Response cannot be normalized: {e}",
             retryable=False,
         ) from e
+
+
+def resolve_generate_branch_model(
+    session: Session,
+    branch: Branch | str,
+    params: GenerateParams,
+) -> tuple[Branch, iModel, dict[str, Any]]:
+    b_ = resolve_branch_exists_in_session(session, branch)
+    imodel_, imodel_kw = resolve_genai_model_exists_in_session(session, params)
+    resource_must_be_accessible_by_branch(b_, imodel_.name)
+    return b_, imodel_, imodel_kw
