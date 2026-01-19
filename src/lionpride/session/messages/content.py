@@ -135,7 +135,11 @@ class InstructionContent(MessageContent):
         structure_format: Literal["json", "custom"] = "json",
         custom_renderer: "Callable[[type[BaseModel]], str] | None" = None,
     ) -> str:
-        from ._utils import _format_json_response_structure, _format_model_schema, _format_task
+        from ._utils import (
+            _format_json_response_structure,
+            _format_model_schema,
+            _format_task,
+        )
 
         task_data: dict[str, Any] = {
             "Instruction": self.instruction,
@@ -211,7 +215,7 @@ class AssistantResponseContent(MessageContent):
 
     @classmethod
     def create(cls, assistant_response: str | None = None) -> "AssistantResponseContent":
-        return cls(assistant_response=Unset if assistant_response is None else assistant_response)
+        return cls(assistant_response=(Unset if assistant_response is None else assistant_response))
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "AssistantResponseContent":

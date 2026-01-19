@@ -60,15 +60,26 @@ class TestAct:
 
         # Register tools (wrapped in iModel)
         tools = [
-            Tool(func_callable=mock_multiply, config=ToolConfig(name="multiply", provider="tool")),
-            Tool(func_callable=mock_add_tool, config=ToolConfig(name="add_tool", provider="tool")),
             Tool(
-                func_callable=mock_error_tool, config=ToolConfig(name="error_tool", provider="tool")
+                func_callable=mock_multiply,
+                config=ToolConfig(name="multiply", provider="tool"),
             ),
             Tool(
-                func_callable=mock_slow_tool, config=ToolConfig(name="slow_tool", provider="tool")
+                func_callable=mock_add_tool,
+                config=ToolConfig(name="add_tool", provider="tool"),
             ),
-            Tool(func_callable=sync_tool, config=ToolConfig(name="sync_tool", provider="tool")),
+            Tool(
+                func_callable=mock_error_tool,
+                config=ToolConfig(name="error_tool", provider="tool"),
+            ),
+            Tool(
+                func_callable=mock_slow_tool,
+                config=ToolConfig(name="slow_tool", provider="tool"),
+            ),
+            Tool(
+                func_callable=sync_tool,
+                config=ToolConfig(name="sync_tool", provider="tool"),
+            ),
         ]
 
         for tool in tools:
@@ -96,14 +107,14 @@ class TestAct:
         with pytest.raises(PydanticValidationError, match=r"function"):
             ActionRequest(function=None, arguments={"a": 5, "b": 3})  # type: ignore[arg-type]
 
-    async def test_empty_function_name_raises_validation_error(self, session_with_tools):
-        """Test that empty function string raises ValidationError."""
+    async def test_empty_function_name_raises_not_found_error(self, session_with_tools):
+        """Test that empty function string raises NotFoundError."""
         session, tool_names = session_with_tools
         branch = session.create_branch(resources=set(tool_names))
 
         requests = [ActionRequest(function="", arguments={})]
 
-        with pytest.raises(ValidationError, match="Action request missing function name"):
+        with pytest.raises(NotFoundError, match="not found in session services"):
             await act(requests, session, branch)
 
     async def test_tool_not_in_registry_raises_not_found_error(self, session_with_tools):
@@ -115,7 +126,7 @@ class TestAct:
             ActionRequest(function="nonexistent_tool", arguments={"a": 5}),
         ]
 
-        with pytest.raises(NotFoundError, match=r"Tool 'nonexistent_tool' not found"):
+        with pytest.raises(NotFoundError, match=r"'nonexistent_tool' not found in session"):
             await act(requests, session, branch)
 
     async def test_tool_not_in_branch_resources_raises_access_error(self, session_with_tools):
@@ -128,7 +139,7 @@ class TestAct:
             ActionRequest(function="add_tool", arguments={"a": 10, "b": 20}),
         ]
 
-        with pytest.raises(AccessError, match=r"doesn't have access to tool 'add_tool'"):
+        with pytest.raises(AccessError, match=r"has no access to resource 'add_tool'"):
             await act(requests, session, branch)
 
     async def test_concurrent_execution_success(self, session_with_tools):
@@ -388,7 +399,8 @@ class TestExecuteTools:
         """Create session with multiply tool."""
         session = Session()
         tool = Tool(
-            func_callable=mock_multiply, config=ToolConfig(name="multiply", provider="tool")
+            func_callable=mock_multiply,
+            config=ToolConfig(name="multiply", provider="tool"),
         )
         session.services.register(iModel(backend=tool))
         return session
@@ -463,7 +475,8 @@ class TestActionMessagePersistence:
         """Create session with a simple tool."""
         session = Session()
         tool = Tool(
-            func_callable=mock_multiply, config=ToolConfig(name="multiply", provider="tool")
+            func_callable=mock_multiply,
+            config=ToolConfig(name="multiply", provider="tool"),
         )
         session.services.register(iModel(backend=tool))
         return session

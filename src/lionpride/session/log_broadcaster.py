@@ -722,11 +722,11 @@ class LogBroadcaster:
                 result[key] = self._redact_dict(value)
             elif isinstance(value, list):
                 result[key] = [
-                    self._redact_dict(item)
-                    if isinstance(item, dict)
-                    else self.redactor.redact(item)
-                    if isinstance(item, str)
-                    else item
+                    (
+                        self._redact_dict(item)
+                        if isinstance(item, dict)
+                        else (self.redactor.redact(item) if isinstance(item, str) else item)
+                    )
                     for item in value
                 ]
             else:

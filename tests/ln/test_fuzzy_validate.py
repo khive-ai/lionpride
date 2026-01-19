@@ -8,10 +8,7 @@ from pydantic import BaseModel
 
 from lionpride.errors import ValidationError
 from lionpride.ln._fuzzy_match import FuzzyMatchKeysParams
-from lionpride.ln._fuzzy_validate import (
-    fuzzy_validate_mapping,
-    fuzzy_validate_pydantic,
-)
+from lionpride.ln._fuzzy_validate import fuzzy_validate_mapping, fuzzy_validate_pydantic
 
 
 # Test models

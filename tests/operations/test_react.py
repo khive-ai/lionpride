@@ -18,11 +18,7 @@ import pytest
 from pydantic import BaseModel
 
 from lionpride.errors import AccessError, ConfigurationError, ValidationError
-from lionpride.operations.operate.types import (
-    GenerateParams,
-    ParseParams,
-    ReactParams,
-)
+from lionpride.operations.operate.types import GenerateParams, ParseParams, ReactParams
 from lionpride.rules import ActionRequest
 
 # React protocol capabilities required on branch
@@ -72,7 +68,7 @@ class TestReactCoverage:
         # ReactParams with no generate (inherited from CommunicateParams)
         params = ReactParams()
 
-        with pytest.raises(ValidationError, match="react requires 'generate' params"):
+        with pytest.raises(ValidationError, match="'generate' field is not of type GenerateParams"):
             await react(session, branch, params)
 
     async def test_react_missing_instruction(self, session_with_model):
@@ -90,7 +86,7 @@ class TestReactCoverage:
             await react(session, branch, params)
 
     async def test_react_missing_imodel_no_default(self, session_with_model):
-        """Test missing imodel raises ConfigurationError when no default_generate_model."""
+        """Test missing imodel raises ValidationError when no default_generate_model."""
         from lionpride.operations.operate.react import react
 
         session, _ = session_with_model
@@ -98,11 +94,11 @@ class TestReactCoverage:
 
         params = _make_react_params(instruction="Test")
 
-        with pytest.raises(ConfigurationError, match="imodel"):
+        with pytest.raises(ValidationError, match="imodel"):
             await react(session, branch, params)
 
     async def test_react_missing_model_name(self, session_with_model):
-        """Test missing model_name raises ConfigurationError when imodel has no .name."""
+        """Test missing model_name raises ValidationError when imodel has no .name."""
         from unittest.mock import MagicMock
 
         from lionpride.operations.operate.react import react
@@ -121,7 +117,7 @@ class TestReactCoverage:
             # No model_name in imodel_kwargs and imodel has no .name
         )
 
-        with pytest.raises(ConfigurationError, match="model_name"):
+        with pytest.raises(ValidationError, match="model_name"):
             await react(session, branch, params)
 
     async def test_react_missing_branch_capabilities(self, session_with_model):
@@ -138,7 +134,7 @@ class TestReactCoverage:
             imodel_kwargs={"model_name": "gpt-4"},
         )
 
-        with pytest.raises(AccessError, match="missing react capabilities"):
+        with pytest.raises(AccessError, match="missing capabilities"):
             await react(session, branch, params)
 
     async def test_react_branch_string_resolution(self, session_with_model):
@@ -290,7 +286,10 @@ class TestReactCoverage:
             mock_result.is_done = call_count >= 2
             return mock_result
 
-        with patch("lionpride.operations.operate.factory.operate", side_effect=mock_operate_multi):
+        with patch(
+            "lionpride.operations.operate.factory.operate",
+            side_effect=mock_operate_multi,
+        ):
             params = _make_react_params(
                 instruction="Test",
                 imodel=model,

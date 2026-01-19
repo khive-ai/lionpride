@@ -6,8 +6,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from lionpride.services.types import iModel
+from lionpride.types import is_sentinel
 
 from .generate import generate
+from .phrases import resource_must_be_accessible_by_branch
 from .types import GenerateParams, InterpretParams
 
 if TYPE_CHECKING:
@@ -32,22 +34,23 @@ async def interpret(
         Refined instruction string
 
     Raises:
-        ValueError: If required params missing
-        PermissionError: If branch doesn't have access to imodel
+        ValidationError: If required params missing
+        ConfigurationError: If branch doesn't have access to imodel
     """
-    if params._is_sentinel(params.text):
-        raise ValueError("interpret requires 'text' parameter")
+    if is_sentinel(params.text):
+        from lionpride.errors import ValidationError
 
-    if params._is_sentinel(params.imodel):
-        raise ValueError("interpret requires 'imodel' parameter")
+        raise ValidationError("interpret requires 'text' parameter")
+    text = params.text
+
+    if is_sentinel(params.imodel):
+        from lionpride.errors import ValidationError
+
+        raise ValidationError("interpret requires 'imodel' parameter")
 
     # Resource access check
     model_name = params.imodel.name if isinstance(params.imodel, iModel) else params.imodel
-    if model_name not in branch.resources:
-        raise PermissionError(
-            f"Branch '{branch.name}' cannot access model '{model_name}'. "
-            f"Allowed: {branch.resources or 'none'}"
-        )
+    resource_must_be_accessible_by_branch(branch, model_name)
 
     # Build interpretation prompt
     system_instruction = (
@@ -61,7 +64,7 @@ async def interpret(
     if params.sample_writing:
         guidance += f" Sample writing style: {params.sample_writing}"
 
-    user_content = f"{guidance}\n\nUser input to refine:\n{params.text}"
+    user_content = f"{guidance}\n\nUser input to refine:\n{text}"
 
     # Build combined instruction
     instruction = f"{system_instruction}\n\n{user_content}"

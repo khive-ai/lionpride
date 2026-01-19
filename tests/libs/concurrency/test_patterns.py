@@ -6,13 +6,7 @@ import time
 import anyio
 import pytest
 
-from lionpride.libs.concurrency import (
-    bounded_map,
-    fail_after,
-    gather,
-    race,
-    retry,
-)
+from lionpride.libs.concurrency import bounded_map, fail_after, gather, race, retry
 
 # Optional hypothesis import for property-based testing
 try:

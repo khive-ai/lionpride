@@ -249,7 +249,11 @@ class TestRegistryDiscovery:
             config={"provider": "test", "name": "prod1", "tags": ["production", "api"]}
         )
         backend2 = MockBackend(
-            config={"provider": "test", "name": "prod2", "tags": ["production", "worker"]}
+            config={
+                "provider": "test",
+                "name": "prod2",
+                "tags": ["production", "worker"],
+            }
         )
         backend3 = MockBackend(config={"provider": "test", "name": "dev1", "tags": ["development"]})
 
@@ -436,7 +440,10 @@ class TestRegistryMCPIntegration:
 
         with (
             patch("lionpride.services.mcps.loader.create_mcp_callable"),
-            patch("lionpride.services.types.tool.Tool", side_effect=Exception("Tool error")),
+            patch(
+                "lionpride.services.types.tool.Tool",
+                side_effect=Exception("Tool error"),
+            ),
         ):
             # Should not raise, but skip failed tools
             registered = await registry.register_mcp_server(
@@ -464,7 +471,10 @@ class TestRegistryMCPIntegration:
         server_config = {"command": "test", "args": []}
 
         with (
-            patch("lionpride.services.mcps.MCPConnectionPool.get_client", return_value=mock_client),
+            patch(
+                "lionpride.services.mcps.MCPConnectionPool.get_client",
+                return_value=mock_client,
+            ),
             patch("lionpride.services.mcps.loader.create_mcp_callable") as mock_create,
             patch("lionpride.services.Tool") as MockTool,
             patch("lionpride.services.iModel") as MockiModel,
@@ -500,7 +510,10 @@ class TestRegistryMCPIntegration:
         server_config = {"command": "test", "args": []}
 
         with (
-            patch("lionpride.services.mcps.MCPConnectionPool.get_client", return_value=mock_client),
+            patch(
+                "lionpride.services.mcps.MCPConnectionPool.get_client",
+                return_value=mock_client,
+            ),
             patch("lionpride.services.mcps.loader.create_mcp_callable"),
             patch("lionpride.services.types.tool.Tool"),
         ):
@@ -525,7 +538,10 @@ class TestRegistryMCPIntegration:
         server_config = {"command": "test", "args": []}
 
         with (
-            patch("lionpride.services.mcps.MCPConnectionPool.get_client", return_value=mock_client),
+            patch(
+                "lionpride.services.mcps.MCPConnectionPool.get_client",
+                return_value=mock_client,
+            ),
             patch("lionpride.services.mcps.loader.create_mcp_callable") as mock_create,
             patch("lionpride.services.Tool") as MockTool,
             patch("lionpride.services.iModel") as MockiModel,
@@ -559,7 +575,8 @@ class TestRegistryMCPIntegration:
         server_config = {"server": "test"}
 
         with patch(
-            "lionpride.services.mcps.MCPConnectionPool.get_client", return_value=mock_client
+            "lionpride.services.mcps.MCPConnectionPool.get_client",
+            return_value=mock_client,
         ):
             wrapper = create_mcp_callable(server_config, "tool_name")
 
@@ -580,7 +597,8 @@ class TestRegistryMCPIntegration:
         server_config = {"server": "test"}
 
         with patch(
-            "lionpride.services.mcps.MCPConnectionPool.get_client", return_value=mock_client
+            "lionpride.services.mcps.MCPConnectionPool.get_client",
+            return_value=mock_client,
         ):
             wrapper = create_mcp_callable(server_config, "tool_name")
 
@@ -598,7 +616,8 @@ class TestRegistryMCPIntegration:
         server_config = {"server": "test"}
 
         with patch(
-            "lionpride.services.mcps.MCPConnectionPool.get_client", return_value=mock_client
+            "lionpride.services.mcps.MCPConnectionPool.get_client",
+            return_value=mock_client,
         ):
             wrapper = create_mcp_callable(server_config, "tool_name")
 

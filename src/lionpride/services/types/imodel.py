@@ -229,7 +229,7 @@ class iModel(Element):  # noqa: N801
                 hook_phase=HookPhase.PreEventCreate,
                 event_like=calling_type,
                 registry=self.hook_registry,
-                exit=create_event_exit_hook if create_event_exit_hook is not None else False,
+                exit=(create_event_exit_hook if create_event_exit_hook is not None else False),
                 timeout=create_event_hook_timeout,
                 streaming=False,
                 params=create_event_hook_params or {},
@@ -268,7 +268,7 @@ class iModel(Element):  # noqa: N801
         ):
             calling.create_pre_invoke_hook(
                 hook_registry=self.hook_registry,
-                exit_hook=pre_invoke_exit_hook if pre_invoke_exit_hook is not None else False,
+                exit_hook=(pre_invoke_exit_hook if pre_invoke_exit_hook is not None else False),
                 hook_timeout=pre_invoke_hook_timeout,
                 hook_params=pre_invoke_hook_params or {},
             )
@@ -279,7 +279,7 @@ class iModel(Element):  # noqa: N801
         ):
             calling.create_post_invoke_hook(
                 hook_registry=self.hook_registry,
-                exit_hook=post_invoke_exit_hook if post_invoke_exit_hook is not None else False,
+                exit_hook=(post_invoke_exit_hook if post_invoke_exit_hook is not None else False),
                 hook_timeout=post_invoke_hook_timeout,
                 hook_params=post_invoke_hook_params or {},
             )

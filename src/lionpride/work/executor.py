@@ -265,7 +265,7 @@ class ReportExecutor:
 
         structure_fmt: Literal["json", "custom"] = cast(
             Literal["json", "custom"],
-            self.structure_format if self.structure_format in ("json", "custom") else "json",
+            (self.structure_format if self.structure_format in ("json", "custom") else "json"),
         )
         target_keys = list(request_model.model_fields.keys()) if request_model else []
 

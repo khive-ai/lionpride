@@ -9,11 +9,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, field_serializer, field_validator
 from pydantic_core.core_schema import SerializationInfo
 
-from ..protocols import (
-    Deserializable,
-    Serializable,
-    implements,
-)
+from ..protocols import Deserializable, Serializable, implements
 from .element import Element
 
 NODE_REGISTRY: dict[str, type[Node]] = {}

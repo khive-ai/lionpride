@@ -3,21 +3,21 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
-from lionpride.errors import (
-    ConfigurationError,
-    ExecutionError,
-    NotFoundError,
-    ValidationError,
+from lionpride.session.messages import prepare_messages_for_chat
+
+from .phrases import (
+    resolve_branch_exists_in_session,
+    resolve_genai_model_exists_in_session,
+    resolve_response_is_normalized,
+    resource_must_be_accessible_by_branch,
+    response_must_be_completed,
 )
-from lionpride.types import is_sentinel
-
 from .types import GenerateParams, ReturnAs
 
 if TYPE_CHECKING:
-    from lionpride.services.types import Calling, NormalizedResponse
+    from lionpride.services.types import Calling
     from lionpride.session import Branch, Session
 
 __all__ = ("_handle_return", "generate")
@@ -30,45 +30,21 @@ async def generate(
     poll_timeout: float | None = None,
     poll_interval: float | None = None,
 ):
-    # Use 'is None' check - empty Branch evaluates to False due to len() == 0
-    if (_b := session.get_branch(branch, None)) is None:
-        raise NotFoundError(f"Branch '{branch}' does not exist in session")
+    b_ = resolve_branch_exists_in_session(session, branch)
+    imodel_, imodel_kw = resolve_genai_model_exists_in_session(session, params)
+    resource_must_be_accessible_by_branch(b_, imodel_.name)
 
-    imodel_ref = params.imodel or session.default_generate_model
-    if imodel_ref is None:
-        raise ConfigurationError("No valid 'imodel' provided for generate")
-    imodel = session.services.get(imodel_ref, None)
-    imodel_kw = params.imodel_kwargs or {}
+    msgs = session.messages[b_]
 
-    if imodel is None:
-        raise ConfigurationError("No valid 'imodel' provided for generate")
-    if imodel.name not in _b.resources:
-        raise ConfigurationError(
-            f"Branch '{_b.name}' has no access to model '{imodel.name}'",
-            details={"branch": _b.name, "model": imodel.name, "resources": list(_b.resources)},
-        )
-    if not isinstance(imodel_kw, dict):
-        raise ValidationError("'imodel_kwargs' must be a dict if provided")
-
-    msgs = session.messages[_b]
-    from pydantic import BaseModel
-
-    from lionpride.session.messages import prepare_messages_for_chat
-
-    # Cast custom_renderer to the expected type (CustomRenderer is compatible with Callable)
-    custom_renderer_fn = cast(
-        "Callable[[BaseModel], str] | None",
-        params.custom_renderer,
-    )
     prepared_msgs = prepare_messages_for_chat(
         msgs,
         new_instruction=params.instruction_message,
         to_chat=True,
         structure_format=params.structure_format,
-        custom_renderer=custom_renderer_fn,
+        custom_renderer=params.custom_renderer,
     )
     calling = await session.request(
-        imodel.name,
+        imodel_.name,
         messages=prepared_msgs,
         poll_interval=poll_interval,
         poll_timeout=poll_timeout,
@@ -79,36 +55,22 @@ async def generate(
 
 
 def _handle_return(calling: Calling, return_as: ReturnAs) -> Any:
-    # For "calling", always return - caller handles status
+    # caller handles status
     if return_as == "calling":
         return calling
 
-    # For data formats, must succeed
-    from lionpride.core.event import EventStatus
+    response_must_be_completed(calling)
+    response = resolve_response_is_normalized(calling)
 
-    if calling.execution.status != EventStatus.COMPLETED:
-        raise ExecutionError(
-            "Generation did not complete successfully",
-            details=calling.execution.to_dict(),
-            retryable=True,  # API failures are often transient
-        )
-
-    response = calling.response
-    # Response should be NormalizedResponse at this point, not Unset
-    if is_sentinel(response):
-        raise ExecutionError(
-            "Generation completed but no response was returned",
-            retryable=False,
-        )
-
-    # Cast to NormalizedResponse for type safety
-    response = cast("NormalizedResponse", response)
     match return_as:
         case "text":
             return response.data
         case "raw":
             return response.raw_response
+        case "response":
+            return response
         case "message":
+            from lionpride.errors import ValidationError
             from lionpride.session.messages import AssistantResponseContent, Message
 
             metadata_dict: dict[str, Any] = {"raw_response": response.raw_response}
@@ -122,4 +84,6 @@ def _handle_return(calling: Calling, return_as: ReturnAs) -> Any:
                 metadata=metadata_dict,
             )
         case _:
+            from lionpride.errors import ValidationError
+
             raise ValidationError(f"Unsupported return_as: {return_as}")

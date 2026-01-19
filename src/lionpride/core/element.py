@@ -9,13 +9,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
-from ..protocols import (
-    Deserializable,
-    Hashable,
-    Observable,
-    Serializable,
-    implements,
-)
+from ..protocols import Deserializable, Hashable, Observable, Serializable, implements
 from ._utils import coerce_created_at, to_uuid
 
 __all__ = ("DEFAULT_ELEMENT_SERIALIZER", "LN_ELEMENT_FIELDS", "Element")
@@ -189,7 +183,9 @@ class Element(BaseModel):
             lion_class = None
 
         if lion_class and lion_class != cls.class_name(full=True):
-            from ._utils import load_type_from_string  # Dynamic import to load the target class
+            from ._utils import (
+                load_type_from_string,
+            )  # Dynamic import to load the target class
 
             try:
                 target_cls = load_type_from_string(lion_class)

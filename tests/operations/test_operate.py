@@ -3,7 +3,7 @@
 
 """Test refactored operate factory with explicit capability-based security.
 
-Note: Uses MockNormalizedResponse and session_with_model fixtures from conftest.py.
+Note: Uses mock_normalized_response and session_with_model fixtures from conftest.py.
 """
 
 from unittest.mock import AsyncMock, MagicMock
@@ -21,7 +21,7 @@ from lionpride.operations.operate.types import (
 )
 from lionpride.rules import ActionRequest, ActionResponse
 from lionpride.session import Session
-from tests.operations.conftest import MockNormalizedResponse
+from tests.operations.conftest import mock_normalized_response
 
 
 class SimpleModel(BaseModel):
@@ -46,7 +46,7 @@ class TestOperateRefactor:
                 def __init__(self):
                     super().__init__()
                     self.status = EventStatus.COMPLETED
-                    self.execution.response = MockNormalizedResponse(
+                    self.execution.response = mock_normalized_response(
                         data='{"simplemodel": {"title": "Test", "value": 42}}'
                     )
 
@@ -152,7 +152,7 @@ class TestFactoryCoverage:
                 def __init__(self):
                     super().__init__()
                     self.status = EventStatus.COMPLETED
-                    self.execution.response = MockNormalizedResponse(
+                    self.execution.response = mock_normalized_response(
                         data='{"simple": {"value": "test"}}'
                     )
 
@@ -250,7 +250,7 @@ class TestFactoryCoverage:
                 def __init__(self):
                     super().__init__()
                     self.status = EventStatus.COMPLETED
-                    self.execution.response = MockNormalizedResponse(
+                    self.execution.response = mock_normalized_response(
                         data='{"simplemodel": {"value": "test"}}'
                     )
 
@@ -375,7 +375,7 @@ class TestFactoryCoverage:
                 def __init__(self):
                     super().__init__()
                     self.status = EventStatus.COMPLETED
-                    self.execution.response = MockNormalizedResponse(data="plain text response")
+                    self.execution.response = mock_normalized_response(data="plain text response")
 
             return MockCalling()
 
@@ -411,7 +411,7 @@ class TestFactoryUncoveredLines:
                 def __init__(self):
                     super().__init__()
                     self.status = EventStatus.COMPLETED
-                    self.execution.response = MockNormalizedResponse()
+                    self.execution.response = mock_normalized_response()
 
             return MockCalling()
 
@@ -439,10 +439,11 @@ class TestFactoryUncoveredLines:
                 instruction="Test",
                 request_model=SimpleModel,
             ),
+            parse=ParseParams(),
             capabilities={"simplemodel"},
         )
 
-        with pytest.raises(ConfigurationError, match=r"imodel"):
+        with pytest.raises(ConfigurationError, match=r"generative model not found"):
             asyncio.run(operate(session, branch, params))
 
     @pytest.mark.asyncio
@@ -464,7 +465,7 @@ class TestFactoryUncoveredLines:
                 def __init__(self):
                     super().__init__()
                     self.status = EventStatus.COMPLETED
-                    self.execution.response = MockNormalizedResponse(
+                    self.execution.response = mock_normalized_response(
                         data='{"simplemodel": {"value": "test_value"}}'
                     )
 
@@ -513,7 +514,8 @@ class TestFactoryUncoveredLines:
             return a + b
 
         tool = Tool(
-            func_callable=add_numbers, config=ToolConfig(name="add_numbers", provider="tool")
+            func_callable=add_numbers,
+            config=ToolConfig(name="add_numbers", provider="tool"),
         )
         session.services.register(iModel(backend=tool))
 
@@ -526,7 +528,7 @@ class TestFactoryUncoveredLines:
                 def __init__(self):
                     super().__init__()
                     self.status = EventStatus.COMPLETED
-                    self.execution.response = MockNormalizedResponse(
+                    self.execution.response = mock_normalized_response(
                         data='{"responsemodel": {"answer": "will compute"}, "action_requests": [{"function": "add_numbers", "arguments": {"a": 5, "b": 3}}]}'
                     )
 
@@ -585,7 +587,7 @@ class TestFactoryUncoveredLines:
                 def __init__(self):
                     super().__init__()
                     self.status = EventStatus.COMPLETED
-                    self.execution.response = MockNormalizedResponse(
+                    self.execution.response = mock_normalized_response(
                         data='{"responsemodel": {"answer": "computing"}, "action_requests": [{"function": "multiply", "arguments": {"x": 4, "y": 7}}]}'
                     )
 
@@ -680,7 +682,7 @@ class TestOperateFactoryCoverage:
                 def __init__(self):
                     super().__init__()
                     self.status = EventStatus.COMPLETED
-                    self.execution.response = MockNormalizedResponse(
+                    self.execution.response = mock_normalized_response(
                         data='{"simplemodel": {"title": "Test", "value": 42}, "reason": "Because testing"}'
                     )
 
@@ -722,7 +724,7 @@ class TestActCoverage:
                 def __init__(self):
                     super().__init__()
                     self.status = EventStatus.COMPLETED
-                    self.execution.response = MockNormalizedResponse()
+                    self.execution.response = mock_normalized_response()
 
             return MockCalling()
 
@@ -763,7 +765,8 @@ class TestActCoverage:
             return ToolResult()
 
         tool = Tool(
-            func_callable=custom_tool, config=ToolConfig(name="custom_tool", provider="tool")
+            func_callable=custom_tool,
+            config=ToolConfig(name="custom_tool", provider="tool"),
         )
         session.services.register(iModel(backend=tool))
 
@@ -775,7 +778,7 @@ class TestActCoverage:
                 def __init__(self):
                     super().__init__()
                     self.status = EventStatus.COMPLETED
-                    self.execution.response = MockNormalizedResponse(
+                    self.execution.response = mock_normalized_response(
                         data='{"responsemodel": {"answer": "test"}, "action_requests": [{"function": "custom_tool", "arguments": {}}]}'
                     )
 
@@ -821,7 +824,10 @@ class TestActCoverage:
         async def data_tool() -> dict:
             return ResultWithData()
 
-        tool = Tool(func_callable=data_tool, config=ToolConfig(name="data_tool", provider="tool"))
+        tool = Tool(
+            func_callable=data_tool,
+            config=ToolConfig(name="data_tool", provider="tool"),
+        )
         session.services.register(iModel(backend=tool))
 
         class ResponseModel(BaseModel):
@@ -832,7 +838,7 @@ class TestActCoverage:
                 def __init__(self):
                     super().__init__()
                     self.status = EventStatus.COMPLETED
-                    self.execution.response = MockNormalizedResponse(
+                    self.execution.response = mock_normalized_response(
                         data='{"responsemodel": {"answer": "test"}, "action_requests": [{"function": "data_tool", "arguments": {}}]}'
                     )
 
@@ -874,7 +880,10 @@ class TestActCoverage:
         async def error_tool() -> dict:
             raise RuntimeError("Tool execution failed")
 
-        tool = Tool(func_callable=error_tool, config=ToolConfig(name="error_tool", provider="tool"))
+        tool = Tool(
+            func_callable=error_tool,
+            config=ToolConfig(name="error_tool", provider="tool"),
+        )
         session.services.register(iModel(backend=tool))
 
         class ResponseModel(BaseModel):
@@ -885,7 +894,7 @@ class TestActCoverage:
                 def __init__(self):
                     super().__init__()
                     self.status = EventStatus.COMPLETED
-                    self.execution.response = MockNormalizedResponse(
+                    self.execution.response = mock_normalized_response(
                         data='{"responsemodel": {"answer": "test"}, "action_requests": [{"function": "error_tool", "arguments": {}}]}'
                     )
 

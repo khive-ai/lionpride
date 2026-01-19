@@ -30,16 +30,10 @@ from lionpride.session import Session
 @pytest.fixture
 def mock_model():
     """Create a mock iModel for testing without API calls."""
-    from dataclasses import dataclass
-
     from lionpride import Event
     from lionpride.services.providers.oai_chat import OAIChatEndpoint
+    from lionpride.services.types import NormalizedResponse
     from lionpride.services.types.imodel import iModel
-
-    @dataclass
-    class MockResponse:
-        status: str = "success"
-        data: str = ""
 
     # Create mock endpoint
     endpoint = OAIChatEndpoint(config=None, name="mock", api_key="mock-key")
@@ -53,8 +47,16 @@ def mock_model():
             def __init__(self, response_data: str):
                 super().__init__()
                 self.status = EventStatus.COMPLETED
-                # Directly set execution response
-                self.execution.response = MockResponse(status="success", data=response_data)
+                # Use proper NormalizedResponse
+                self.execution.response = NormalizedResponse(
+                    status="completed",
+                    data=response_data,
+                    raw_response={
+                        "id": "mock",
+                        "choices": [{"message": {"content": response_data}}],
+                    },
+                    metadata={"usage": {"prompt_tokens": 10, "completion_tokens": 20}},
+                )
 
         # Extract response from kwargs or use default
         response = kwargs.get("_test_response", "mock response")

@@ -492,7 +492,10 @@ class TestiModelSerialization:
         """Test serialization with rate limiter."""
         from lionpride.services.providers.oai_chat import OAIChatEndpoint
         from lionpride.services.types.imodel import iModel
-        from lionpride.services.utilities.rate_limiter import RateLimitConfig, TokenBucket
+        from lionpride.services.utilities.rate_limiter import (
+            RateLimitConfig,
+            TokenBucket,
+        )
 
         # Create iModel with rate limiter
         endpoint = OAIChatEndpoint(config=None, name="test-endpoint", api_key="OPENAI_API_KEY")
@@ -546,7 +549,10 @@ class TestiModelSerialization:
         """Test serialization with all fields."""
         from lionpride.services.providers.oai_chat import OAIChatEndpoint
         from lionpride.services.types.imodel import iModel
-        from lionpride.services.utilities.rate_limiter import RateLimitConfig, TokenBucket
+        from lionpride.services.utilities.rate_limiter import (
+            RateLimitConfig,
+            TokenBucket,
+        )
 
         # Create iModel with all fields
         endpoint = OAIChatEndpoint(config=None, name="test-endpoint", api_key="OPENAI_API_KEY")
@@ -633,7 +639,10 @@ class TestiModelSerialization:
         # Create model with rate limiting
         endpoint = OAIChatEndpoint(config=None, name="test-endpoint", api_key="OPENAI_API_KEY")
         model = iModel(
-            backend=endpoint, limit_requests=5, limit_tokens=10000, capacity_refresh_time=60
+            backend=endpoint,
+            limit_requests=5,
+            limit_tokens=10000,
+            capacity_refresh_time=60,
         )
 
         # Verify executor created and start it
@@ -834,7 +843,10 @@ class TestiModelExecutorIntegration:
         # Create iModel with rate limiting (auto-constructs executor)
         endpoint = MockEndpoint(name="test_api")
         model = iModel(
-            backend=endpoint, limit_requests=10, limit_tokens=10000, capacity_refresh_time=60
+            backend=endpoint,
+            limit_requests=10,
+            limit_tokens=10000,
+            capacity_refresh_time=60,
         )
 
         # Verify executor was created
@@ -864,7 +876,10 @@ class TestiModelExecutorIntegration:
     @pytest.mark.asyncio
     async def test_invoke_executor_rate_limited_denial(self):
         """Test rate limiting: when capacity exhausted, requests timeout/fail."""
-        from lionpride.services.utilities.rate_limiter import RateLimitConfig, TokenBucket
+        from lionpride.services.utilities.rate_limiter import (
+            RateLimitConfig,
+            TokenBucket,
+        )
 
         # Create model with strict rate limit (only 2 requests allowed, minimal refill)
         endpoint = MockEndpoint(name="test_api")

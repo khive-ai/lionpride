@@ -14,17 +14,8 @@ from typing_extensions import override
 
 from ..errors import ExistsError, NotFoundError
 from ..libs.concurrency import Lock as AsyncLock
-from ..protocols import (
-    Containable,
-    Deserializable,
-    Serializable,
-    implements,
-)
-from ._utils import (
-    extract_types,
-    load_type_from_string,
-    synchronized,
-)
+from ..protocols import Containable, Deserializable, Serializable, implements
+from ._utils import extract_types, load_type_from_string, synchronized
 from .element import Element
 from .progression import Progression
 
@@ -138,7 +129,7 @@ class Pile(Element, Generic[T]):
         created_at_format: Literal["datetime", "isoformat", "timestamp"] | None = None,
         meta_key: str | None = None,
         item_meta_key: str | None = None,
-        item_created_at_format: Literal["datetime", "isoformat", "timestamp"] | None = None,
+        item_created_at_format: (Literal["datetime", "isoformat", "timestamp"] | None) = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Serialize pile with items in progression order.

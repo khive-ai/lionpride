@@ -1,16 +1,9 @@
 # Copyright (c) 2025 - 2026, HaiyangLi <quantocean.li at gmail dot com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Session and Branch - Core conversation management.
-
-Session orchestrates messages, branches, services, and operations.
-Branch is a named progression of message UUIDs with access control.
-"""
-
 from __future__ import annotations
 
 import contextlib
-import warnings
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID
@@ -29,26 +22,17 @@ from .messages import Message, SystemContent
 if TYPE_CHECKING:
     from lionpride.services.types import Calling
 
-__all__ = ("Branch", "Session")
-
-
-# =============================================================================
-# Branch
-# =============================================================================
+__all__ = (
+    "Branch",
+    "Session",
+    "capabilities_must_be_subset_of_branch",
+    "resource_must_be_accessible_by_branch",
+    "resource_must_exist_in_session",
+)
 
 
 class Branch(Progression):
-    """Named progression of messages with access control.
-
-    Extends Progression (ordered UUIDs) with session context and permissions.
-    Operations are invoked via Session.conduct(), not Branch methods.
-
-    Attributes:
-        session_id: Parent session UUID (frozen).
-        system_message: System message UUID, always at order[0] if set.
-        capabilities: Allowed structured output schema names.
-        resources: Allowed backend service names.
-    """
+    """Named progression of messages with access control."""
 
     session_id: UUID = Field(..., frozen=True)
     system_message: UUID | None = None
@@ -75,45 +59,8 @@ class Branch(Progression):
         return f"Branch(messages={len(self)}, session={str(self.session_id)[:8]}{name_str})"
 
 
-# =============================================================================
-# Session
-# =============================================================================
-
-
 class Session(Element):
-    """Central orchestrator for messages, branches, services, and operations.
-
-    Example:
-        session = Session(default_generate_model=my_model)
-        branch = session.create_branch(name="main")
-        op = await session.conduct("operate", branch, instruction="Analyze this")
-        result = op.response
-
-    Note:
-        Session is not thread-safe. The lazy initialization of internal containers
-        (conversations, services, operations) uses simple None-checks without
-        synchronization. For concurrent access, use external synchronization
-        or create separate Session instances per thread.
-
-    Lazy Initialization:
-        By default, conversations, services, and operations are lazily initialized
-        on first access to minimize Session() construction overhead. However,
-        passing certain parameters triggers eager initialization:
-
-        +---------------------------------------+----------+---------------+
-        | Construction                          | services | conversations |
-        +=======================================+==========+===============+
-        | Session()                             | LAZY     | LAZY          |
-        +---------------------------------------+----------+---------------+
-        | Session(default_generate_model=model) | EAGER    | LAZY          |
-        +---------------------------------------+----------+---------------+
-        | Session(default_branch=branch)        | LAZY     | EAGER         |
-        +---------------------------------------+----------+---------------+
-    """
-
-    # -------------------------------------------------------------------------
-    # Fields (using PrivateAttr for lazy initialization)
-    # -------------------------------------------------------------------------
+    """Central orchestrator for messages, branches, services, and operations."""
 
     user: str | None = None
     """User identifier for this session."""
@@ -125,10 +72,6 @@ class Session(Element):
 
     _default_branch_id: UUID | None = PrivateAttr(None)
     _default_backends: dict[str, str] = PrivateAttr(default_factory=dict)
-
-    # -------------------------------------------------------------------------
-    # Lazy Properties (initialize on first access)
-    # -------------------------------------------------------------------------
 
     @property
     def conversations(self) -> Flow[Message, Branch]:
@@ -150,10 +93,6 @@ class Session(Element):
         if self._operations is None:
             self._operations = OperationRegistry()
         return self._operations
-
-    # -------------------------------------------------------------------------
-    # Initialization
-    # -------------------------------------------------------------------------
 
     def __init__(
         self,
@@ -226,10 +165,6 @@ class Session(Element):
                 )
                 self._default_branch_id = branch_obj.id
 
-    # -------------------------------------------------------------------------
-    # Properties
-    # -------------------------------------------------------------------------
-
     @property
     def messages(self):
         """All messages in session (Pile[Message])."""
@@ -260,10 +195,6 @@ class Session(Element):
         """Default model for parse operations."""
         name = self._default_backends.get("parse")
         return self.services.get(name) if name and self.services.has(name) else None
-
-    # -------------------------------------------------------------------------
-    # Branch Management
-    # -------------------------------------------------------------------------
 
     def create_branch(
         self,
@@ -375,10 +306,10 @@ class Session(Element):
         forked = self.create_branch(
             name=name or f"{source.name}_fork",
             messages=source.order,
-            capabilities={*source.capabilities}
-            if capabilities is True
-            else (capabilities or set()),
-            resources={*source.resources} if resources is True else (resources or set()),
+            capabilities=(
+                {*source.capabilities} if capabilities is True else (capabilities or set())
+            ),
+            resources=({*source.resources} if resources is True else (resources or set())),
             system=source.system_message if system is True else system,
         )
 
@@ -389,10 +320,6 @@ class Session(Element):
             "message_count": len(source),
         }
         return forked
-
-    # -------------------------------------------------------------------------
-    # Message Management
-    # -------------------------------------------------------------------------
 
     def add_message(
         self,
@@ -447,10 +374,6 @@ class Session(Element):
         else:
             resolved.set_system_message(system)
 
-    # -------------------------------------------------------------------------
-    # Default Model Management
-    # -------------------------------------------------------------------------
-
     def set_default_model(
         self,
         model: iModel | str,
@@ -468,10 +391,6 @@ class Session(Element):
             self.services.register(model)
         if self.default_branch is not None:
             self.default_branch.resources.add(name)
-
-    # -------------------------------------------------------------------------
-    # Operations
-    # -------------------------------------------------------------------------
 
     async def conduct(
         self,
@@ -495,7 +414,10 @@ class Session(Element):
         """
         resolved = self._resolve_branch(branch)
         op = Operation(
-            operation_type=operation_type, parameters=params, timeout=None, streaming=False
+            operation_type=operation_type,
+            parameters=params,
+            timeout=None,
+            streaming=False,
         )
         op.bind(self, resolved)
         await op.invoke()
@@ -566,23 +488,7 @@ class Session(Element):
         # Access control check when branch is provided
         if branch is not None:
             resolved_branch = self.get_branch(branch)
-            if service_name not in resolved_branch.resources:
-                raise AccessError(
-                    f"Branch '{resolved_branch.name}' doesn't have access to service '{service_name}'",
-                    details={
-                        "requested": service_name,
-                        "available": list(resolved_branch.resources),
-                    },
-                )
-        else:
-            # Deprecation warning for missing branch parameter
-            warnings.warn(
-                "Calling Session.request() without a branch parameter is deprecated. "
-                "In a future version, branch will be required for access control. "
-                "Pass branch=<branch> to enable access control checks.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
+            resource_must_be_accessible_by_branch(resolved_branch, service_name)
 
         service = self.services.get(service_name)
         return await service.invoke(
@@ -601,10 +507,6 @@ class Session(Element):
         """
         self.operations.register(name, factory, override=override)
 
-    # -------------------------------------------------------------------------
-    # Internal
-    # -------------------------------------------------------------------------
-
     def _resolve_branch(self, branch: Branch | UUID | str | None) -> Branch:
         """Resolve branch, falling back to default."""
         if branch is not None:
@@ -619,3 +521,45 @@ class Session(Element):
             f"branches={len(self.branches)}, "
             f"services={len(self.services)})"
         )
+
+
+def resource_must_exist_in_session(session: Session, name: str) -> None:
+    """Raises NotFoundError if service not registered in session."""
+    if not session.services.has(name):
+        raise NotFoundError(
+            f"Service '{name}' not found in session services",
+            details={"available": session.services.list_names()},
+        )
+
+
+def resource_must_be_accessible_by_branch(branch: Branch, name: str) -> None:
+    """Raises AccessError if branch lacks access to named resource."""
+    if name not in branch.resources:
+        raise AccessError(
+            f"Branch '{branch.name}' has no access to resource '{name}'",
+            details={
+                "branch": branch.name,
+                "resource": name,
+                "available": list(branch.resources),
+            },
+        )
+
+
+def capabilities_must_be_subset_of_branch(branch: Branch, capabilities: set[str]) -> None:
+    """Raises AccessError if branch missing required capabilities."""
+    if not capabilities.issubset(branch.capabilities):
+        missing = capabilities - branch.capabilities
+        raise AccessError(
+            f"Branch '{branch.name}' missing capabilities: {missing}",
+            details={
+                "requested": sorted(capabilities),
+                "available": sorted(branch.capabilities),
+            },
+        )
+
+
+def resolve_branch_exists_in_session(session: Session, branch: Branch | str) -> Branch:
+    """Return Branch or raise NotFoundError if not in session."""
+    if (b_ := session.get_branch(branch, None)) is None:
+        raise NotFoundError(f"Branch '{branch}' does not exist in session")
+    return b_

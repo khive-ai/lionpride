@@ -219,7 +219,10 @@ class TestBuilder:
         builder.add("task1", "generate", {"instruction": "First"})
         builder.add("task2", "generate", {"instruction": "Second"})
         builder.add_aggregation(
-            "summary", "operate", {"instruction": "Summarize"}, source_names=["task1", "task2"]
+            "summary",
+            "operate",
+            {"instruction": "Summarize"},
+            source_names=["task1", "task2"],
         )
 
         # Verify aggregation metadata
@@ -963,7 +966,10 @@ class TestOperationLifecycle:
 
         op = Operation(
             operation_type="generate",
-            parameters={"imodel": model, "messages": [{"role": "user", "content": "Hi"}]},
+            parameters={
+                "imodel": model,
+                "messages": [{"role": "user", "content": "Hi"}],
+            },
         )
 
         result = op.bind(session, branch)
@@ -1237,7 +1243,10 @@ class TestOperationsIntegration:
 
         # Aggregation: Depends on all level 3
         builder.add_aggregation(
-            "final", "generate", gen_params("Final"), source_names=["level3_a", "level3_b"]
+            "final",
+            "generate",
+            gen_params("Final"),
+            source_names=["level3_a", "level3_b"],
         )
 
         graph = builder.build()
@@ -1247,7 +1256,14 @@ class TestOperationsIntegration:
         assert len(results) == 6
         assert all(
             task in results
-            for task in ["root", "level2_a", "level2_b", "level3_a", "level3_b", "final"]
+            for task in [
+                "root",
+                "level2_a",
+                "level2_b",
+                "level3_a",
+                "level3_b",
+                "final",
+            ]
         )
 
     async def test_session_message_integration(self, session_with_model):

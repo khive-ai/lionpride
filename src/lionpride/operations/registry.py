@@ -64,14 +64,7 @@ class OperationRegistry:
         Imports are deferred to avoid circular imports.
         Factories are registered directly - they expect typed Params objects.
         """
-        from .operate import (
-            communicate,
-            generate,
-            interpret,
-            operate,
-            parse,
-            react,
-        )
+        from .operate import communicate, generate, interpret, operate, parse, react
 
         # Register factories directly - they expect typed params
         self._factories["operate"] = operate

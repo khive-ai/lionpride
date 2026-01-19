@@ -8,11 +8,7 @@ import pytest
 from pydantic import BaseModel, SecretStr
 
 from lionpride.services.types import Endpoint, EndpointConfig
-from lionpride.services.utilities import (
-    CircuitBreaker,
-    CircuitState,
-    RetryConfig,
-)
+from lionpride.services.utilities import CircuitBreaker, CircuitState, RetryConfig
 
 
 class TestEndpointIntegration:

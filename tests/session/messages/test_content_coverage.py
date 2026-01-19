@@ -19,10 +19,7 @@ import pytest
 from pydantic import BaseModel, Field
 
 from lionpride.session.messages._utils import _validate_image_url
-from lionpride.session.messages.content import (
-    InstructionContent,
-    MessageContent,
-)
+from lionpride.session.messages.content import InstructionContent, MessageContent
 
 # =============================================================================
 # Edge Case Tests - URL Validation Exception Handling (Lines 47-48)

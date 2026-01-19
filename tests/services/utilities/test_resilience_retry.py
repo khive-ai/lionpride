@@ -9,10 +9,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from lionpride.services.utilities.resilience import (
-    RetryConfig,
-    retry_with_backoff,
-)
+from lionpride.services.utilities.resilience import RetryConfig, retry_with_backoff
 
 
 class TestRetryConfig:
@@ -244,7 +241,10 @@ class TestRetryWithBackoff:
 
         with patch("lionpride.services.utilities.resilience.sleep", new_callable=AsyncMock):
             result = await retry_with_backoff(
-                mock_func, max_retries=3, initial_delay=0.1, retry_on=(ValueError, TypeError)
+                mock_func,
+                max_retries=3,
+                initial_delay=0.1,
+                retry_on=(ValueError, TypeError),
             )
 
         assert result == "success"
@@ -271,7 +271,11 @@ class TestRetryWithBackoff:
         """Test retrying different error types in sequence."""
         # Simulate recoverable errors of different types, then success
         mock_func = AsyncMock(
-            side_effect=[ConnectionError("network error"), TimeoutError("timeout"), "success"]
+            side_effect=[
+                ConnectionError("network error"),
+                TimeoutError("timeout"),
+                "success",
+            ]
         )
 
         with patch("lionpride.services.utilities.resilience.sleep", new_callable=AsyncMock):

@@ -21,9 +21,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from lionpride.errors import ConfigurationError, ExecutionError, LionprideError, ValidationError
+from lionpride.errors import (
+    ConfigurationError,
+    ExecutionError,
+    LionprideError,
+    ValidationError,
+)
 from lionpride.operations.operate.parse import _direct_parse, _llm_reparse, parse
 from lionpride.operations.operate.types import ParseParams
+from lionpride.types._sentinel import Unset
 
 
 class TestDirectParse:
@@ -235,12 +241,13 @@ class TestParse:
         """Test that sentinel text raises ValidationError."""
         session, branch = mock_session_branch
 
-        params = ParseParams()  # text is sentinel (not provided)
+        params = ParseParams(text="placeholder", target_keys=["key"])
+        # Force set text to a sentinel value
+        object.__setattr__(params, "text", Unset)
 
         with pytest.raises(ValidationError) as exc_info:
             await parse(session, branch, params)
-        assert "No text provided" in str(exc_info.value)
-        assert exc_info.value.retryable is False
+        assert "parse requires 'text' parameter" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_direct_extract_success(self, mock_session_branch):

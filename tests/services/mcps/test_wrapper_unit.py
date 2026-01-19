@@ -363,14 +363,16 @@ class TestCreateClient:
     async def test_missing_url_and_command_raises_error(self):
         """Test ValueError when neither url nor command present (lines 160-162)."""
         with pytest.raises(
-            ValueError, match="Config must have either 'url' or 'command' with non-None value"
+            ValueError,
+            match="Config must have either 'url' or 'command' with non-None value",
         ):
             await MCPConnectionPool._create_client({"other_key": "value"})
 
     async def test_null_url_and_command_raises_error(self):
         """Test ValueError when both url and command are None (lines 160-162)."""
         with pytest.raises(
-            ValueError, match="Config must have either 'url' or 'command' with non-None value"
+            ValueError,
+            match="Config must have either 'url' or 'command' with non-None value",
         ):
             await MCPConnectionPool._create_client({"url": None, "command": None})
 
@@ -995,10 +997,7 @@ class TestCommandAllowlistEdgeCases:
 # =============================================================================
 
 
-from lionpride.services.mcps.wrapper import (
-    MCP_ENV_ALLOWLIST,
-    filter_mcp_environment,
-)
+from lionpride.services.mcps.wrapper import MCP_ENV_ALLOWLIST, filter_mcp_environment
 
 
 class TestEnvironmentFiltering:

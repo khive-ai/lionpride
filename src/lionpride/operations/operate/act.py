@@ -5,13 +5,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from lionpride.errors import AccessError, NotFoundError, ValidationError
 from lionpride.ln import alcall
 from lionpride.rules import ActionRequest, ActionResponse
 from lionpride.session.messages import (
     ActionRequestContent,
     ActionResponseContent,
     Message,
+)
+
+from .phrases import (
+    resource_must_be_accessible_by_branch,
+    resource_must_exist_in_session,
 )
 
 if TYPE_CHECKING:
@@ -47,24 +51,10 @@ async def act(
     if not action_requests:
         return []
 
-    # Validate upfront
+    # Validate upfront using phrases
     for req in action_requests:
-        if not req.function:
-            raise ValidationError(
-                "Action request missing function name",
-                details={"request": req},
-            )
-        if not session.services.has(req.function):
-            raise NotFoundError(
-                f"Tool '{req.function}' not found in registry",
-                details={"available": session.services.list_names()},
-            )
-        # Check branch has access to tool
-        if req.function not in branch.resources:
-            raise AccessError(
-                f"Branch '{branch.name}' doesn't have access to tool '{req.function}'",
-                details={"requested": req.function, "available": list(branch.resources)},
-            )
+        resource_must_exist_in_session(session, req.function)
+        resource_must_be_accessible_by_branch(branch, req.function)
 
     async def execute_single(req: ActionRequest) -> ActionResponse:
         try:
@@ -118,12 +108,14 @@ async def act(
 
     # Convert any uncaught exceptions to ActionResponse
     action_responses = [
-        r
-        if isinstance(r, ActionResponse)
-        else ActionResponse(
-            function=action_requests[i].function,
-            arguments=action_requests[i].arguments,
-            output=f"{type(r).__name__}: {r}" if isinstance(r, Exception) else str(r),
+        (
+            r
+            if isinstance(r, ActionResponse)
+            else ActionResponse(
+                function=action_requests[i].function,
+                arguments=action_requests[i].arguments,
+                output=(f"{type(r).__name__}: {r}" if isinstance(r, Exception) else str(r)),
+            )
         )
         for i, r in enumerate(responses)
     ]

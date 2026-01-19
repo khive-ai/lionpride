@@ -15,11 +15,7 @@ import pytest
 from pydantic import BaseModel
 
 from lionpride.errors import AccessError, NotFoundError, ValidationError
-from lionpride.operations.operate.act import (
-    act,
-    execute_tools,
-    has_action_requests,
-)
+from lionpride.operations.operate.act import act, execute_tools, has_action_requests
 from lionpride.rules import ActionRequest, ActionResponse
 from lionpride.services import iModel
 from lionpride.services.types.tool import Tool, ToolConfig
@@ -62,10 +58,19 @@ def session_with_tools():
     tool_names = []
 
     tools = [
-        Tool(func_callable=mock_multiply, config=ToolConfig(name="multiply", provider="tool")),
+        Tool(
+            func_callable=mock_multiply,
+            config=ToolConfig(name="multiply", provider="tool"),
+        ),
         Tool(func_callable=mock_adder, config=ToolConfig(name="adder", provider="tool")),
-        Tool(func_callable=mock_error_tool, config=ToolConfig(name="error_tool", provider="tool")),
-        Tool(func_callable=sync_tool, config=ToolConfig(name="sync_tool", provider="tool")),
+        Tool(
+            func_callable=mock_error_tool,
+            config=ToolConfig(name="error_tool", provider="tool"),
+        ),
+        Tool(
+            func_callable=sync_tool,
+            config=ToolConfig(name="sync_tool", provider="tool"),
+        ),
     ]
 
     for tool in tools:
@@ -92,14 +97,14 @@ class TestAct:
 
         assert responses == []
 
-    async def test_missing_function_name_raises_validation_error(self, session_with_tools):
-        """Test that empty function string raises ValidationError."""
+    async def test_missing_function_name_raises_not_found_error(self, session_with_tools):
+        """Test that empty function string raises NotFoundError (service not found)."""
         session, tool_names = session_with_tools
         branch = session.create_branch(resources=set(tool_names))
 
         requests = [ActionRequest(function="", arguments={})]
 
-        with pytest.raises(ValidationError, match="Action request missing function name"):
+        with pytest.raises(NotFoundError, match="not found in session"):
             await act(requests, session, branch)
 
     async def test_tool_not_in_registry_raises_not_found_error(self, session_with_tools):
@@ -109,7 +114,7 @@ class TestAct:
 
         requests = [ActionRequest(function="nonexistent", arguments={})]
 
-        with pytest.raises(NotFoundError, match="Tool 'nonexistent' not found"):
+        with pytest.raises(NotFoundError, match="'nonexistent' not found in session"):
             await act(requests, session, branch)
 
     async def test_tool_not_in_branch_resources_raises_access_error(self, session_with_tools):
@@ -119,7 +124,7 @@ class TestAct:
 
         requests = [ActionRequest(function="adder", arguments={"a": 1, "b": 2})]
 
-        with pytest.raises(AccessError, match="doesn't have access to tool 'adder'"):
+        with pytest.raises(AccessError, match="has no access to resource 'adder'"):
             await act(requests, session, branch)
 
     async def test_single_tool_execution_success(self, session_with_tools):

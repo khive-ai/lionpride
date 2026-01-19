@@ -676,7 +676,10 @@ class TestS3LogSubscriberEnsureClient:
 
         with (
             patch.dict("sys.modules", {"aioboto3": None}),
-            patch("builtins.__import__", side_effect=ImportError("No module named 'aioboto3'")),
+            patch(
+                "builtins.__import__",
+                side_effect=ImportError("No module named 'aioboto3'"),
+            ),
             pytest.raises(ImportError, match="aioboto3 is required"),
         ):
             await sub._ensure_client()
@@ -787,7 +790,10 @@ class TestPostgresLogSubscriberReceive:
         mock_adapter.write = AsyncMock(return_value=3)
 
         # Patch at the module where it's imported
-        with patch("lionpride.session.log_adapter.PostgresLogAdapter", return_value=mock_adapter):
+        with patch(
+            "lionpride.session.log_adapter.PostgresLogAdapter",
+            return_value=mock_adapter,
+        ):
             logs = [
                 Log(log_type=LogType.INFO, message="msg1"),
                 Log(log_type=LogType.INFO, message="msg2"),
@@ -825,7 +831,10 @@ class TestWebhookLogSubscriberImportError:
 
         with (
             patch.dict("sys.modules", {"httpx": None}),
-            patch("builtins.__import__", side_effect=ImportError("No module named 'httpx'")),
+            patch(
+                "builtins.__import__",
+                side_effect=ImportError("No module named 'httpx'"),
+            ),
             pytest.raises(ImportError, match="httpx is required"),
         ):
             await sub.receive(logs)

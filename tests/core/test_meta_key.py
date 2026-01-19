@@ -64,7 +64,10 @@ class TestElementMetaKey:
         data = {
             "id": "550e8400-e29b-41d4-a716-446655440000",
             "created_at": "2025-01-01T00:00:00Z",
-            "node_metadata": {"legacy": "data", "lion_class": "lionpride.core.element.Element"},
+            "node_metadata": {
+                "legacy": "data",
+                "lion_class": "lionpride.core.element.Element",
+            },
         }
 
         # Should automatically handle node_metadata → metadata

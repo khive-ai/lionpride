@@ -13,13 +13,18 @@ Focus areas:
 from unittest.mock import AsyncMock
 
 import pytest
-from conftest import MockNormalizedResponse
 
 from lionpride import Event, EventStatus
-from lionpride.errors import ConfigurationError, ExecutionError, ValidationError
+from lionpride.errors import (
+    AccessError,
+    ConfigurationError,
+    ExecutionError,
+    ValidationError,
+)
 from lionpride.operations.operate.generate import generate
 from lionpride.operations.operate.types import GenerateParams
 from lionpride.session.messages import Message
+from tests.operations.conftest import mock_normalized_response
 
 
 class TestGenerateValidation:
@@ -32,7 +37,7 @@ class TestGenerateValidation:
 
         params = GenerateParams(instruction="test")
 
-        with pytest.raises(ConfigurationError, match="No valid 'imodel' provided"):
+        with pytest.raises(ConfigurationError, match="generative model not found in session"):
             await generate(session, branch, params)
 
 
@@ -200,7 +205,7 @@ class TestBranchResourceAccess:
     """Test branch resource access control."""
 
     async def test_branch_without_model_access_raises_error(self, session_with_model):
-        """Test that branch without model access raises ConfigurationError."""
+        """Test that branch without model access raises AccessError."""
         session, _ = session_with_model
         branch = session.create_branch(name="test", resources=set())  # No resources
 
@@ -209,7 +214,7 @@ class TestBranchResourceAccess:
             instruction="test",
         )
 
-        with pytest.raises(ConfigurationError, match="has no access to model"):
+        with pytest.raises(AccessError, match="has no access to resource"):
             await generate(session, branch, params)
 
 
@@ -252,7 +257,7 @@ class TestHandleReturnEdgeCases:
             def __init__(self):
                 super().__init__()
                 self.status = EventStatus.COMPLETED
-                self.execution.response = MockNormalizedResponse()
+                self.execution.response = mock_normalized_response()
 
         calling = MockCalling()
 

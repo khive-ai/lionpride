@@ -11,9 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
-from lionpride.services.third_party.gemini_models import (
-    GeminiCodeRequest,
-)
+from lionpride.services.third_party.gemini_models import GeminiCodeRequest
 
 # ============================================================================
 # GeminiCodeRequest Security Warnings Tests (Issue #92)

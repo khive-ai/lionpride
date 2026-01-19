@@ -12,12 +12,7 @@ from pydantic import Field, PrivateAttr, field_validator, model_validator
 from typing_extensions import override
 
 from ..errors import NotFoundError
-from ..protocols import (
-    Containable,
-    Deserializable,
-    Serializable,
-    implements,
-)
+from ..protocols import Containable, Deserializable, Serializable, implements
 from ._utils import synchronized
 from .element import Element
 from .node import Node
@@ -64,7 +59,9 @@ class Edge(Element):
     tail: UUID = Field(description="Target node ID")
     label: list[str] = Field(default_factory=list, description="Edge labels")
     condition: EdgeCondition | None = Field(
-        default=None, exclude=True, description="Runtime traversal condition (not serialized)"
+        default=None,
+        exclude=True,
+        description="Runtime traversal condition (not serialized)",
     )
     properties: dict[str, Any] = Field(default_factory=dict, description="Custom edge properties")
 
@@ -400,7 +397,7 @@ class Graph(Element):
         created_at_format: Literal["datetime", "isoformat", "timestamp"] | None = None,
         meta_key: str | None = None,
         item_meta_key: str | None = None,
-        item_created_at_format: Literal["datetime", "isoformat", "timestamp"] | None = None,
+        item_created_at_format: (Literal["datetime", "isoformat", "timestamp"] | None) = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Serialize graph with manual Pile field handling.

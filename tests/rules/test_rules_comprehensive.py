@@ -425,7 +425,9 @@ class TestActionRequestRule:
         """Test valid action request passes."""
         rule = ActionRequestRule()
         result = await rule.invoke(
-            "action_request", {"function": "get_weather", "arguments": {"city": "NYC"}}, dict
+            "action_request",
+            {"function": "get_weather", "arguments": {"city": "NYC"}},
+            dict,
         )
         assert result.function == "get_weather"
         assert result.arguments == {"city": "NYC"}

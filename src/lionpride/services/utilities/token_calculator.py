@@ -50,7 +50,10 @@ class TokenCalculator:
             num_tokens += 4
             _c = msg.get("content")
             num_tokens += TokenCalculator._calculate_chatitem(
-                _c, tokenizer=tokenizer, model_name=model, image_token_cost=image_token_cost
+                _c,
+                tokenizer=tokenizer,
+                model_name=model,
+                image_token_cost=image_token_cost,
             )
         return num_tokens  # buffer for chat
 
@@ -105,7 +108,8 @@ class TokenCalculator:
         except Exception as e:
             # Actual encoding failure during tokenization - this is an error
             logger.error(
-                f"Tokenization failed for input (len={len(s_) if s_ else 0}): {e}", exc_info=True
+                f"Tokenization failed for input (len={len(s_) if s_ else 0}): {e}",
+                exc_info=True,
             )
             raise TokenCalculationError(f"Tokenization failed: {e}") from e
 
